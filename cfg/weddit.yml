@@ -1,0 +1,199 @@
+GPUID: [3]
+SEED: 3905718999 ##None
+LOG_CFG_INFO: false
+PROFILE: 0
+TMP: false ## FALSE WHEN CREATING NEW EXP FILE
+
+
+DEBUG:
+  ROOT: 0
+  DATA: 0
+  LOSS: 1
+  METRIC: 1
+  MISC: 0
+  NETS: 1
+  TEST: 0
+  TRAIN: 1
+  VLDT: 0
+
+
+NET:
+  LOG_INFO: ['blck'] ## ,'prmt'
+  WGHT_INIT: xavier
+  NAME: rtfm
+  
+  ATTNOMIL:
+    VERSION: VCls ## VCls , SAVCls , SAVCls_spat , SAVCls_lstm , LSTMCls
+    DA: 64
+    R: 3
+    CLS_NEURONS: [32,1]
+    LSTM_DIM: 0
+    SPAT: False 
+    RET_ATT: False
+    VLDT_SPLIT: 9 ## 0 could one global score (not implemented)
+  
+  CMALA:
+    CLS_VRS: CONV
+
+  MINDSPORE:
+    CLS_VRS: MLP
+
+  DTR:
+    DTR_NEURONS: [512,128]
+    CLS_VRS: MLP
+
+  RTFM:
+    CLS_VRS: CONV
+
+  CLS:
+    MLP:
+      NEURONS: [512,32]
+      ACTIVA: relu
+      DO: 0.7
+    CONV:
+      KS: 5
+    LSTM:
+      HIDDIM: 256
+      BD: False
+
+
+
+TRAIN:
+  ENABLE: true  ## true false
+  EPOCHS: 5
+  BS: 32
+  DS: XDV
+  FRMT: SEG
+  XEL:
+    ENABLE: false
+  SEG:
+    LEN: 32
+    L2N: 0
+    RND: ['']  ## jit / glob
+    LOSS: [RTFM, RNKG]  ## BCE RNKG MBS RTFM
+  SEQ:
+    LEN: 200
+    L2N: 0
+    RND: ['uni'] ## uni or rnd / jit / glob  
+    LOSS: [CLAS]  ## BCE CLAS 
+
+  VLDT:
+    PERIOD: 5
+    CUDDNAUTOTUNE: false  ## true false   
+    PER_WHAT: lbl  ## glob , lbl
+    VISPLOT: false
+
+  CKPT_PERIOD: 1000
+  LOG_PERIOD: 20
+
+LOSS:
+  #BCE:
+  RNKG:
+    VERSION: deepmil  ## deepmil milbert tempatt
+    LAMBDA12: [8e-5,8e-5]
+  CLAS:
+    FX: topk  ## topk wink full
+    TOPK: 16
+    WINK: 3
+    WINKCONV: false
+  RTFM:
+    K: 3
+    ALPHA: 0.0001
+    MARGIN: 100
+
+OPTIMA:
+  TYPE: ADAM
+  #ADAM:
+  #  LR: 0.0
+  #  WD: 0.0005
+  #  BETAS: [0.9, 0.999]
+  #ADAMW:
+  #  LR:
+  #  WD:
+  #  BETAS:
+  #  EPS:
+  #ADAMAX:
+  #  LR:
+  #  WD:
+  #  BETAS:
+  #  EPS:
+  #SGD:
+  #  LR: 0.0
+  #  WD: 0.0005
+  #  MOMENTUM: 0.0
+  #  DAMPENING: 0.0
+  #  NESTEROV: false
+  #ASGD:
+  #  LR: 0.0
+  #  WD: 0.0005
+  #  LAMBD: 0.0001
+  ADABEL:
+    LR: 1e-3
+
+  LRS:
+    TYPE: None ##  / multistep / cosanlg 
+    VERBOSE: True
+    STEP:
+      SIZE: 10
+      GAMMA: 0.1
+    MULTISTEP:
+      MILESTONES: [10,20]
+      GAMMA: 0.1
+    COSANLG: ## CosineAnnealingLR
+      T_MAX: 60 
+      ETA_MIN: 0
+
+
+TEST:
+  ENABLE: false ## true false
+  DS: UCF
+  LOADFROM: ''
+  LOADMODE: net ## dict
+
+  VLDT:
+    SAVEPKL: true
+    FROMPKL: false
+    
+    PER_WHAT: lbl ## glob , lbl , vid
+    MTRC_VISPLOT: true
+    MTRC_VISTABLE: false
+    MTRC_SAVETABLE: false
+    CURV_VISPLOT: true
+
+  WATCH: ## B1 FIGHT | B2 SHOOT | B4 RIOT | B5 ABUSE | B6 CARACC | G EXPLOS
+    SAVEPKL: true
+    FROMPKL: false
+    FRTEND: visdom
+    FRMT: ['asp', 'gtfl']
+    LABEL: ['111']
+    GUIVIDSEL: true
+    ASP:
+      FS: 1
+      TH: 0.5
+      CVPUTFX: float
+
+
+DATA:
+  CROPASVIDEO: false  ## true false
+  RGB:
+    SEGMENTNFRAMES: 16
+    NCROPS: 2
+    L2N: 0
+  AUD:
+    ENABLE: false
+    SEGMENTNFRAMES: 16
+    L2N: 0
+
+  LOADIN2MEM: false
+  PINMEM: true
+  PERSISTWRK: true
+  NWORKERS : 1
+
+
+DS:
+  XDV:
+    RGBFNAME: i3d-features-rgb
+    AUDFNAME: vggish-features ## vgg42-tlpf-aps
+  UCF:
+    RGBFNAME: I3DDEEPMIL
+    #AUDFNAME: vggish-features
