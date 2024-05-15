@@ -10,7 +10,6 @@ def init(l):
     log = l
 
 
-
 class RTFM(nn.Module):
     def __init__(self, rgbnf, cfg_net, cfg_cls):
         super(RTFM, self).__init__()
@@ -113,8 +112,10 @@ class NetPstFwd(BasePstFwd):
         log.debug(f"slscores: {ndata['slscores']=}")
         
         return ndata['slscores']    
-    
 
+    
+    
+    
 ### TORCH
                 
 #############

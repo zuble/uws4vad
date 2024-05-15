@@ -145,7 +145,7 @@ class CMA_LA(HybridBlock):
         super(CMA_LA, self).__init__()
 
         if hid_dim != audnf: 
-            logger.info(f"Setting hod_dim of CrossAttention block: 128 -> {audnf}")
+            logger.warning(f"Setting hod_dim of CrossAttention block: 128 -> {audnf}")
             #hid_dim = audnf
             
         with self.name_scope():

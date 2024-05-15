@@ -6,7 +6,8 @@ import glob , os, os.path as osp , math , time
 from multiprocessing import cpu_count, Pool
 CPU_COUNT = cpu_count()
 
-from utils import FeaturePathListFinder, hh_mm_ss, seed_sade
+
+from utils import hh_mm_ss, seed_sade
 
 log = None
 def init(l):
@@ -31,9 +32,15 @@ class Zuader:
 
 
 def get_trainloader(cfg):
+    
+    
     log.info(f'TRAIN: getting trainloader')
     
-    
+    ## MIL
+    ## transform te confg so both SEG SEQ is avable as a featprep
+    ## for both mil / no mil cases
+    ## abstract the seg/seq to be in the featprep fx chosen
+    ## trainfmrter must be set according MIL/ no mil
     if cfg.TRAIN.FRMT == 'SEG':
         ads, nds, arsampler, nrsampler = get_segds(cfg)
         ald = DataLoader(ads, 
@@ -65,6 +72,8 @@ def get_trainloader(cfg):
         return Zuader('SEQ', ld0)
 
 def get_segds(cfg):
+    from ._data import FeaturePathListFinder
+    
     def get_rnd_smp(ds, nsamples, gen):
         is_oversampling = len(ds) < nsamples
         log.info(f"{is_oversampling = }")
@@ -119,6 +128,8 @@ def get_segds(cfg):
     return ads, nds, arsampler, nrsampler
 
 def get_seqds(cfg):
+    from ._data import FeaturePathListFinder
+    
     opts=[]
     
     if cfg.DATA.NWORKERS == 0: 
@@ -213,8 +224,8 @@ class TrainDS(Dataset):
     def get_label(self,idx):
         #if 'label_A' in self.rgbflst[int(idx)]: return int(0)
         #else: return int(1)
-        if self.cfg_ds.LBLS[0] in self.rgbflst[int(idx)]: return int(0)
-        else: return int(1)
+        if self.cfg_ds.LBLS[0] in self.rgbflst[int(idx)]: return np.float32(0.0)
+        else: return np.float32(1.0)
         
     def get_feat(self,idx):
         
@@ -226,7 +237,7 @@ class TrainDS(Dataset):
                 
                 ## RGB
                 rgb_fp_crop = f"{self.rgbflst[int(idx)]}__{i}.npy"
-                rgb_feature_crop = np.load(rgb_fp_crop)
+                rgb_feature_crop = np.load(rgb_fp_crop).astype(np.float32)
                 
                 if self.rgbl2n: rgb_feature_crop = self.l2normfx(rgb_feature_crop)
                 #if idx == 0: view_feat(feature_crop.asnumpy())
@@ -237,11 +248,12 @@ class TrainDS(Dataset):
                 if self.audflst:
                     if not i: ## load
                         aud_fp = f"{self.audflst[int(idx)]}.npy"
-                        aud_features = np.array( np.load(aud_fp) )
+                        aud_features = np.load(aud_fp).astype(np.float32)
                         log.debug(f'vid[{idx}][AUD] {aud_features.shape} {aud_features.dtype}  {osp.basename(aud_fp)}')
                         
+                        ## assert to use prep.segmentation
                         if aud_features.shape[0] != rgb_feature_crop.shape[0]: 
-                            aud_features = segmentation_feat(aud_features,rgb_feature_crop.shape[0]) 
+                            aud_features = self.prepfx(aud_features, rgb_feature_crop.shape[0]) 
                             log.debug(f'vid[{idx}] AUD : seg in2 {aud_features.shape}')
                         
                         if self.audl2n: aud_features = self.l2normfx(aud_features)
@@ -255,14 +267,14 @@ class TrainDS(Dataset):
 
                 if self.l2n == 1: feature_crop = self.l2normfx(feature_crop)
                 #log.info(f'vid[{idx}]: PRE-SEQ {feature_crop.shape}')
-                features[i] = self.prepfx(feature_crop,self.len) 
+                features[i] = self.prepfx(feature_crop, self.len) 
                 #log.info(f'vid[{idx}]: PST-SEQ {features[i].shape}')
                 if self.l2n == 2: features[i] = self.l2normfx(features[i],a=2)
 
         ## (len, nfeatures)
         else:
             rgb_fp = f"{self.rgbflst[int(idx)]}.npy"
-            rgb_features = np.array( np.load(rgb_fp) )
+            rgb_features = np.load(rgb_fp).astype(np.float32)
             
             if self.rgbl2n: rgb_features = self.l2normfx(rgb_features)
             log.debug(f"vid[{idx}][RGB] {rgb_features.shape} {rgb_features.dtype}  {osp.basename(rgb_fp)}")
@@ -273,7 +285,7 @@ class TrainDS(Dataset):
                 else: aud_idx = int(idx)
                 
                 aud_fp = f"{self.audflst[aud_idx]}.npy"
-                aud_features = np.array( np.load( aud_fp ) )
+                aud_features = np.load( aud_fp ).astype(np.float32)
                 
                 if self.audl2n: aud_features = self.l2normfx(aud_features)
                 log.debug(f'vid[{idx}][AUD] {aud_features.shape} {aud_features.dtype}  {osp.basename(aud_fp)}')
@@ -283,7 +295,7 @@ class TrainDS(Dataset):
                 if aud_features.shape[0] != rgb_features.shape[0]:
                     #log.debug(f'preseg {np.mean(aud_features,axis=0)}')
                     #for af in aud_features[:16]: log.debug(f'{af[:40]}')
-                    aud_features = segmentation_feat(aud_features,rgb_features.shape[0]) 
+                    aud_features = self.prepfx(aud_features, rgb_features.shape[0]) 
                     #log.debug(f'posseg {np.mean(aud_features,axis=0)}')
                     #for af in aud_features[:16]: log.debug(f'{af[:40]}')
                     log.debug(f'vid[{idx}][AUD] seg in2 {aud_features.shape}')
@@ -343,7 +355,7 @@ class FeatPrep():
             'seq': self.seqmentation
         }.get(what)
         self.RNG = np.random.default_rng(seed)
-        log.error(f" np.random.")
+        #log.error(f" {np.random.default_rng.}")
     
     def rnd_jit(self, idxx, len_feat):
         ## jitter betwen adjacent chosen idxx
@@ -439,6 +451,7 @@ class TrainFrmter():
             'SEG':self.segfrmter,
             'SEQ':self.seqfrmter
         }.get(cfg.TRAIN.FRMT)
+        
         self.bs = cfg.TRAIN.BS
         self.ncrops = cfg.DATA.RGB.NCROPS
         
@@ -451,8 +464,6 @@ class TrainFrmter():
         return x 
 
     def segfrmter(self, tdata, ldata, trn_inf):
-        ## cant have tdata(traindata) as a dict out of dataloader
-        ## so have to ret
         (nfeat, nlabel), (afeat, alabel) = tdata
         log.debug(f"E[{trn_inf['epo']+1}]B[{trn_inf['bat']+1}] nfeat: {nlabel[0]} {nfeat.dtype} {nfeat.shape} {nfeat.device} , afeat: {alabel[0]} {afeat.dtype} {afeat.shape} {afeat.device}")
         
@@ -460,7 +471,7 @@ class TrainFrmter():
         
         cfeat = torch.cat((nfeat, afeat), 0) ## (2*bs, (ncrops), seglen , nfeats)
         log.debug(f"E[{trn_inf['epo']+1}]B[{trn_inf['bat']+1}] cfeat: {cfeat.shape} {cfeat.dtype} {cfeat.device}")
-        
+
         return self.rshp_in(cfeat).to(trn_inf['dvc'])
         
     def seqfrmter(self, tdata, ldata, trn_inf):

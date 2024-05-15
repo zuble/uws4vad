@@ -1,12 +1,13 @@
 import torch
 import numpy as np
 
-import glob , os, os.path as osp , math , time
+import glob , os, os.path as osp, math, time
+from collections import OrderedDict
 
 from .testdl import init as init1
 from .traindl import init as init2
 
-from utils import FeaturePathListFinder, mp4_rgb_info, Visualizer, LoggerManager
+from utils import mp4_rgb_info, LoggerManager
 
 log = None
 def init():
@@ -14,8 +15,7 @@ def init():
     log = LoggerManager.get_logger(__name__)
     init1(log); init2(log)
 
-
-
+###########
 ## DEBUGGER
 def run_dl(dl):
     """
@@ -37,7 +37,7 @@ def run_dl(dl):
         log.error(f'Error unpacking variables in batch {b_idx+1}: {e}')
 
 
-###############################
+##############
 ## XDV/UCF DS
 def get_testxdv_info(txt_path):
     txt = open(txt_path,'r')
@@ -96,3 +96,130 @@ def get_ucf_stats():
         log.info(f"TOTAL NORMAL FRAMES: {total[0]} {(total[0]/(total[0]+total[1]))*100:2f}%")
         log.info(f"TOTAL ANOMALY FRAMES: {total[1]} {(total[1]/(total[0]+total[1]))*100:2f}%\n\n")
 
+
+####################
+## PATHS AND SUCH
+class FeaturePathListFinder:
+    """
+        From cfg_ds.FROOT/fname/ finds a folder with mode in it (train / test)
+        then based on cfg procedes to filter the features paths
+        so it retrieves accurate features list to use
+        used in data/get_trainloader && data/get_testloader
+    """
+    def __init__(self, cfg, mode:str, modality:str, cfg_ds):
+        self.listBG , self.listA = [], []
+        
+        #if not cfg_ds:
+        #    if mode in 'train': cfg_ds = getattr(cfg.DS, cfg.TRAIN.DS)
+        #    ## test mode is used by vldt/Validate on 2 scenarios:
+        #    ## train for validation and test
+        #    ## it must be specified in order to get the right cfg_ds
+        #    ## as train and test might have different ds to operate on
+        #    else: raise Exception("cfg_ds is None with mode in test")
+        
+        if modality == 'rgb': fname = cfg_ds.RGBFNAME
+        elif modality == 'aud': 
+            fname = cfg_ds.AUDFNAME
+            if not fname :
+                ## UCF
+                log.warning(f'fname is empty for {mode}/aud while being enabled: feature lists empty')
+                return
+            
+        fpath = ''
+        for root, dirs, _ in os.walk(cfg_ds.FROOT):
+            if fname == osp.basename(root):
+                for d in dirs:
+                    if mode in d:
+                        #log.info(f'{d}')
+                        fpath = osp.join(root, d)
+                        log.info(f'{mode} features path {fpath}')
+                        break        
+        if not fpath: 
+            raise Exception (f'{fname} or {fname}/{mode} not found in {cfg_ds.FROOT=}')
+
+        flist = glob.glob(fpath + '/**.npy')
+        flist.sort()
+        log.debug(f"feat flist pre-filt in {mode} {modality} : {len(flist)}")
+        
+        #################        
+        ## if cropasvideo
+        ##      if train, 
+        ##          if cfg.DATA.RGB.NCROPS == to the amount of crops in the flist 
+        ##              all features will treatead as a video so leave all fn in list
+        ##          if != load only correspondant crop, eg if cfg.DATA.RGB.NCROPS == 1 and the flist contains 5 crops for each vid, form flist with flist excluding the __1.npy __2.npy __3.npy __4.npy crops for each video 
+        ##      if test, take unique basename from crop fns -> it'll use only center crop __0.npy
+        ## elif cfg,DATA.NCROPS is set means that features files have crops even if only 1 is used
+        ##      if train, take unique basename from crop fns -> feed each crop feat -> mean scores over crop dimension
+        ##      if test, take unique basename from crop fns -> it'll use only center crop __0.npy
+        ## else means that all files are a feature of video full view
+
+        if modality == 'rgb':
+            if cfg.DATA.CROPASVIDEO and mode in 'train':
+                ## Get the unique video identifiers from the first cfg.DATA.RGB.NCROPS * 2 files
+                unique_video_ids = list(OrderedDict.fromkeys([osp.splitext(f)[0][:-3] for f in flist[:cfg.DATA.RGB.NCROPS * 2]]))
+                ## if features dataset ncrops corresponds to cfg.DATA.RGB.NCROPS select all
+                if len(unique_video_ids) == 2: flist = [f[:-4] for f in flist]
+                ## selects only the frist cfg.DATA.RGB.NCROPS crop files
+                else:
+                    flist = list(OrderedDict.fromkeys([osp.splitext(f)[0][:-3] for f in flist]))
+                    flist = [f"{f}__{i}" for f in flist for i in range(cfg.DATA.RGB.NCROPS)]
+            
+            ## cfg.DATA.CROPASVIDEO is False or the mode is "test"
+            elif cfg.DATA.RGB.NCROPS:
+                ##feature fn from features crop folder without duplicates (__0, __1...) 
+                flist = list(OrderedDict.fromkeys([osp.splitext(f)[0][:-3] for f in flist]))
+            
+            ## ds w/ 1 rgbf per video
+            else: flist = [f[:-4] for f in flist]
+        
+        ## 1 audf npy per video
+        else: flist = [f[:-4] for f in flist]
+
+        log.debug(f"feat flist pos-filt in {mode} {modality} : {len(flist)}")
+        
+        
+        ######
+        ## filters into anom and norm w/ listA and listBG
+        ## filters for watching purposes w/ fn_label_dict
+        self.fn_label_dict = {lbl: [] for lbl in cfg_ds.LBLS_INFO[:-1]}
+        fist = list(self.fn_label_dict.keys())[0]  ## 000.NORM
+        last = list(self.fn_label_dict.keys())[-1] ## 111.ANOM
+
+        for fp in flist:
+            fn = osp.basename(fp)
+            
+            ## v=Z12t5h2mBJc__#1_label_B1-0-0
+            if 'label_' in fn: xearc = fn[fn.find('label_'):]
+            else: xearc = fn
+            
+            #log.debug(f'{fp} {xearc} ')
+            
+            if cfg_ds.LBLS[0] in xearc:
+                self.listA.append(fp)
+                self.fn_label_dict[fist].append(fn)
+                #log.debug(f'{xearc} {fn}')
+            else:
+                self.listBG.append(fp)
+                self.fn_label_dict[last].append(fn)
+
+                for key in self.fn_label_dict.keys():
+                    if key in xearc: 
+                        self.fn_label_dict[key].append(fn)
+                        #log.debug(f'{key} {fn}')
+                        
+        #for label, lst in self.fn_label_dict.items(): 
+        #    log.debug(f'[{label}]: {len(self.fn_label_dict[label])}  ') ##{self.fn_label_dict[label]}
+                
+                
+    def get(self, mode, watch_list=[]):
+        if mode == 'BG': l = self.listBG
+        elif mode == 'A': l = self.listA
+        elif mode == 'watch': 
+            l = []
+            for lbl2wtch in watch_list:
+                ## find the labels that match the ones provided which need to be the nummberss prior to dot/.
+                lbl2wtch = [lbl for lbl in list(self.fn_label_dict.keys()) if lbl.split('.')[0] == lbl2wtch][0]
+                log.debug(f'{lbl2wtch} {len(self.fn_label_dict[lbl2wtch])}')
+                l.extend(self.fn_label_dict[lbl2wtch])
+        else: log.error(f'{mode} not found')
+        return l

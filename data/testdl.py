@@ -6,7 +6,7 @@ import glob , os, os.path as osp , math , time
 from multiprocessing import cpu_count, Pool
 CPU_COUNT = cpu_count()
 
-from utils import FeaturePathListFinder, hh_mm_ss
+from utils import hh_mm_ss
 
 log = None
 def init(l):
@@ -17,6 +17,7 @@ def init(l):
 #############################
 ## TEST
 def get_testloader(cfg, cfg_ds):
+    from ._data import FeaturePathListFinder
         
     if cfg.DATA.NWORKERS == 0: cfg.DATA.NWORKERS = int(CPU_COUNT / 4)
     log.info(f'TEST: CPU_COUNT {CPU_COUNT} , NWORKERS {cfg.DATA.NWORKERS}')

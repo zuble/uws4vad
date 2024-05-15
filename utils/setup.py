@@ -21,21 +21,28 @@ def init(args):
             #print(f'2 {expryml_path}')
     assert osp.isfile(expryml_path), f'{expryml_path} does not exist'
     
-    #print(f'3 {expryml_path}')
+    print(f'3 {expryml_path}')
 
     ## merge default with experiment
     cfg = get_cfg(expryml_path) 
 
+
     ## Creates experiment main dir 
-    cfg.EXPERIMENTPROJ = osp.basename(os.getcwd())
-    cfg.EXPERIMENTID = osp.splitext(osp.basename(expryml_path))[0]
-    exp_path = osp.join(cfg.EXPERIMENTDIR,cfg.EXPERIMENTID)
+    proj_name = osp.basename(os.getcwd())
+    exp_id = osp.splitext(osp.basename(expryml_path))[0]
+    if not cfg.EXPERIMENTDIR or osp.exists(cfg.EXPERIMENTDIR):
+        exp_path = osp.join(os.getcwd()+'/.params',exp_id)
+    else:
+        exp_path = osp.join(cfg.EXPERIMENTDIR, exp_id)    
     if not osp.exists(exp_path):os.mkdir(exp_path)    
-    cfg.EXPERIMENTPATH = exp_path
+    cfg.merge_from_list( ['EXPERIMENTPROJ', proj_name , 
+                        'EXPERIMENTID', exp_id, 
+                        'EXPERIMENTPATH', exp_path] )
     
     ## sets all gpus as avaiable
-    gpus = subprocess.check_output(['nvidia-smi'], text=True).count('%')
-    os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, range(gpus))) ## '0,...,gpus-1'
+    if cfg.GPUSETON:
+        gpus = subprocess.check_output(['nvidia-smi'], text=True).count('%')
+        os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, range(gpus))) ## '0,...,gpus-1'
     
     from utils.log import LoggerManager
     log_path = LoggerManager.setup(exp_path, cfg.DEBUG)

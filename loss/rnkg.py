@@ -14,7 +14,7 @@ class BCE(nn.Module):
         self.crit = nn.BCELoss()
         
     def forward(self, scores, label):
-        log.debug(f"BCE/{scores.shape} {scores.context} {label.shape} {label.context}")
+        #log.debug(f"BCE/{scores.shape} {scores.context} {label.shape} {label.context}")
         l = self.crit(scores, label)
         return {
             'loss_bce': l
@@ -179,7 +179,7 @@ class RTFML(nn.Module):
         nc, b, t, f = feats.shape
         
         idx_feat = idx.unsqueeze(2).expand([-1, -1, f])
-        feats_sel = torch.zeros(0, device=self.dvc)
+        feats_sel = torch.zeros(0, ) #device=self.dvc
         for i, feat in enumerate(feats):
             feats_sel = torch.gather(feat, dim=1, index=idx_feat)
             ## (bag, 3, f)
@@ -226,7 +226,7 @@ class RTFML(nn.Module):
         ## abnormal
         sls_sel_abn = torch.gather(abnr_sls, dim=1, index=idx_abnr) ## (bag, k)
         vls_abn = torch.mean( sls_sel_abn, dim=1 ) ## (bag)
-        
+        loss_bcea = self.bce(vls_abn, torch.ones_like(vls_abn).to(self.dvc))
         ## normal
         sls_sel_norm = torch.gather(norm_sls, dim=1, index=idx_norm) ## (bag, k)
         vls_norm = torch.mean( sls_sel_norm, dim=1 ) ## (bag)

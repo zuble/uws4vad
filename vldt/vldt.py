@@ -138,7 +138,6 @@ class VldtInfo:
 
 
 ###############
-@torch.no_grad()
 class Validate:
     def __init__(self, cfg, cfg_ds, cfg_vldt, net_pst_fwd, dvc, metrics, watching):
         self.cfg = cfg
@@ -191,7 +190,7 @@ class Validate:
         return new_arr
     
     
-    
+    @torch.no_grad()
     def _forward_attnomil(self, net, feat):
         '''
         as one score per forward, segment&repeat to get len(scores)=len(feats)
@@ -302,7 +301,7 @@ class Validate:
             self.scores = np.expand_dims(self.scores, axis=0)
         log.debug(f'scores post1 {self.scores.shape=}') #
     '''
-            
+    @torch.no_grad()    
     def _forward_glob(self, net, feat):
         ndata = net(feat)
         

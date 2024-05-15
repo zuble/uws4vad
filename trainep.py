@@ -10,7 +10,8 @@ def init(l):
     global log
     log = l
 
-@torch.enable_grad()
+
+@torch.enable_grad() #need?
 def train_epo(cfg, loader, frmter, net, net_pst_fwd, lossfx, ldata, optima, tmeter, trn_inf):
     
     net.train()

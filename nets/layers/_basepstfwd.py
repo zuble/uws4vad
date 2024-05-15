@@ -9,8 +9,10 @@
 ##      levarage that each lossfx returns a dict
 ##      furthermore the train_epo expects a dict of losses
 ##  infer, to adapt values 4 inference
-## train_ep/train_epo and vldt/vldt/Validate stays static nd focus on architect
-## if really needed realy on id key in ndata o process in train_epo
+## train_ep/train_epo (use netpstfwd.train)
+## vldt/vldt/Validate (use netpstfwd.infer)
+## both enabling the principal loop to stay static nd focus on architect
+## if really needed realy on id key in ndata to post process both cases
 import torch
 
 class BasePstFwd:
@@ -71,13 +73,17 @@ class NetPstFwdEx(BasePstFwd):
     def train(self, ndata, ldata, lossfx):
         log.debug(f"")
         
-        super().rshp_out(ndata, '', 'mean')
-        #super().rshp_out(ndata, '', 'crop0')
+        super().rshp_out(ndata, '', 'mean') ## crop0
         log.debug(f" pos_rshp: {ndata[''].shape}")
-        loss0 = lossfx[''](ndata[''])
-        self.updt_lbat('', loss0.item())
         
-        return loss0 
+        ## every lossfx returns a dict
+        L0 = lossfx[''](ndata[''])
+        L1 = lossfx[''](ndata[''])
+        
+        ## later indiv metered and summed to .backward 
+        return L0.update(
+            L1
+            ) 
 
 
     def infer(self, ndata):
@@ -86,3 +92,5 @@ class NetPstFwdEx(BasePstFwd):
         log.debug(f"slscores: {ndata['slscores']=}")
         
         return ndata['slscores']    
+    
+    

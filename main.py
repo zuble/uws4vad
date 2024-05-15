@@ -8,11 +8,11 @@ from utils import setup_init, misc
 from vldt import vldt, metric
 
 parser = argparse.ArgumentParser(description='fext')
-parser.add_argument('--exp', 
+parser.add_argument('--exp','-e',
                     type=str, 
                     default='cfg/weddit.yml',
-                    help='either full/fn or relative path to experiment .yml')
-parser.add_argument('--loop_ptrn',
+                    help='either full or relative path to experiment .yml')
+parser.add_argument('--loop_ptrn', '-lp',
                     type=str,
                     default='', ## cfg/attnomil_1*.yml
                     help='loop over all cfg present in loop_ptrn ')
@@ -67,6 +67,8 @@ if __name__ == "__main__":
     ## https://pytorch.org/docs/1.8.1/notes/cuda.html#tf32-on-ampere
     print(torch.tensor([1.2, 3]).dtype )
     print(f"{torch.backends.cuda.matmul.allow_tf32=} {torch.backends.cudnn.allow_tf32=}")
+    print(f"{torch.get_default_dtype()=}")
+    #torch.set_default_dtype('float32')
     
     ## expeeeriment config selection
     exps=[]
@@ -74,7 +76,9 @@ if __name__ == "__main__":
         exps = glob.glob( osp.join(os.getcwd(),args.loop_ptrn) )
     else: exps.append(args.exp)
     
-    if not exps or not osp.exists(exps[0]): ## user input
+    print('\n\n','_'*33,'\n\n')
+    if not exps or not osp.exists(exps[0]) or not osp.exists(osp.join(os.getcwd(),exps[0])): 
+        ## user input
         cfg_files = glob.glob(osp.join(os.getcwd(), 'cfg') + '/*.yml')
         cfg_dict = {str(i): t for i, t in enumerate(cfg_files)}
         for key, value in cfg_dict.items():print(f"{key}: {value}")
@@ -88,15 +92,17 @@ if __name__ == "__main__":
         print(f'\n\nEXPERIMENT {expi+1}/{len(exps)}: {exp}\n\n')
 
         args.exp = exp
-        cfg = setup_init(args) ## here is called the log.LoggerManager.setup
+        cfg = setup_init(args) ## call log.LoggerManager.setup
         
-        initialize_modules() ## creates a log instance per module
+        initialize_modules() ## create a log instance per module
         
         ## device setup
-        if cfg.GPUID[0] == -1: dvc = torch.device('cpu')
-        elif len(cfg.GPUID) == 1:
-            assert torch.cuda.is_available()
+        if cfg.GPUID[0] != -1 and torch.cuda.is_available(): 
             dvc = torch.device(f'cuda:{cfg.GPUID[0]}')
+            
+        elif len(cfg.GPUID) == 1:
+            dvc = torch.device('cpu')
+            
         else: raise Exception(f'invalid gpuid {cfg.GPUID}')
         
         main()

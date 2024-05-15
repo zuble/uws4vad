@@ -7,16 +7,16 @@ __all__ = []
 
 MODULE_CONFIG = {
     'attnomil': True,
-    'cmala': False,
+    'cma': False,
     'dtr': False,
     'mindspore': False,
-    'rtfm': False,
+    'rtfm': True,
     'zzz': False
 }
 
 def import_modules():
     for _, module_name, _ in pkgutil.iter_modules(__path__):
-        if module_name != "_nets" and MODULE_CONFIG.get(module_name, True):
+        if module_name != "_nets" and MODULE_CONFIG.get(module_name, False):
             module = importlib.import_module(f".{module_name}", package=__name__)
             #print("NET",module)
             globals()[module_name] = module

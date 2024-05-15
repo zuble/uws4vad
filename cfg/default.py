@@ -3,6 +3,7 @@ from yacs.config import CfgNode as CN
 _C = CN()
 ## number of gpus to use. Use -1 for CPU
 _C.GPUID = [3]
+_C.GPUSETON = False ## sets all gpus in os var CUDA_VISIBLE_DEVICES
 ## if None and train: generates trough os see more utils/misc.py
 ## else: use seed at fn .pkl 
 _C.SEED = None
@@ -10,7 +11,9 @@ _C.DETERMINISTIC = False
 
 #########
 ## root dir to save logs /ckpt / model
-_C.EXPERIMENTDIR = '/media/jtstudents/T77/TH/zutc_vad/.params'
+#_C.EXPERIMENTDIR = '/media/jtstudents/T77/TH/zutc_vad/.params'
+#_C.EXPERIMENTDIR = '/mnt/t77/TH/zutc_vad/.params'
+_C.EXPERIMENTDIR = ''
 ## based on fn.yml, a fn folder will be created in the experiment dir (see utils/setup.py)
 _C.EXPERIMENTID = ''
 _C.EXPERIMENTPROJ = ''

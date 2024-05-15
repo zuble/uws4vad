@@ -8,7 +8,7 @@ import trainep
 from loss import get_loss
 from nets import get_net, save
 from data import get_trainloader, TrainFrmter, run_dl
-from utils import LoggerManager , Visualizer, hh_mm_ss, get_optima
+from utils import LoggerManager, Visualizer, hh_mm_ss, get_optima
 from vldt import Validate, Metrics
 
 
@@ -74,11 +74,12 @@ def trainer(cfg, dvc, dl=None):
         ## validat
         if (epo + 1) % cfg.TRAIN.VLDT.PERIOD == 0:
             log.info(f'$$$ Validation at epo {epo+1}')
-            if not cfg.TRAIN.VLDT.CUDDNAUTOTUNE: os.environ['MXNET_CUDNN_AUTOTUNE_DEFAULT'] = '0'
+            ## !!!! anything similiar in torch ?? 
+            #if not cfg.TRAIN.VLDT.CUDDNAUTOTUNE: os.environ['MXNET_CUDNN_AUTOTUNE_DEFAULT'] = '0'
             _, _, mtrc_info = vldt.start(net)
             if cfg_vldt.VISPLOT: vis.plot_vldt_mtrc(mtrc_info,epo)
             vldt.reset()
-            if not cfg.TRAIN.VLDT.CUDDNAUTOTUNE: os.environ['MXNET_CUDNN_AUTOTUNE_DEFAULT'] = '1'    
+            #if not cfg.TRAIN.VLDT.CUDDNAUTOTUNE: os.environ['MXNET_CUDNN_AUTOTUNE_DEFAULT'] = '1'    
         
         lrs.step() ## adjust lr
         

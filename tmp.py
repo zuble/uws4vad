@@ -1,110 +1,73 @@
 import torch
 from torch.utils.data import DataLoader, Dataset, BatchSampler, RandomSampler
 import numpy as np
-torch.set_default_tensor_type(torch.cuda.FloatTensor)
-torch.set_default_tensor_type(torch.FloatTensor)
+
+#torch.set_default_tensor_type(torch.cuda.FloatTensor)
+#torch.set_default_tensor_type(torch.FloatTensor)
 
 import os, random, time
 
-
 import nets ## can use nets.dtr.dtr eg
 from nets import get_net, save
-from utils import LoggerManager, get_optima, Visualizer, hh_mm_ss, FeaturePathListFinder, mp4_rgb_info
+from utils import LoggerManager, get_optima, Visualizer, hh_mm_ss, mp4_rgb_info
 #from vldt import Metrics, Validate 
 from data import get_trainloader, get_xdv_stats, get_ucf_stats
-#from loss import get_loss
+from loss import get_loss
 
 log = None
 def init():
     global log
     log = LoggerManager.get_logger(__name__)
 
-
-#########################
-## SEED
-def get_truly_random_seed_through_os():
-    """
-    Usually the best random sample you could get in any programming language is generated through the operating system. 
-    In Python, you can use the os module.
-    https://stackoverflow.com/questions/57416925/best-practices-for-generating-a-random-seeds-to-seed-pytorch/57416967#57416967
-    """
-    RAND_SIZE = 4
-    random_data = os.urandom( RAND_SIZE )  ## Return a string of size random bytes suitable for cryptographic use.
-    random_seed = int.from_bytes(random_data, byteorder="big")
-    return random_seed
-
-def init_seed(seed = None):
-    ## https://pytorch.org/docs/1.8.1/notes/randomness.html
-    ## https://github.com/henrryzh1/UR-DMU/blob/master/utils.py#L34
-    ## https://github.com/Roc-Ng/DeepMIL/blob/master/main.py#L9
-    ## https://github.com/Lightning-AI/pytorch-lightning/blob/baeef935fb172a5aca2c84bff47b9b59d8e35b8a/src/lightning/fabric/utilities/seed.py#L37 
+# LOSS / NETS TEST CALLS
+def run_net_loss(cfg, dvc):
+    #A = ['BCE','RNKG','CLAS', 'MBS']
+    #A = ['RNKG']
+    #cfg.TRAIN.SEQ.LOSS = A
+    lossfx, ldata = get_loss(cfg, dvc)
+    for lfx in lossfx:
+        log.info(f"{lfx}")
+    #ldata = {}
+    #lossfx = {}
     
-    print(f'cfg.SEED: {seed}')
-    if seed is None: ## cfg.SEED
-        seed = os.environ.get('PYTHONHASHSEED', None)
-        print(f'PYTHONHASHSEED: {seed}')
-        if seed is None: ## os.var
-            seed = get_truly_random_seed_through_os()
-            print(f'new os.seed: {seed}')
-            
-    ## change the cfg file itself to the seed or simple 
-    print(f'SEEDIT~WEEDIT {seed}')
-    os.environ['PYTHONHASHSEED'] = str(seed)
+    #A = ['CMA','DTR','ATTNOMIL', 'MINDSPORE', 'ZZZ', 'TAD', 'CLAWS']
+    A = ['rtfm'] #RTFM
     
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed) ## cpu
-    ## gpus
-    torch.cuda.manual_seed(seed) ## single
-    torch.cuda.manual_seed_all(seed) ## multiple
-    ## https://pytorch.org/docs/1.8.1/generated/torch.use_deterministic_algorithms.html#torch.use_deterministic_algorithms
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    for a in A:
+        cfg.NET.NAME = a
+        log.info(f"\n\n{a}\n\n")
+        
+        net, net_pst_fwd = get_net(cfg, dvc)
+        
 
-    #return np.random.seed(seed)
+        bs = cfg.TRAIN.BS
+        nc = cfg.DATA.RGB.NCROPS
+        seqlen = cfg.TRAIN.SEG.LEN
+        rgbnf = cfg.DATA.RGB.NFEATURES
+        #feat = torch.randint(0,1,(seqlen,rgbnf),dtype=torch.float32)#.to(dvc)
+        feat = torch.randint(0,1,(bs*nc,seqlen,rgbnf),dtype=torch.float32)#.to(dvc)
+        
+        ######
+        ndata = net(feat)
+        loss_glob = net_pst_fwd.train(ndata, ldata, lossfx)
+        ######
+        
+        
+        
+        #if a == 'CLAWS':
+        #    cfg.TRAIN.SEQ.LOSS = 'CLAWS'
+        #    l, ldata = get_loss(cfg, dvc)
+        #    log.info(f"{a} {l}")
+        #    loss = l(ndata, ldata)
 
-def seed_sade(id):
-    tmp = torch.initial_seed() % 2**32
-    np.random.seed(tmp)
-    random.seed(tmp)   
-
-
-#########################
-## allow_tf32
-## https://pytorch.org/docs/1.8.1/notes/cuda.html#tf32-on-ampere
-def allow_tf32():
-    
-    a_full = torch.randn(10240, 10240, dtype=torch.double, device='cuda')
-    b_full = torch.randn(10240, 10240, dtype=torch.double, device='cuda')
-    tic = time.time()
-    ab_full = a_full @ b_full
-    print(f"time: {time.time() - tic}")
-    mean = ab_full.abs().mean()  # 80.7277
-
-    a = a_full.float()
-    b = b_full.float()
-
-    # Do matmul at TF32 mode.
-    print(f"{torch.backends.cuda.matmul.allow_tf32=} {torch.backends.cudnn.allow_tf32=}")
-    tic = time.time()
-    ab_tf32 = a @ b  # takes 0.016s on GA100
-    print(f"time: {time.time() - tic}")
-    error = (ab_tf32 - ab_full).abs().max()  # 0.1747
-    relative_error = error / mean  # 0.0022
-    print(f"{error=} {relative_error=}")
-    
-    # Do matmul with TF32 disabled
-    torch.backends.cuda.matmul.allow_tf32 = False
-    torch.backends.cudnn.allow_tf32 = False
-    print(f"{torch.backends.cuda.matmul.allow_tf32=} {torch.backends.cudnn.allow_tf32=}")
-    
-    tic = time.time()
-    ab_fp32 = a @ b  # takes 0.11s on GA100
-    print(f"time: {time.time() - tic}")
-    error = (ab_fp32 - ab_full).abs().max()  # 0.0031
-    relative_error = error / mean  # 0.000039
-    print(f"{error=} {relative_error=}")
-
+        
+        ######
+        for k,v in ndata.items():
+            if k != "id": log.info(f"{k} {v.shape}")
+            else: log.info(f"{k} {v}")
+        log.info(f"\n\n")
+        ######
+        
 class Zuader:
     ## encapsulates the dataloader independtly of elements yielded
     def __init__(self, frmt='SEG', *loaders):
@@ -136,7 +99,10 @@ class RndDS(Dataset):
         return self.len
 
 
-def main():
+def main(cfg, dvc):
+    
+    run_net_loss(cfg, dvc); return
+    
     allow_tf32()
     init_seed(22)
     assert torch.initial_seed() == int(os.environ['PYTHONHASHSEED']), f"{torch.initial_seed()} {os.environ['PYTHONHASHSEED']}"
@@ -204,9 +170,6 @@ def main():
     print(f"{time.time() - tic}")
 
 
-def ola(cfg,dvc):
-    print(cfg)
-    
 if __name__ == "__main__":
     
     main()

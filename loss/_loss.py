@@ -65,7 +65,7 @@ def get_loss(cfg, dvc):
         else: raise Exception('Loss not implemented')
     
         loss_mdl.init(log)
-        log.info(f"loss[{loss_idx}] {list(lfx.keys())[-1]}\n{list(lfx.values())[-1]}\nldata: {ldata}")
-        log.info('losscfg:\n{}'.format(c.dump()))
+        log.info(f"loss[{loss_idx}] {list(lfx.keys())[-1]}\n{list(lfx.values())[-1]}\nldata:\n{ldata}\nlosscfg:\n{c.dump()}")
+
     
     return lfx, ldata
