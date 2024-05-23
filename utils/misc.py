@@ -88,14 +88,12 @@ def parse_ptfn(fn):
     match = re.match(r'(.*)_(\d+)\.(net|dict)$', fn)
     if not match: 
         log.warming(f'no match for pattern name_seed.[net|dict]')
-        d = {'bn':None,'seed':None,'load_mode':None}
+        d = {'bn':None,'seed':None,'mode':None}
     else:
         base_name, seed, load_mode = match.groups()
-        d = {'bn':base_name,'seed':int(seed),'load_mode':load_mode}
+        d = {'bn':base_name,'seed':int(seed),'mode':mode}
     log.info(f'{fn} parsed as {d}')
     return d
-
-
 
 
 

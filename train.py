@@ -27,11 +27,11 @@ def trainer(cfg, dvc, dl=None):
     if dl: 
         log.warning(f"REUSING {dl} FROM PREVIOUS RUN")
         loader = dl
-    else: loader = get_trainloader(cfg) ;run_dl(loader); return
+    else: loader, cfg_frgb, cfg_faud = get_trainloader(cfg) #;run_dl(loader); return
     frmter = TrainFrmter(cfg)
 
     ## NetWork
-    net, net_pst_fwd = get_net(cfg, dvc, cfg.NET.WGHT_INIT)
+    net, net_pst_fwd = get_net(cfg, cfg_frgb, cfg_faud, dvc, cfg.NET.WGHT_INIT)
     net.to(dvc)
     #f = torch.randn(2, 32, cfg.DATA.RGB.NFEATURES).to(dvc)
     #y = net(f)  
@@ -46,8 +46,9 @@ def trainer(cfg, dvc, dl=None):
     #vis.delete(f'{cfg.EXPERIMENTPROJ}/{cfg.EXPERIMENTID}')
     metrics = Metrics(cfg, 'train', vis)
     cfg_vldt = cfg.TRAIN.VLDT
-    vldt = Validate(cfg, getattr(cfg.DS, cfg.TRAIN.DS), cfg_vldt, net_pst_fwd, dvc, metrics, watching=None)
-    #vldt.start(net);return
+    
+    vldt = Validate(cfg, getattr(cfg.DS, cfg.TRAIN.DS[0].split('.')[0]), cfg_frgb, cfg_vldt, net_pst_fwd, dvc, metrics, watching=None)
+    vldt.start(net);return
     if not cfg.TRAIN.LOG_PERIOD: cfg.merge_from_list(["TRAIN.LOG_PERIOD", cfg.TRAIN.EPOCHBATCHS // 2])
     
     ## Train

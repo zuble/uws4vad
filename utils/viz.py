@@ -2,6 +2,12 @@ import visdom, json, numpy, subprocess
 
 from .log import LoggerManager
 
+log = None
+def init():
+    global log
+    log = LoggerManager.get_logger(__name__)
+
+
 #########################
 ## visdom helper methods
 class Visualizer(object):
@@ -24,7 +30,6 @@ class Visualizer(object):
         self.env = env
         self.index = {}
         self.mtrc_win = {}
-        self.log = log = LoggerManager.get_logger(__name__)
         
         log.info(f"vis envs: {self.vis.get_env_list()}")
         log.info(f"vis created for {env = }")
@@ -39,9 +44,9 @@ class Visualizer(object):
     def check_server(self):
         #up = subprocess.check_output("ps aux | grep 'visdom.server'| grep -v grep ", shell=True)
         up = subprocess.Popen("ps aux | grep 'visdom.server'| grep -v grep", shell=True, stdout=subprocess.PIPE).stdout.read().decode()
-        #self.log.info(up)
+        #log.info(up)
         if not up: 
-            self.log.error("RUN :   nohup python -m visdom.server > vis.out &&"); 
+            log.error("RUN :   nohup python -m visdom.server > vis.out &"); 
             raise Exception("")
 
         
@@ -114,7 +119,7 @@ class Visualizer(object):
                 
                 if self.vis.win_exists(win=win_id,env=self.env):
                     self.vis.close(win=win_id, env=self.env) #, env=env
-                    self.log.warning(f"VIS closing {wtitle} {win_id} ")
+                    log.warning(f"VIS closing {wtitle} {win_id} ")
         
     def exists(self, wtitle): return self.vis.win_exists(win=wtitle,env=self.env)
     

@@ -60,6 +60,9 @@ class BasePstFwd:
                 elif meth == 'crop0':
                     arr = arr[:, 0, :, :]
         return arr
+    
+    
+    
                     
     def updt_lbat(self, key, value):
         self.lbat[key] = value

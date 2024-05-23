@@ -10,9 +10,9 @@ def init(l):
     log = l
 
 
-class RTFM(nn.Module):
+class Network(nn.Module):
     def __init__(self, rgbnf, cfg_net, cfg_cls):
-        super(RTFM, self).__init__()
+        super().__init__()
         self.rgbnf = rgbnf
         
         self.aggregate = Aggregate(self.rgbnf)

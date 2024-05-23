@@ -181,9 +181,9 @@ class RTFML(nn.Module):
         idx_feat = idx.unsqueeze(2).expand([-1, -1, f])
         feats_sel = torch.zeros(0, ) #device=self.dvc
         for i, feat in enumerate(feats):
-            feats_sel = torch.gather(feat, dim=1, index=idx_feat)
+            feat_sel = torch.gather(feat, dim=1, index=idx_feat)
             ## (bag, 3, f)
-            feats_sel = torch.cat((feats_sel , feats_sel))
+            feats_sel = torch.cat((feats_sel , feat_sel))
         ## (nc*bags, 3, f)
 
         log.debug(f"{feats.shape=} gather {idx.shape=} over ncrops dim -> {feats_sel.shape=} ")
@@ -211,7 +211,7 @@ class RTFML(nn.Module):
         loss_abn = torch.abs(self.margin - l2norm_abn)
         
         ## normal
-        nfeat = torch.mean(self.gather_feats(norm_feats, idx_norm), dim=1) ## (bag*nc, k, f) -> (bag*nc, f)
+        nfeat = torch.mean( self.gather_feats(norm_feats, idx_norm), dim=1) ## (bag*nc, k, f) -> (bag*nc, f)
         loss_norm = torch.norm(nfeat, p=2, dim=1)
         
         loss_rtfm = torch.mean((loss_abn + loss_norm) ** 2)
@@ -224,15 +224,18 @@ class RTFML(nn.Module):
         #if abnr_sls is not None and norm_sls is not None:
             
         ## abnormal
-        sls_sel_abn = torch.gather(abnr_sls, dim=1, index=idx_abnr) ## (bag, k)
+        sls_sel_abn = torch.gather( abnr_sls, dim=1, index=idx_abnr ) ## (bag, k)
         vls_abn = torch.mean( sls_sel_abn, dim=1 ) ## (bag)
-        loss_bcea = self.bce(vls_abn, torch.ones_like(vls_abn).to(self.dvc))
+        loss_bcea = self.bce( vls_abn, torch.ones_like(vls_abn).to(self.dvc) )
+        
         ## normal
         sls_sel_norm = torch.gather(norm_sls, dim=1, index=idx_norm) ## (bag, k)
         vls_norm = torch.mean( sls_sel_norm, dim=1 ) ## (bag)
-        #loss_bcen = self.bce(vls_norm, torch.zeros_like(vls_norm).to(self.dvc))
+        loss_bcen = self.bce( vls_norm, torch.zeros_like(vls_norm).to(self.dvc) )
         
-        loss_vls = self.bce( torch.cat((vls_norm, vls_abn)) , ldata['label'])
+        loss_vls = loss_bcea + loss_bcen
+        
+        #loss_vls = self.bce( torch.cat((vls_norm, vls_abn)) , ldata['label'])
         log.debug(f"RTFM/ loss_vls {loss_vls.item()} {loss_vls.device} ")
         
         return {

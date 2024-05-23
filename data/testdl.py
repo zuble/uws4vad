@@ -16,22 +16,34 @@ def init(l):
 
 #############################
 ## TEST
-def get_testloader(cfg, cfg_ds):
+def get_testloader(cfg):
     from ._data import FeaturePathListFinder
         
-    if cfg.DATA.NWORKERS == 0: cfg.DATA.NWORKERS = int(CPU_COUNT / 4)
+    if cfg.DATA.NWORKERS == 0: 
+        cfg.merge_from_list(['DATA.NWORKERS', int(CPU_COUNT / 4)])
     log.info(f'TEST: CPU_COUNT {CPU_COUNT} , NWORKERS {cfg.DATA.NWORKERS}')
     
+    
+    ## ['DS.RGB.FEATTYPE','DS.AUD.FEATYPE']
+    ds, modality, featdir = cfg.TEST.DS[0].split(".")
+    cfg_ds = getattr(cfg.DS, ds)
+        
     audfl = []
-    if cfg.DATA.AUD.ENABLE and cfg.TEST.DS != 'UCF':
-        audfplf = FeaturePathListFinder(cfg, 'test', 'aud', cfg_ds)
-        audfl = audfplf.get('BG')+audfplf.get('A')
+    cfg_faud = None
+    if len(cfg.TRAIN.DS) == 2: ## aud
+        ds2, modality2, featdir2 = cfg.TRAIN.DS[1].split(".")
+        assert ds2 != 'UCF' and ds == ds2 and modality2 == 'AUD'
+        cfg_faud = getattr( getattr( cfg_ds, modality2 ), featdir2) 
+        audfplf = FeaturePathListFinder(cfg, 'test', modality2, featdir2, cfg_ds, cfg_faud)
+        audfl = audfplf.get('ANOM') + audfplf.get('NORM')
         log.info(f'TEST: AUD {len(audfl)} feats')
         
-    rgbfplf = FeaturePathListFinder(cfg, 'test', 'rgb', cfg_ds)
-    rgbfl = rgbfplf.get('BG') + rgbfplf.get('A')
+    cfg_frgb = getattr( getattr( cfg_ds, modality ), featdir)   
+    rgbfplf = FeaturePathListFinder(cfg, 'test', modality, featdir, cfg_ds, cfg_frgb)
+    rgbfl = rgbfplf.get('ANOM') + rgbfplf.get('NORM')
     log.info(f'TEST: RGB {len(rgbfl)} feats')
-    
+
+
     ##################################
     ## FRAME COUNTER COMPARE BETWEN THE VIDEOS AND FEATURES
     #tft1 = 0; tft2 = 0
@@ -49,7 +61,7 @@ def get_testloader(cfg, cfg_ds):
     #    tft2 += tf2
     #    log.info(f"{osp.basename(vp)} {tf1=} {tf2=}")
     #log.info(f"\n\n\n\n{tft1=} {tft2=}\n\n\n\n")
-    ## both gt.npy for xdv and ucf have same lenght as total number of segments in features * window length of the feature extractor
+    ## both gt.npy for xdv and ucf have same lenght as total number of segments in feats * window length of the feature extractor
     #######################################
     
     ds = TestDS(cfg, rgbfl, audfl)
@@ -61,7 +73,7 @@ def get_testloader(cfg, cfg_ds):
                         pin_memory=cfg.DATA.PINMEM, 
                         persistent_workers=cfg.DATA.PERSISTWRK 
                         ) 
-    return loader
+    return loader, cfg_frgb, cfg_faud
 
 
 class TestDS(Dataset):
@@ -70,40 +82,10 @@ class TestDS(Dataset):
         self.rgbflst = rgbflst
         self.audflst = audflst
         self.lbl_mng = LBL(cfg)
-        self.rgb_ncrops = cfg.DATA.RGB.NCROPS
-        #self.full_or_center = full_or_center = 'center'
-        
-        
-        ## peakboo RGB features
-        if osp.exists(f'{self.rgbflst[0]}.npy'): peakboo = f'{self.rgbflst[0]}.npy'
-        else: peakboo = f"{self.rgbflst[0]}__{0}.npy"
-        
-        tojo = np.load(peakboo)    
-        if not cfg.DATA.RGB.NFEATURES:  cfg.DATA.RGB.NFEATURES = tojo.shape[-1]
-        log.info(f'TEST: RGB {osp.basename(peakboo)} {tojo.shape}')
-        
-        
-        ## peakboo AUD features
-        if audflst:
-            #if len(rgbflst) != len(audflst):
-            #    r = set(osp.basename(path) for path in rgbflst)
-            #    a = set(osp.basename(path) for path in audflst)
-            #    not_in_both = r.symmetric_difference(a)
-            #    log.info(f'TEST: not_in_both {not_in_both}')
-            #    for basename in not_in_both:
-            #        rgbflst = [path for path in rgbflst if osp.basename(path) != basename]
-            #        audflst = [path for path in audflst if osp.basename(path) != basename]
-            #assert len(rgbflst) == len(audflst)
-            assert len(rgbflst) == len(audflst)
-            
-            peakboo2 = f"{self.audflst[0]}.npy"
-            tojo2 = np.load(peakboo2)    
-            if not cfg.DATA.AUD.NFEATURES:  cfg.DATA.AUD.NFEATURES = tojo2.shape[-1]
-            log.info(f'TEST: AUD {osp.basename(audflst[0])} {np.shape(tojo2)}')
+        self.crops2use = cfg.TEST.CROPS2USE
 
         if cfg.DATA.LOADIN2MEM: self.loadin2mem()
-    
-    
+
     def load_data(self,idx):
         return self.get_feat(idx), self.get_label(idx)
     
@@ -121,66 +103,59 @@ class TestDS(Dataset):
         return label , fn
     
     def get_feat(self,idx):
-        '''
-            if self.full_or_center == 'center':
-            elif self.full_or_center == 'full':
-                features = []
-                for i in range(self.rgb_ncrops):
-                    fp_crop = f"{self.rgbflst[int(idx)]}__{i}.npy"
-                    feature_crop = np.load(fp_crop)  ## (timesteps, 1024)
-                    log.debug(f'crop[{i}] {osp.basename(fp_crop)}: {feature_crop.shape} {feature_crop.dtype}')                
-                    #features[i] = np.array(feature_crop)
-                    features.append(feature_crop)
-                features = np.array(features)
-                log.debug(f'f[{idx}]: {type(features)} {features.shape} {features.dtype}') ## (5,32,1024)
-        '''
-
         ## RGB 
-        if self.rgb_ncrops: 
-            rgb_fp = f"{self.rgbflst[int(idx)]}__{0}.npy"  ## center crop
+        if self.crops2use:
+            rgb_feats = []
+            for i in range(self.crops2use):
+                fp_crop = f"{self.rgbflst[int(idx)]}__{i}.npy"
+                feat_crop = np.load(fp_crop).astype(np.float32)  ## (timesteps, 1024)
+                log.debug(f'crop[{i}] {osp.basename(fp_crop)}: {feat_crop.shape} {feat_crop.dtype}')                
+                #features[i] = np.array(feat_crop)
+                rgb_feats.append(feat_crop)
+            rgb_feats = np.array(rgb_feats)
+            log.debug(f'f[{idx}]: {type(rgb_feats)} {rgb_feats.shape} {rgb_feats.dtype}') ## (5,32,1024)
         else: 
             rgb_fp = f"{self.rgbflst[int(idx)]}.npy"    
-            
-        rgb_features = np.array( np.load(rgb_fp) )
-        log.debug(f'vid[{idx}][RGB] {rgb_features.shape} {rgb_features.dtype}  {osp.basename(rgb_fp)} ')
+            rgb_feats = np.load(rgb_fp).astype(np.float32)
+            log.debug(f'vid[{idx}][RGB] {rgb_feats.shape} {rgb_feats.dtype}  {osp.basename(rgb_fp)} ')
         
         ## AUD
         if self.audflst:
             aud_fp = f"{self.audflst[int(idx)]}.npy"
-            aud_features = np.array( np.load(aud_fp) )
-            log.debug(f'vid[{idx}] AUD {osp.basename(aud_fp)}: {aud_features.shape} {aud_features.dtype}')
+            aud_feats = np.load(aud_fp).astype(np.float32)
+            log.debug(f'vid[{idx}] AUD {osp.basename(aud_fp)}: {aud_feats.shape} {aud_feats.dtype}')
             
-            if aud_features.shape[0] != rgb_features.shape[0]:
+            if aud_feats.shape[0] != rgb_feats.shape[0]:
                 log.debug(f'vid[{idx}]AUD rshp 2mtch rgbf')
-                aud_features = segmentation_feat(aud_features,rgb_features.shape[0]) 
-                
+                t, f = rgb_feats.shape
+                new_feat = np.zeros((t, f)).astype(np.float32)
+                idxs = np.linspace(0, len(aud_feats), t+1, dtype=np.int32)
+                for i in range(t):
+                    #if idxs[i] != idxs[i+1]:
+                    #    new_feat[i, :] = np.mean(feat[idxs[i]:idxs[i+1], :], axis=0)
+                    #else:
+                    new_feat[i, :] = aud_feats[idxs[i], :]
+                aud_feats = new_feat
             ## MIX
-            features = np.concatenate((rgb_features, aud_features), axis=1)
-            log.debug(f'vid[{idx}] MIX {features.shape} {features.dtype}')
+            feats = np.concatenate((rgb_feats, aud_feats), axis=1)
+            log.debug(f'vid[{idx}] MIX {feats.shape} {feats.dtype}')
             
-        else: features = rgb_features
+        else: feats = rgb_feats
         
-        
-        
-        return features
+        return feats
     
     def __getitem__(self, idx):
         
         if self.cfg.DATA.LOADIN2MEM:
-            features, (label, fn)= self.data[int(idx)]    
+            feats, (label, fn)= self.data[int(idx)]    
         else:   
             label,fn = self.get_label(idx)
-            features = self.get_feat(idx)
+            feats = self.get_feat(idx)
         
-        return features , label , str(fn)
+        return feats , label , str(fn)
     
     def __len__(self):
         return len(self.rgbflst)
-
-def custom_batchify_fn(data):
-    if isinstance(data[0], tuple):
-        data = zip(*data)
-    return [i for i in data]
 
 ################################
 ## LABELS
@@ -195,7 +170,6 @@ class LBL:
         self.cfg_ucf = cfg.DS.UCF    
         
     def encod(self, fn):
-        
         if 'label_' in fn: ## xdv
             ## norm
             if self.cfg_xdv.LBLS[0] in fn: aux = [self.cfg_xdv.LBLS_INFO[0]]
@@ -208,7 +182,10 @@ class LBL:
                 aux = [self.cfg_xdv.LBLS_INFO[i] for i in idxs]
         
         else: ## ucf
-            aux = [fn[:fn.find("_x264")-3]]
+            aux = [fn[:-3]]
+            ##aux = [ osp.basename(fn) ]
+            #aux = [fn[:fn.find("_x264")-3]]
+            
             idxs = [self.cfg_ucf.LBLS.index(a) for a in aux]
             aux = [self.cfg_ucf.LBLS_INFO[i] for i in idxs]
             

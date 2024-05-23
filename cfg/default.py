@@ -1,3 +1,6 @@
+## NOTES 
+## theres a few caveats here, mainly because of how the yacs deals with cfg
+## using Hydra would be the best solution
 from yacs.config import CfgNode as CN
 
 _C = CN()
@@ -49,22 +52,25 @@ _C.DEBUG.TMP = 1
 
 #############
 ## NETWORK 
-## it serves both train/test, set acordingly (net.__init__ )
+## it serves both train/test
 _C.NET = CN()
 _C.NET.LOG_INFO = ['blck'] ## blck / prmt
 _C.NET.WGHT_INIT = 'xavier' ## weights~xavier / bias~0
 ###############
-## one of the nets/ fn's 
+## keep consistent cfg.NET entrie with nets/filename.py
+## so @ _nets/get_net automatcly loads nets/{NET.NAME}/Network 
+## if .VERSION present loads nets/{.VERSION}/Network 
+## otherwise its excepted each net.py to have the main module as Network
 _C.NET.NAME = ''
 
 ## nets/attnomil
 _C.NET.ATTNOMIL = CN()
-_C.NET.ATTNOMIL.VERSION = 'VCls' ## VCls , SAVCls , SAVCls_lstm, LSTMCls
+_C.NET.ATTNOMIL.VERSION = 'VCls' ## VCls , SAVCls , SAVCls_lstm
 _C.NET.ATTNOMIL.DA = 64
 _C.NET.ATTNOMIL.R = 3
-_C.NET.ATTNOMIL.CLS_VRS = 'MLP' ## MLP CONV LSTM
+_C.NET.ATTNOMIL.DROP_RATE = 0.3
 _C.NET.ATTNOMIL.CLS_NEURONS = [32,1]
-_C.NET.ATTNOMIL.LSTM_DIM = 0 ## SAVCls_lstm
+_C.NET.ATTNOMIL.LSTM_DIM = 0 ## SAVCls_lstm set to 0 for no use
 ## if true softmax over the feature axis (normalizing across the feats)
 ## false over the temporal axis (normalizing across the time steps)
 _C.NET.ATTNOMIL.SPAT = False 
@@ -128,13 +134,62 @@ _C.NET.CLS.LSTM.BD = False
 _C.TRAIN = CN()
 _C.TRAIN.ENABLE = True
 _C.TRAIN.EPOCHS = 1
-## batch per epoch assigneded in data.py after get len ds
-_C.TRAIN.EPOCHBATCHS = 0
 _C.TRAIN.BS = 1
-_C.TRAIN.DROPLAST = True
-## one of the cfg.DS
+_C.TRAIN.EPOCHBATCHS = 0 ## batch per epoch assigneded in data.py after get len ds
+_C.TRAIN.DROPLAST = True ## 4 BatchSampler, True otherwise irregular length
+
+#######
+## following one of the provided _C.DS
+## ds.modality.ftype  ;  0:rgb 1:aud
 ## therefore loading rgb/aud features and the gt file from it
-_C.TRAIN.DS = ''
+_C.TRAIN.DS = ['UCF.RGB.CLIPTSA']
+
+
+## MUST BE SET RIGHT
+## 0 : feats in use must have no crops whatsoever, so fn are in format 'fn.npy'  
+## 1 : feats in use have crop augm and only center crop is used, eg. 'fn__0.npy'
+## 2 : feats in use have crop augm and center + topright (or wtv) eg. 'fn__0.npy' && 'fn__1.npy' ...
+_C.TRAIN.CROPS2USE = 1
+_C.TRAIN.CROPASVIDEO = False ## each crop with be treated as a video it self
+_C.TRAIN.RGBL2N = 0 ## if 1 l2norm apllied right after load
+_C.TRAIN.AUDL2N = 0
+
+## each batch is a equal number of abnormal/normal features
+## mainly used per UCF, but can be used per XDV aswell
+_C.TRAIN.MIL = True
+
+## determines how to segment/process input features
+## so the temporal dimension is static
+## it works indepently of MIL
+_C.TRAIN.FRMT = 'ITPLT'
+
+## use sultani interpolate
+## select seg.len evenly spaced feats from each video nfeats
+_C.TRAIN.ITPLT = CN()
+_C.TRAIN.ITPLT.LEN = 32 ## interpolation of original feat arr (ts,nfeat) into (nsegments,nfeat)
+_C.TRAIN.ITPLT.L2N = 0 ## l2norm 0-none / 1-pre / 2-post segmentation
+## jit: add a jitter to the linspace idxs
+## glob: rnd temporal order of feat
+_C.TRAIN.ITPLT.RND = ['']
+## a list of lossfx is created in utils/loss/get_loss
+## latter passed in trainep/train_epo to chosen net_pst_fwd.train
+_C.TRAIN.ITPLT.LOSS = [''] 
+
+## use mode introduced by xdv DS: XDVioDet@gh
+## video features are treated as a fixed size sequence, either padded or truncated
+## then each seq len is used to in loss to find the topk, if set 
+_C.TRAIN.SEQ = CN()
+_C.TRAIN.SEQ.LEN = 200 ## sequence of original feat arr (ts,nfeat) into (nsegments,nfeat)
+_C.TRAIN.SEQ.L2N = 0 ## l2norm 0-none / 1-pre / 2-post segmentation
+## frist pos of list must be one of these 2: 
+#   'uni': chooses idxs as linspace(0, len(feat)-1, SEQ.LEN)
+#   'rnd': enables to choose SEQ.LEN features randomly
+## jit: rnd betwen adjacent interval of linspace idxs
+## glob: rnd temporal order of feat
+_C.TRAIN.SEQ.RND = ['uni']
+_C.TRAIN.SEQ.LOSS = ['']
+
+#######
 ## monitor conditions
 _C.TRAIN.PLOT_LOSS = True
 _C.TRAIN.LOG_PERIOD = 0 ## batch relative , if 0 = EPOCHBATCHS/2
@@ -150,36 +205,6 @@ _C.TRAIN.VLDT.PER_WHAT = 'lbl'
 _C.TRAIN.VLDT.CUDDNAUTOTUNE = True
 ## updates lines after each vldt with metrics values (dependant of )
 _C.TRAIN.VLDT.VISPLOT = False
-
-########
-## determines the features input format
-_C.TRAIN.FRMT = 'SEG'
-## use sultani interpolate/segmentation
-## select seg.len evenly spaced feats from each video nfeats
-## each batch is formed by equal number of abnormal/normal features concatenated
-_C.TRAIN.SEG = CN()
-_C.TRAIN.SEG.LEN = 32 ## segmentation of original feat arr (ts,nfeat) into (nsegments,nfeat)
-_C.TRAIN.SEG.L2N = 0 ## l2norm 0-none / 1-pre / 2-post segmentation
-## jit: add a jitter to the linspace idxs
-## glob: rnd temporal order of feat
-_C.TRAIN.SEG.RND = ['']
-## a list of lossfx is created in utils/loss/get_loss
-## latter passed in trainep/train_epo to chosen net_pst_fwd.train
-_C.TRAIN.SEG.LOSS = [''] 
-
-## use mode introduced by xdv DS: XDVioDet@gh
-## video features are treated as a fixed size sequence, either padded or truncated
-## then each seq len is used to in loss to find the topk, if set 
-_C.TRAIN.SEQ = CN()
-_C.TRAIN.SEQ.LEN = 200 ## segmentation of original feat arr (ts,nfeat) into (nsegments,nfeat)
-_C.TRAIN.SEQ.L2N = 0 ## l2norm 0-none / 1-pre / 2-post segmentation
-## frist pos of list must be one of these 2: 
-#   'uni': chooses idxs as linspace(0, len(feat)-1, SEQ.LEN)
-#   'rnd': enables to choose SEQ.LEN features randomly
-## jit: rnd betwen adjacent interval of linspace idxs
-## glob: rnd temporal order of feat
-_C.TRAIN.SEQ.RND = ['uni']
-_C.TRAIN.SEQ.LOSS = ['']
 
 
 ########
@@ -301,10 +326,11 @@ _C.TEST.ENABLE = True
 _C.TEST.LOADFROM = ''
 ## net: from a torch.save(net) | dict: from a torch.save(net.state_dict())
 _C.TEST.LOADMODE = 'net'
-## one of the cfg.DS
-## therefore loading from it rgb/aud features, gt file, and videos (if WATCH.AS is set)
-_C.TEST.DS = ''
+
+## same logic as per train
+_C.TEST.DS = ['UCF.RGB.CLIPTSA']
 _C.TEST.BS = 1 
+_C.TEST.CROPS2USE = 1 ## many use all crops, other dont 
 _C.TEST.L2NORM = 0  ## 0 off / 1 on
 
 ########
@@ -378,40 +404,7 @@ _C.TEST.WATCH.ASP.TH = 0.5
 
 
 ################
-## FEATURES
-## affects 
 _C.DATA = CN()
-## each crop with be treated as a video it self
-_C.DATA.CROPASVIDEO = False
-
-########
-_C.DATA.RGB = CN()
-## number of frames used in each clip when forward trough vision/fe model
-## so this * ts of feature arr = vid tot frames
-_C.DATA.RGB.SEGMENTNFRAMES = 32
-## set with a pekaboo in either of the train/test DS init
-_C.DATA.RGB.NFEATURES = 0
-## MUST BE SET RIGHT
-## 0 : feats in use must have no crops whatsoever, so fn are in format 'fn.npy'  
-## 1 : feats in use have crop augm and only center crop is used, eg. 'fn__0.npy'
-## 2 : center + topright (or wtv)  eg. each 2 crops from every video are used 'fn__0.npy' && 'fn__1.npy'
-_C.DATA.RGB.NCROPS = 0
-## if 1 l2norm apllied right after load
-_C.DATA.RGB.L2N = 0
-
-########
-_C.DATA.AUD = CN()
-_C.DATA.AUD.ENABLE = False
-## number of frames used in each clip when forward trough audio model
-## so this * ts of feature arr = vid tot frames
-_C.DATA.AUD.SEGMENTNFRAMES = 32
-## set with a pekaboo in either of the train/test DS init
-_C.DATA.AUD.NFEATURES = 0
-## if 1 l2norm apllied right after load
-_C.DATA.AUD.L2N = 0
-
-
-###################
 ## parameters of both train and test data.DataLoader
 _C.DATA.LOADIN2MEM = False
 _C.DATA.PINMEM = True
@@ -421,53 +414,72 @@ _C.DATA.NWORKERS = 1 ## if 0 , = CPU_CORES / 4
 
 ####################
 ## DATASET
-## holds the default cfg for each of the dataset
-## affeting where/how the files will be loaded
-## LBLS/LBLS_INFO : labeling in data/testdataset, process in vldt/VldtInfo // metric/Metrics
-## FROOT/RGBFNAME/AUDFNAME : feature filepath list creation in misc/FeaturePathListFinder , founndation of how both data/TrainDataset TestDataset
-## GT/VROOT : vldt/GTFL for creation of arrays based on total frames in original videos , test/Watch for watching of test results                         
 _C.DS = CN()
-_C.DS.INUSE = ''
+#   holds the default cfg for each of the dataset
+#   affeting where to load files 
+#   and how they are structered 
+## LBLS/LBLS_INFO : 
+#   labeling in data/testdataset, process in vldt/VldtInfo // metric/Metrics
+#   LBLS: represents the labels ids to look for in filenames
+#   LBLS_INFO:  represent the correspondent enconded labels created in data/TestDataset and 
+#               further used as keys in both vldt/Validade/VldtInfo and WtchInfo dict
+## GT/VROOT : 
+#   vldt/GTFL for creation of arrays based on total frames in original videos , test/Watch for watching of test results
+## FROOT:
+#   feature root path
+#   each added entry represents a different feature type holding both train/test features
+#   with atleast 2 children folders with '*train*' / '*test*' in its name, e.g.:
+#       FROOT/I3DROCNG/RGB/train/...
+#       FROOT/I3DROCNG/RGB/test/...
+#   moreover @ _data/_data/FeaturePathListFinder
+## FSTEP :  number of frames used in each clip when forward trough vision/fe model
+##          so this * ts of feature arr = vid tot frames
+
 ########
 ## UCF
 _C.DS.UCF = CN()
-## represents the labels ids to look for in filenames
 _C.DS.UCF.LBLS = ['Normal', 'Abuse', 'Arrest', 'Arson', 'Assault', 'Burglary', 'Explosion', 'Fighting', 'RoadAccidents', 'Robbery', 'Shooting', 'Shoplifting', 'Stealing', 'Vandalism']
-## represent the correspondent enconded labels created in data/TestDataset and further used as keys in both vldt/Validade/VldtInfo and WtchInfo dict
 _C.DS.UCF.LBLS_INFO = ['000.NORM', '1.ABUSE', '2.ARREST', '3.ARSON', '4.ASSAULT', '5.BURGLARY', '6.EXPLOS', '7.FIGHT', '8.ROADACC', '9.ROBBER', '10.SHOOT', '11.SHOPLIFT', '12.STEAL', '13.VANDAL', '111.ANOM', 'ALL']
+_C.DS.UCF.GT = 'data/gt/ucf.txt' ## del normal lines
+_C.DS.UCF.VROOT = '/mnt/t77/DS/UCF/test'#'/raid/DATASETS/anomaly/UCF_Crimes/DS/test'
+_C.DS.UCF.FROOT = '/mnt/t77/FEAT/UCF/' #'/raid/DATASETS/anomaly/UCF_Crimes/features/'
 
-## UCF feature root path
-_C.DS.UCF.FROOT = '/raid/DATASETS/anomaly/UCF_Crimes/features/'
-## search FROOT children folders for this folder name, in its children folders must have 2 folders with ...train.. ...test... in the names
-##  I3DDEEPMIL : https://github.com/Roc-Ng/DeepMIL , 16 fstep , 10 crop
-##  I3DRTFM : https://github.com/tianyu0207/RTFM
-_C.DS.UCF.RGBFNAME = ''
-## not used as theres no audio waves, leave empty
-_C.DS.UCF.AUDFNAME = ''
-_C.DS.UCF.VROOT = '/raid/DATASETS/anomaly/UCF_Crimes/DS/test'
-_C.DS.UCF.GT = '/raid/DATASETS/anomaly/UCF_Crimes/annotations.txt' ## lines with normal deleted
+#####
+_C.DS.UCF.RGB = CN()
+##  'I3DDEEPMIL' : https://github.com/Roc-Ng/DeepMIL , 16 fstep , 10 crop
+_C.DS.UCF.RGB.I3DROCNG = CN()
+_C.DS.UCF.RGB.I3DROCNG.FROOT = ''
+_C.DS.UCF.RGB.I3DROCNG.FSTEP = 16
+_C.DS.UCF.RGB.I3DROCNG.NFEATS = 1024
+_C.DS.UCF.RGB.I3DROCNG.NCROPS = 10
+##  'CLIPTSA' : https://github.com/joos2010kj/CLIP-TSA , 8 fstep , nocrop
+_C.DS.UCF.RGB.CLIPTSA = CN()
+_C.DS.UCF.RGB.CLIPTSA.FROOT = ''
+_C.DS.UCF.RGB.CLIPTSA.FSTEP = 8
+_C.DS.UCF.RGB.CLIPTSA.NFEATS = 512
+_C.DS.UCF.RGB.CLIPTSA.NCROPS = 0
+##  'I3DRTFM' : https://github.com/tianyu0207/RTFM
 
 ########
 ## XDV
 _C.DS.XDV = CN()
-## represents the labels ids to look for in filenames
 _C.DS.XDV.LBLS = ['label_A', 'B1', 'B2', 'B4', 'B5', 'B6', 'G']
-## represent the correspondent enconded labels created in data/TestDataset and further used as keys in both vldt/Validade/VldtInfo and WtchInfo dict
 _C.DS.XDV.LBLS_INFO = ['000.NORM', 'B1.FIGHT', 'B2.SHOOT', 'B4.RIOT', 'B5.ABUSE', 'B6.CARACC', 'G.EXPLOS', '111.ANOM', 'ALL']
-
-## XDV feature root path
+_C.DS.XDV.GT = 'data/gt/xdv.txt'
+_C.DS.XDV.VROOT = '/raid/DATASETS/anomaly/XD_Violence/testing_copy'
 _C.DS.XDV.FROOT = '/raid/DATASETS/anomaly/XD_Violence/features/'
 ## search FROOT children folders for this folder name, in its children folders must have 2 folders with ...train.. ...test... in the names
 ##  i3d-features-rgb : original , 16 fstep , 5 CROP
 ##  (.mx/)i3d_nl5_resnet50_v1_kinetics400-xdviol_c1
 ##  (.mx/)i3d_resnet50_v1_kinetics400-xdviol_c1
 ##  (.mx/)slowfast_4x16_resnet50_kinetics400-xdviol_c5
-_C.DS.XDV.RGBFNAME = ''
-## vggish-features : original
-## (.tf/)vgg42-tlpf-aps
-_C.DS.XDV.AUDFNAME = ''
-_C.DS.XDV.VROOT = '/raid/DATASETS/anomaly/XD_Violence/testing_copy'
-_C.DS.XDV.GT = '/raid/DATASETS/anomaly/XD_Violence/annotations.txt'
+
+
+#_C.DS.XDV.RGBFNAME = ''
+### vggish-features : original
+### (.tf/)vgg42-tlpf-aps
+#_C.DS.XDV.AUDFNAME = ''
+
 
 
 

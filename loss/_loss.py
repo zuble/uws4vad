@@ -8,7 +8,10 @@ def get_loss(cfg, dvc):
     lfx = {}
     ldata = {}
     ldata["label"] = None
+    
+    
     c_frmt = getattr(cfg.TRAIN, cfg.TRAIN.FRMT)
+    
     
     for loss_idx, loss_id in enumerate(c_frmt.LOSS):
         loss_id = loss_id.upper()

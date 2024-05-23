@@ -19,30 +19,61 @@ def init(l):
 ## TRAIN
 class Zuader:
     ## encapsulates the dataloader independtly of elements yielded
-    def __init__(self, frmt, *loaders):
-        self.frmt = frmt
+    def __init__(self, mil, *loaders):
+        self.mil = mil
         self.loaders = loaders
     def __iter__(self):
         self.loader_iters = [iter(loader) for loader in self.loaders]
         return self
     def __next__(self):
-        if self.frmt == 'SEG': return next(self.loader_iters[0]), next(self.loader_iters[1])
-        elif self.frmt == 'SEQ': return next(self.loader_iters[0])
+        if self.mil: return next(self.loader_iters[0]), next(self.loader_iters[1])
+        elif not self.mil: return next(self.loader_iters[0])
         else: raise StopIteration
 
 
 def get_trainloader(cfg):
-    
-    
+    from ._data import FeaturePathListFinder
     log.info(f'TRAIN: getting trainloader')
     
-    ## MIL
-    ## transform te confg so both SEG SEQ is avable as a featprep
-    ## for both mil / no mil cases
-    ## abstract the seg/seq to be in the featprep fx chosen
-    ## trainfmrter must be set according MIL/ no mil
-    if cfg.TRAIN.FRMT == 'SEG':
-        ads, nds, arsampler, nrsampler = get_segds(cfg)
+    if cfg.DATA.NWORKERS == 0: 
+        cfg.merge_from_list(['DATA.NWORKERS', int(CPU_COUNT / 4)])
+    
+    
+    
+    ## ['DS.RGB.FEATTYPE','DS.AUD.FEATYPE']
+    ds, modality, featdir = cfg.TRAIN.DS[0].split(".")
+    cfg_ds = getattr(cfg.DS, ds)
+    
+    aaudfl, naudfl = [], []
+    cfg_faud = None
+    if len(cfg.TRAIN.DS) == 2: ## aud
+        ds2, modality2, featdir2 = cfg.TRAIN.DS[1].split(".")
+        assert ds2 != 'UCF' and ds == ds2 and modality2 == 'AUD'
+        cfg_faud = getattr( getattr( cfg_ds, modality2 ), featdir2) 
+        audfplf = FeaturePathListFinder(cfg, 'train', modality2, featdir2, cfg_ds, cfg_faud)
+        aaudfl, naudfl = audfplf.get('ANOM'),  audfplf.get('NORM')
+        log.info(f'TRAIN: AUD ENABLED {len(naudfl)} normal, {len(aaudfl)} abnormal')    
+        
+    cfg_frgb = getattr( getattr( cfg_ds, modality ), featdir)   
+    rgbfplf = FeaturePathListFinder(cfg, 'train', modality, featdir, cfg_ds, cfg_frgb)
+    argbfl, nrgbfl = rgbfplf.get('ANOM'), rgbfplf.get('NORM')
+    log.info(f'TRAIN: RGB {len(nrgbfl)} normal, {len(argbfl)} abnormal') 
+    
+    ## constructed the feat preparation independtly of MIL
+    ## contempling both interpolate and sequencial
+    ## big dif is seg average adjacent snippets into segments
+    ## and seq does not, keeping integraty
+    cfg_fsegm = getattr(cfg.TRAIN, cfg.TRAIN.FRMT)
+    fprep = FeatSegm(cfg.TRAIN.FRMT, cfg_fsegm, cfg.SEED)
+    log.info(f'TRAIN: {fprep=}')  
+    
+    
+    if cfg.TRAIN.MIL:
+        log.info(f"MIL ITS ON")
+        ads = TrainDS(cfg, cfg_ds, cfg_frgb, cfg_faud, cfg_fsegm, fprep, argbfl, aaudfl, 'ABNORMAL')
+        nds = TrainDS(cfg, cfg_ds, cfg_frgb, cfg_faud, cfg_fsegm, fprep, nrgbfl, naudfl, 'NORMAL')
+        
+        arsampler, nrsampler = get_milRS(cfg, ads, nds)
         ald = DataLoader(ads, 
                         batch_sampler=BatchSampler(arsampler, batch_size=cfg.TRAIN.BS//2 , drop_last=cfg.TRAIN.DROPLAST),
                         num_workers=cfg.DATA.NWORKERS,
@@ -58,21 +89,26 @@ def get_trainloader(cfg):
                         persistent_workers=cfg.DATA.PERSISTWRK 
                         )
         log.info(f'TRAIN: NWORKERS {cfg.DATA.NWORKERS} CPU_COUNT {CPU_COUNT} , ')
-        return Zuader('SEG', nld, ald) 
+        return Zuader(True, nld, ald), cfg_frgb, cfg_faud
     
-    elif cfg.TRAIN.FRMT == 'SEQ': ## sequence
-        ds, bsampler = get_seqds(cfg)
+    else:
+        rgbfl = argbfl + nrgbfl
+        audfl = aaudfl + naudfl
+        log.info(f'TRAIN: RGB {len(rgbfl)} feats')
+        
+        ds = TrainDS(cfg, cfg_ds, cfg_frgb, cfg_faud, cfg_fsegm, fprep, rgbfl, audfl)  
+        rsampler = get_seqRS(cfg, ds)
         ld0 = data.DataLoader( ds,
-                            batch_sampler=bsampler,
+                            batch_sampler= BatchSampler(rsampler , cfg.TRAIN.BS , drop_last=cfg.TRAIN.DROPLAST),
                             num_workers=cfg.DATA.NWORKERS , 
                             pin_memory=cfg.DATA.PINMEM , 
                             thread_pool=cfg.DATA.THREAD 
                             )
         log.info(f'TRAIN: NWORKERS {cfg.DATA.NWORKERS} CPU_COUNT {CPU_COUNT} , ')
-        return Zuader('SEQ', ld0)
+        return Zuader(False, ld0), cfg_frgb, cfg_faud
 
-def get_segds(cfg):
-    from ._data import FeaturePathListFinder
+
+def get_milRS(cfg, ads, nds):
     
     def get_rnd_smp(ds, nsamples, gen):
         is_oversampling = len(ds) < nsamples
@@ -82,36 +118,9 @@ def get_segds(cfg):
                             num_samples=nsamples if is_oversampling else None, 
                             generator=gen)
         
-    opts=[]
-
-    if cfg.DATA.NWORKERS == 0: 
-        opts.extend(['DATA.NWORKERS', int(CPU_COUNT / 4)])
-    
-    cfg_ds = getattr(cfg.DS, cfg.TRAIN.DS)
-    
-    
-    aaudfl, naudfl = [], []
-    if cfg.DATA.AUD.ENABLE and cfg.TRAIN.DS != 'UCF':
-        audfplf = FeaturePathListFinder(cfg, 'train', 'aud', cfg_ds)
-        aaudfl = audfplf.get('BG') 
-        naudfl = audfplf.get('A')
-        log.info(f'TRAIN: AUD {len(naudfl)} normal, {len(aaudfl)} abnormal')    
-        
-    rgbfplf = FeaturePathListFinder(cfg, 'train', 'rgb', cfg_ds)
-    argbfl = rgbfplf.get('BG')
-    nrgbfl = rgbfplf.get('A')
-    log.info(f'TRAIN: RGB {len(nrgbfl)} normal, {len(argbfl)} abnormal')  
-    
-    cfg_prep = cfg.TRAIN.SEG
-    prepfx = FeatPrep('seg', cfg_prep, cfg.SEED).fx
-    log.info(f'TRAIN: {prepfx=}')  
-    
-    ads = TrainDS(cfg, cfg_ds, cfg_prep, prepfx, argbfl, aaudfl, 'ABNORMAL')
-    nds = TrainDS(cfg, cfg_ds, cfg_prep, prepfx, nrgbfl, naudfl, 'NORMAL')
-    
     maxlends = max(len(ads),len(nds))
     epoch_nbatch = maxlends // (cfg.TRAIN.BS // 2) #math.ceil(maxlends / cfg.TRAIN.BS)
-    opts.extend(["TRAIN.EPOCHBATCHS", epoch_nbatch])
+    cfg.merge_from_list(["TRAIN.EPOCHBATCHS", epoch_nbatch])
     log.info(f'TRAIN: {maxlends=} {cfg.TRAIN.BS//2=} -> {epoch_nbatch=} ')
     
     ## https://pytorch.org/docs/1.8.1/generated/torch.Generator.html#torch.Generator
@@ -122,93 +131,66 @@ def get_segds(cfg):
     arsampler = get_rnd_smp(ads, maxlends, gen)
     log.info(f'TRAIN: {len(nds)=}')
     nrsampler = get_rnd_smp(nds, maxlends, gen)
+    
+    return arsampler, nrsampler
 
-    cfg.merge_from_list(opts)
+def get_seqRS(cfg, ds):
+    epoch_nbatch = len(ds) // cfg.TRAIN.BS
+    cfg.merge_from_list(["TRAIN.EPOCHBATCHS", epoch_nbatch])
+    log.info(f'TRAIN: {len(ds)} {cfg.TRAIN.BS=} -> {epoch_nbatch=} ')
     
-    return ads, nds, arsampler, nrsampler
-
-def get_seqds(cfg):
-    from ._data import FeaturePathListFinder
+    gen = torch.Generator().manual_seed(cfg.SEED)
+    rsampler = data.RandomSampler(len(ds), generator=gen)
     
-    opts=[]
-    
-    if cfg.DATA.NWORKERS == 0: 
-        opts.extend(['DATA.NWORKERS', int(CPU_COUNT / 4)])
-    cfg_ds = getattr(cfg.DS, cfg.TRAIN.DS)
-    
-    audfl = []
-    if cfg.DATA.AUD.ENABLE and cfg.TRAIN.DS != 'UCF':
-        audfplf = FeaturePathListFinder(cfg, 'train', 'aud')
-        audfl = audfplf.get('BG') + audfplf.get('A')
-        log.info(f'TRAIN: AUD {len(audfl)} feats')
-        
-    rgbfplf = FeaturePathListFinder(cfg, 'train')
-    rgbfl = rgbfplf.get('BG') + rgbfplf.get('A')
-    log.info(f'TRAIN: RGB {len(rgbfl)} feats')
-
-    cfg_prep = cfg.TRAIN.SEQ
-    prepfx = FeatPrep('seq', cfg_prep, cfg.SEED).fx
-    log.info(f'TRAIN: {prepfx=}')  
-    
-    ds = TrainDS(cfg, cfg_ds, cfg_prep, prepfx, rgbfl, audfl)   
-    
-    epoch_nbatch = len(ds) // cfg.TRAIN.BS #math.ceil(len(ds) / cfg.TRAIN.BS)
-    ##assert epoch_nbatch == len(ds) // cfg.TRAIN.BS
-    opts.extend(["TRAIN.EPOCHBATCHS", epoch_nbatch])
-    log.info(f'TRAIN: len ds {len(ds)} , epoch_nbatch: {cfg.TRAIN.EPOCHBATCHS}')
-    rsampler = data.RandomSampler(len(ds))
-    bsampler = data.BatchSampler(rsampler , cfg.TRAIN.BS , 'discard')
-    
-    cfg.merge_from_list(opts)
-    return ds, bsampler 
+    return rsampler 
 
 
 class TrainDS(Dataset):
-    def __init__(self, cfg, cfg_ds, cfg_prep, prepfx, rgbflst, audflst, xtra=''):
+    def __init__(self, cfg, cfg_ds, cfg_frgb, cfg_faud, cfg_fsegm, fprep, rgbflst, audflst, xtra=''):
         
         self.xtra = xtra
         self.cfg = cfg
         self.cfg_ds = cfg_ds
-        self.prepfx = prepfx
-        self.len = cfg_prep.LEN
-        self.l2n = cfg_prep.L2N
+        self.cfg_frgb = cfg_frgb
+        self.cfg_faud = cfg_faud
+        self.fprep = fprep
+        self.len = cfg_fsegm.LEN
+        self.l2n = cfg_fsegm.L2N
         
-        self.cropasvideo = cfg.DATA.CROPASVIDEO
-        self.rgb_ncrops = cfg.DATA.RGB.NCROPS
+        self.cropasvideo = cfg.TRAIN.CROPASVIDEO
+        self.rgb_ncrops = cfg.TRAIN.CROPS2USE
         self.rgbflst = rgbflst
-        self.rgbl2n = cfg.DATA.RGB.L2N
+        self.rgbl2n = cfg.TRAIN.RGBL2N
         self.audflst = audflst
-        self.audl2n = cfg.DATA.AUD.L2N
+        self.audl2n = cfg.TRAIN.AUDL2N
         
+        self.nfeats = cfg_frgb.NFEATS
+        if audflst: self.peakboo_aud()
         
-        ## peakboo RGB features
-        if osp.exists(f'{rgbflst[-1]}.npy'): pekaboo = f'{rgbflst[-1]}.npy'
-        else: pekaboo = f"{rgbflst[-1]}__{0}.npy"
-        
-        tojo = np.load(pekaboo)    
-        if not cfg.DATA.RGB.NFEATURES: cfg.DATA.RGB.NFEATURES = tojo.shape[-1]
-        self.nfeatures = cfg.DATA.RGB.NFEATURES
-        log.info(f'TRAIN {xtra}: RGB {osp.basename(pekaboo)} {np.shape(tojo)}')
-        
-        
-        ## pekaboo AUD features
-        if audflst:
-            if not self.cropasvideo: assert len(rgbflst) == len(audflst)
-            
-            peakboo2 = f"{self.audflst[-1]}.npy"
-            tojo2 = np.load(peakboo2)    
-            if not cfg.DATA.AUD.NFEATURES:  cfg.DATA.AUD.NFEATURES = tojo2.shape[-1]
-            self.audnfeatures = tojo2.shape[-1]
-            self.nfeatures += self.audnfeatures
-            log.info(f'TRAIN: AUD {osp.basename(peakboo2)} {np.shape(tojo2)}')
-            
-        
-        log.info(f'TRAIN {xtra}: ({self.rgb_ncrops} ncrops, {self.len} maxseqlen/nsegments, {self.nfeatures} feats ({cfg.DATA.RGB.NFEATURES}+{cfg.DATA.AUD.NFEATURES}))')    
+        log.info(f'TRAIN {xtra}: ({self.rgb_ncrops} ncrops, {self.len} maxseqlen/nsegments, {self.nfeats} feats')    
         log.info(f'TRAIN {xtra}: cropasvideo is {self.cropasvideo}')
 
-        if cfg.DATA.LOADIN2MEM: self.loadin2mem()
+        self.get_feat = {
+            True: self.get_feat_wcrop,
+            False: self.get_feat_wocrop
+        }.get(self.rgb_ncrops and not self.cropasvideo)
 
-
+        if cfg.DATA.LOADIN2MEM: 
+            ## rnd state will b de same troughout epo iters
+            ## or load full arrays int memory
+            self.loadin2mem()
+            
+    def peakboo_aud(self):
+        ## pekaboo AUD features
+        if not self.cropasvideo:
+            assert len(self.rgbflst) == len(self.audflst)
+        peakboo2 = f"{self.audflst[-1]}.npy"
+        tojo2 = np.load(peakboo2)    
+        assert self.cfg_faud.NFEATS == tojo2.shape[-1]
+        self.nfeats += self.cfg_faud.NFEATS
+        log.info(f'TRAIN: AUD {osp.basename(peakboo2)} {np.shape(tojo2)}')    
+    
+    
     def load_data(self,idx): return self.get_feat(idx), self.get_label(idx)
     
     def loadin2mem(self):
@@ -226,95 +208,111 @@ class TrainDS(Dataset):
         #else: return int(1)
         if self.cfg_ds.LBLS[0] in self.rgbflst[int(idx)]: return np.float32(0.0)
         else: return np.float32(1.0)
-        
-    def get_feat(self,idx):
-        
-        ## (ncrops, len, nfeatures)
-        if self.rgb_ncrops and not self.cropasvideo:
-            features = np.zeros((self.rgb_ncrops, self.len, self.nfeatures), dtype=np.float32)
-            
-            for i in range(self.rgb_ncrops):
-                
-                ## RGB
-                rgb_fp_crop = f"{self.rgbflst[int(idx)]}__{i}.npy"
-                rgb_feature_crop = np.load(rgb_fp_crop).astype(np.float32)
-                
-                if self.rgbl2n: rgb_feature_crop = self.l2normfx(rgb_feature_crop)
-                #if idx == 0: view_feat(feature_crop.asnumpy())
-                log.debug(f'vid[{idx}][{i}][RGB] {rgb_feature_crop.shape} {rgb_feature_crop.dtype}  {osp.basename(rgb_fp_crop)}')
-                
-                
-                ## AUD
-                if self.audflst:
-                    if not i: ## load
-                        aud_fp = f"{self.audflst[int(idx)]}.npy"
-                        aud_features = np.load(aud_fp).astype(np.float32)
-                        log.debug(f'vid[{idx}][AUD] {aud_features.shape} {aud_features.dtype}  {osp.basename(aud_fp)}')
-                        
-                        ## assert to use prep.segmentation
-                        if aud_features.shape[0] != rgb_feature_crop.shape[0]: 
-                            aud_features = self.prepfx(aud_features, rgb_feature_crop.shape[0]) 
-                            log.debug(f'vid[{idx}] AUD : seg in2 {aud_features.shape}')
-                        
-                        if self.audl2n: aud_features = self.l2normfx(aud_features)
-                        
-                    try: feature_crop = np.hstack((rgb_feature_crop, aud_features))
-                    except: log.info(f'{rgb_feature_crop} {aud_features.shape}')
-                    log.debug(f'vid[{idx}][{i}][MIX] {feature_crop.shape} {feature_crop.dtype}')
-                    
-                else: feature_crop = rgb_feature_crop
-
-
-                if self.l2n == 1: feature_crop = self.l2normfx(feature_crop)
-                #log.info(f'vid[{idx}]: PRE-SEQ {feature_crop.shape}')
-                features[i] = self.prepfx(feature_crop, self.len) 
-                #log.info(f'vid[{idx}]: PST-SEQ {features[i].shape}')
-                if self.l2n == 2: features[i] = self.l2normfx(features[i],a=2)
-
-        ## (len, nfeatures)
-        else:
-            rgb_fp = f"{self.rgbflst[int(idx)]}.npy"
-            rgb_features = np.load(rgb_fp).astype(np.float32)
-            
-            if self.rgbl2n: rgb_features = self.l2normfx(rgb_features)
-            log.debug(f"vid[{idx}][RGB] {rgb_features.shape} {rgb_features.dtype}  {osp.basename(rgb_fp)}")
-
-            
-            if self.audflst:
-                if self.cropasvideo: aud_idx = int(idx)//self.rgb_ncrops
-                else: aud_idx = int(idx)
-                
-                aud_fp = f"{self.audflst[aud_idx]}.npy"
-                aud_features = np.load( aud_fp ).astype(np.float32)
-                
-                if self.audl2n: aud_features = self.l2normfx(aud_features)
-                log.debug(f'vid[{idx}][AUD] {aud_features.shape} {aud_features.dtype}  {osp.basename(aud_fp)}')
-                
-                #############################
-                ## use FeatComp class 
-                if aud_features.shape[0] != rgb_features.shape[0]:
-                    #log.debug(f'preseg {np.mean(aud_features,axis=0)}')
-                    #for af in aud_features[:16]: log.debug(f'{af[:40]}')
-                    aud_features = self.prepfx(aud_features, rgb_features.shape[0]) 
-                    #log.debug(f'posseg {np.mean(aud_features,axis=0)}')
-                    #for af in aud_features[:16]: log.debug(f'{af[:40]}')
-                    log.debug(f'vid[{idx}][AUD] seg in2 {aud_features.shape}')
-                    
-                features = np.hstack((rgb_features, aud_features))
-                log.debug(f'vid[{idx}][MIX] {features.shape} {features.dtype}')
     
-            else: features = rgb_features     
         
+    ## (ncrops, len, nfeats)
+    def get_feat_wcrop(self,idx):
+        feats = np.zeros((self.rgb_ncrops, self.len, self.nfeats), dtype=np.float32)
+        
+        for i in range(self.rgb_ncrops):
             
-            if self.l2n == 1: features = self.l2normfx(features)
-            #log.info(f'vid[{idx}]: PRE-SEQ {features.shape}')
-            features = self.prepfx(features,self.len) 
-            #log.info(f'vid[{idx}]: PST-SEQ {features.shape}')
-            if self.l2n == 2: features = self.l2normfx(features,a=2)
+            ## RGB
+            rgb_fp_crop = f"{self.rgbflst[int(idx)]}__{i}.npy"
+            rgb_feat_crop = np.load(rgb_fp_crop).astype(np.float32)
+            
+            if not i: ## crop 0
+                idxs = self.fprep.get_idxs(len(rgb_feat_crop))
+            
+            if self.rgbl2n: rgb_feat_crop = self.l2normfx(rgb_feat_crop)
+            #if idx == 0: view_feat(feat_crop.asnumpy())
+            log.debug(f'vid[{idx}][{i}][RGB] {rgb_feat_crop.shape} {rgb_feat_crop.dtype}  {osp.basename(rgb_fp_crop)}')
+            
+            
+            ## AUD
+            if self.audflst:
+                if not i: ## load
+                    aud_fp = f"{self.audflst[int(idx)]}.npy"
+                    aud_feats = np.load(aud_fp).astype(np.float32)
+                    log.debug(f'vid[{idx}][AUD] {aud_feats.shape} {aud_feats.dtype}  {osp.basename(aud_fp)}')
+                    
+                    if aud_feats.shape[0] != rgb_feat_crop.shape[0]: 
+                        aud_feats = self.fprep.interpolate(aud_feats, rgb_feat_crop.shape[0], None) 
+                        log.debug(f'vid[{idx}] AUD : seg in2 {aud_feats.shape}')
+                    
+                    if self.audl2n: aud_feats = self.l2normfx(aud_feats)
+                    
+                try: feat_crop = np.hstack((rgb_feat_crop, aud_feats))
+                except: log.info(f'{rgb_feat_crop} {aud_feats.shape}')
+                log.debug(f'vid[{idx}][{i}][MIX] {feat_crop.shape} {feat_crop.dtype}')
+                
+            else: feat_crop = rgb_feat_crop
+
+            ## if segmentation the means betwen adjacent selected segmetns is done
+            ## if aud enabled, as its cat over feat dim
+            ## does it influence ??
+            if self.l2n == 1: feat_crop = self.l2normfx(feat_crop)
+            #log.info(f'vid[{idx}]: PRE-SEQ {feat_crop.shape}')
+            feats[i] = self.fprep.fx(feat_crop, idxs['idxs']) 
+            #log.info(f'vid[{idx}]: PST-SEQ {feats[i].shape}')
+            if self.l2n == 2: feats[i] = self.l2normfx(feats[i],a=2)
+
+            if idxs['rnd_glob'] is not None:
+                ## rnd ovre same idxs per crop
+                feats[i] = feats[i, idxs['rnd_glob']]
+            
+        log.debug(f'vid[{idx}] {feats.shape} {feats.dtype}')
+        return feats
+    
+    
+    ## (len, nfeats)
+    def get_feat_wocrop(self,idx):
+        rgb_fp = f"{self.rgbflst[int(idx)]}.npy"
+        rgb_feats = np.load(rgb_fp).astype(np.float32)
+
+        if self.rgbl2n: rgb_feats = self.l2normfx(rgb_feats)
+        log.debug(f"vid[{idx}][RGB] {rgb_feats.shape} {rgb_feats.dtype}  {osp.basename(rgb_fp)}")
+
+        fprep_idxs = self.fprep.get_idxs(len(rgb_feats))
         
+        if self.audflst:
+            if self.cropasvideo: aud_idx = int(idx)//self.rgb_ncrops
+            else: aud_idx = int(idx)
+            
+            aud_fp = f"{self.audflst[aud_idx]}.npy"
+            aud_feats = np.load( aud_fp ).astype(np.float32)
+            
+            if self.audl2n: aud_feats = self.l2normfx(aud_feats)
+            log.debug(f'vid[{idx}][AUD] {aud_feats.shape} {aud_feats.dtype}  {osp.basename(aud_fp)}')
+            
+            #############################
+            ## use FeatComp class 
+            if aud_feats.shape[0] != rgb_feats.shape[0]:
+                #log.debug(f'preseg {np.mean(aud_feats,axis=0)}')
+                #for af in aud_feats[:16]: log.debug(f'{af[:40]}')
+                aud_feats = self.self.fprep.segmentation(aud_feats, rgb_feats.shape[0], None) 
+                #log.debug(f'posseg {np.mean(aud_feats,axis=0)}')
+                #for af in aud_feats[:16]: log.debug(f'{af[:40]}')
+                log.debug(f'vid[{idx}][AUD] seg in2 {aud_feats.shape}')
+            
+            #log.info(f'vid[{idx}]: PRE-SEQ {aud_feats.shape}')
+            aud_feats = self.fprep.fx(aud_feats, fprep_idxs['idxs']) 
+            #log.info(f'vid[{idx}]: PST-SEQ {aud_feats.shape}')
         
-        log.debug(f'vid[{idx}] {features.shape} {features.dtype}')
-        return features
+            feats = np.hstack((rgb_feats, aud_feats))
+            log.debug(f'vid[{idx}][MIX] {feats.shape} {feats.dtype}')
+
+        else: feats = rgb_feats     
+
+        
+        #log.info(f'vid[{idx}]: PRE-SEQ {rgb_feats.shape}')
+        feats = self.fprep.fx(feats, fprep_idxs['idxs']) 
+        #log.info(f'vid[{idx}]: PST-SEQ {rgb_feats.shape}')
+        
+        if fprep_idxs['rnd_glob'] is not None:
+            feats = feats[fprep_idxs['rnd_glob']]
+        
+        log.debug(f'vid[{idx}] {feats.shape} {feats.dtype}')
+        return feats
     
     
     def __getitem__(self, idx):
@@ -326,13 +324,13 @@ class TrainDS(Dataset):
 
         
         if self.cfg.DATA.LOADIN2MEM:
-            features , label = self.data[int(idx)]  
+            feats , label = self.data[int(idx)]  
         else:
             label = self.get_label(idx)
-            features = self.get_feat(idx)
+            feats = self.get_feat(idx)
         
-        #log.info(f'f[{idx}]: {features.shape}')    
-        return features, label
+        #log.info(f'f[{idx}]: {feats.shape}')    
+        return feats, label
 
     def __len__(self):
         return len(self.rgbflst)
@@ -342,73 +340,128 @@ class TrainDS(Dataset):
 ## PREP / FRMT 
 ## preprocessing of train input
 
-## 1) FeatPrep prepares the features matrix for each .npy in order to have consistent shape
+## 1) FeatSegm prepares the features matrix for each .npy in order to have consistent shape
 ## its setup occurs in get_trainloader based on the cfg.TRAIN.FRMT
 ## according fx is further used in TrainDataset upon each .npy file after load
-class FeatPrep():
-    def __init__(self, what, cfg, seed):
+class FeatSegm():
+    def __init__(self, frmt, cfg, seed):
         self.len = cfg.LEN
         self.rnd = cfg.RND
-        self.jit_idxx, self.glob_idxx = None, None
+        
         self.fx = {
-            'seg': self.segmentation,
-            'seq': self.seqmentation
-        }.get(what)
+            'ITPLT': self.interpolate,
+            'SEQ': self.sequencial
+        }.get(frmt)
+        self.frmt = frmt
+        
         self.RNG = np.random.default_rng(seed)
         #log.error(f" {np.random.default_rng.}")
     
-    def rnd_jit(self, idxx, len_feat):
+    def get_idxs(self, feat_len):
+        ## call this at the start of get_feat
+        ## if crops in use 
+        ## it usefull to return idxs, so later when calling the fprep.fx, idxxs are passed
+        ## and the same idxxs are used for all crops
+        ## if not in use this is called only one time 
+        ## possible to dont call this at all or have idxs returned as NNone
+        ## if cfg.RNDCROP is True
+        ## so each crop will have different idxs chosen
+        
+        if self.frmt == 'ITPLT':
+            idxs = np.linspace(0, feat_len, self.len+1, dtype=np.int32)
+            idxs = self.rnd_jit(idxs, feat_len)
+            
+        elif self.frmt == 'SEQ':
+            if feat_len <= self.len:
+                idxs = None ## later pad only
+                
+            elif self.rnd[0] == 'uni':
+                idxs = np.linspace(0, feat_len-1, self.len, dtype=np.int32)
+                idxs = self.rnd_jit(idxs, feat_len)
+                
+            elif self.rnd[0] == 'rnd':
+                ## start point
+                start = self.RNG.integers(feat_len-self.len)
+                idxs = list(range(start, start+self.len))
+
+        if 'glob' in self.rnd:
+            ## aply glob rnd after seg/q
+            idxx_glob = np.arange(self.len)
+            self.RNG.shuffle(idxx_glob)
+            log.debug(f"GLOB / NEW {idxx_glob=}")
+            #return feat[idxx]
+        else: idxx_glob = None
+        
+        
+        return {
+            'idxs': idxs,
+            'rnd_glob': idxx_glob
+        }
+        
+    def rnd_jit(self, idxx, feat_len):
         ## jitter betwen adjacent chosen idxx
         ## only when theres no repetead idxs
-        ## when used in a ncrop configuration, each crop will have a different idxx
         ## taken from MIST random_petrub
-        if len_feat > self.len:
-            #log.debug(f'JIT / OLD {idxx=}')
-            for i in range(self.len):
-                if i < self.len - 1:
-                    if idxx[i] != idxx[i+1]:
-                        idxx[i] = self.RNG.choice(range(idxx[i], idxx[i+1]))  
-            #log.debug(f'JIT / NEW {idxx=}')
+        if 'jit' in self.rnd:
+            if feat_len > self.len:
+                #log.debug(f'JIT / OLD {idxx=}')
+                for i in range(self.len):
+                    if i < self.len - 1:
+                        if idxx[i] != idxx[i+1]:
+                            idxx[i] = self.RNG.choice(range(idxx[i], idxx[i+1]))  
+                #log.debug(f'JIT / NEW {idxx=}')
         return idxx
         
-    def rnd_glob(self, feat):
-        idxx = np.arange(self.len)
-        self.RNG.shuffle(idxx)
-        log.debug(f"GLOB / NEW {idxx=}")
-        return feat[idxx]
 
-    ## sultani MIL
-    def segmentation(self, feat, crop=0, fn=''):
-
-        new_feat = np.zeros((self.len, feat.shape[1]), dtype=np.float32)
-        idxs = np.linspace(0, len(feat), self.len+1, dtype=np.int32)
+    ## sultani interpolate
+    def interpolate(self, feat, idxs):
         
-        #if 'jit' in self.rnd:
-        #    if crop == 1: ## atual vid calling frist time, store jit_idxxs
-        #        log.error(f"{fn} {crop}")
-        #        self.jit_idxx = idxs = self.rnd_jit(idxs, len(feat))
-        #        log.error(f'{idxs=}')
-        #    elif crop != 0: ## consequent
-        #        idxs = self.jit_idxx
-        #        log.warning(f"{fn} {crop}")
-        #        log.warning(f'{idxs=}')
-        #    else: ## only call for vid in question, no need to store
-        #        idxs = self.rnd_jit(idxs, len(feat))    
-            
-            
+        ## ovverride given idxs
+        #if cfg.RNDCROP: 
+        #    log.error(f"{cfg.RNDCROP} in dev")
+        #    #idxs = self.get_idxs(len(feat))['idxs']
+        
+        if idxs is None: ## aud temp dim align
+            idxs = np.linspace(0, len(feat), self.len+1, dtype=np.int32)
+        
+        new_feat = np.zeros((self.len, feat.shape[1]), dtype=np.float32)
         for i in range(self.len):
             #log.info(f"{fn} {crop}")
             if idxs[i] != idxs[i+1]:
+                ## t, f
                 new_feat[i, :] = np.mean(feat[idxs[i]:idxs[i+1], :], axis=0)
+                ## topk vvfeat ar
+                #new_feat[i, :] = np.sort(feat[idxs[i]:idxs[i+1], :], axis=0)[0]
+                # topk !!!!!
             else:
                 new_feat[i, :] = feat[idxs[i], :]
-        
-        #if 'glob' in self.rnd: new_feat = self.rnd_glob(new_feat)
-            
         return new_feat
 
+
     ## https://github.com/Roc-Ng/XDVioDet/blob/master/utils.py
-    def seqmentation(self, feat, crop=0, fn=''):
+    def sequencial(self, feat, idxs):
+
+        def pad(feat):
+            if np.shape(feat)[0] <= self.len:
+                return np.pad(feat, ((0, self.len-np.shape(feat)[0]), (0, 0)), mode='constant', constant_values=0)
+            else: return feat
+        
+        if idxs is None: return pad(feat)
+        else:
+            ## make use of idxs already pre seleted at crop0
+            ## find a way to modulate each crop differently
+            ## ovverride given idxs
+            #if cfg.RNDCROP:
+            #    log.error(f"{cfg.RNDCROP} in dev")
+            #    #idxs = self.get_idxs(len(feat))['idxs']
+            
+            ## diffrence ??
+            f = feat[ idxs ]
+            assert f.shape == feat[idxs, :].shape
+
+            return f    
+
+    '''def sequencial(self, feat, crop=0, fn=''):
         
         def unfrm_extrt(feat):
             idxs = np.linspace(0, len(feat)-1, self.len, dtype=np.int32)
@@ -439,21 +492,22 @@ class FeatPrep():
             
             return f    
                 
-        else: return pad(feat)
+        else: return pad(feat)'''
 
 
 ## 2) frmter unifies the netowork input formating 
 ## handle MIL segmentation / SEQ sequencial
 ## called upon batchs of trainloader in trainep/trainepo
 class TrainFrmter():
-    def __init__(self,cfg):
+    def __init__(self, cfg):
+        
         self.fx = {
-            'SEG':self.segfrmter,
-            'SEQ':self.seqfrmter
-        }.get(cfg.TRAIN.FRMT)
+            True:self.milfrmter,
+            False:self.seqfrmter
+        }.get(cfg.TRAIN.MIL)
         
         self.bs = cfg.TRAIN.BS
-        self.ncrops = cfg.DATA.RGB.NCROPS
+        self.ncrops = cfg.TRAIN.CROPS2USE
         
     def rshp_in(self, x):
         ## reshapes the post frmt feats to handle the crop dimension
@@ -463,10 +517,11 @@ class TrainFrmter():
         else: assert x.ndim == 3 ## no crops
         return x 
 
-    def segfrmter(self, tdata, ldata, trn_inf):
+    def milfrmter(self, tdata, ldata, trn_inf):
         (nfeat, nlabel), (afeat, alabel) = tdata
         log.debug(f"E[{trn_inf['epo']+1}]B[{trn_inf['bat']+1}] nfeat: {nlabel[0]} {nfeat.dtype} {nfeat.shape} {nfeat.device} , afeat: {alabel[0]} {afeat.dtype} {afeat.shape} {afeat.device}")
         
+        ## simply know that bs/2 *0 , bs/2 *1 ?
         ldata["label"] = torch.cat((nlabel, alabel), 0).to(trn_inf['dvc'])
         
         cfeat = torch.cat((nfeat, afeat), 0) ## (2*bs, (ncrops), seglen , nfeats)
@@ -478,14 +533,61 @@ class TrainFrmter():
         cfeat, label = tdata
         log.debug(f"E[{trn_inf['epo']+1}]B[{trn_inf['bat']+1}] feat: {cfeat.shape} , lbl: {label} {label.shape} {label.device}")
         
-        ldata["label"] = label.copyto(trn_inf['dvc'])
+        ldata["label"] = label.to(trn_inf['dvc'])
         if "seqlen" in ldata: ## for CLAS loss fx
             if cfeat.ndim == 4: ##  b4 rshp in2 (bs*ncrops,maxseqlen,nfeats), as its equals to all ncrops views 
                 seqlen = np.sum(np.max(np.abs(cfeat[:,0,:,:]), axis=2) > 0, axis=1)
             else: seqlen = np.sum(np.max(np.abs(cfeat), axis=2) > 0, axis=1)
-            ldata["seqlen"] = seqlen
+            ldata["seqlen"] = seqlen.to(trn_inf['dvc'])
             log.debug(f"E[{trn_inf['epo']+1}]B[{trn_inf['bat']+1}] seqlen: {seqlen.shape}")
         
-        return self.rshp_in(cfeat).copyto(trn_inf['dvc'])
+        return self.rshp_in(cfeat).to(trn_inf['dvc'])
 
 ################################
+
+
+def segment_feat_crop(feat, length ):
+    """
+        segments (ncrops,ts,feats) into (ncrops,length,feats)
+    """
+    nc, t, f = feat.shape
+    divided_features = []        
+    for idxf, f in enumerate(feat): 
+        new_f = np.zeros((length, f.shape[1]) , dtype=np.float32)
+        print(f'{idxf} {new_f.shape}')
+        ## len(f) = t
+        r = numpy.linspace(0, len(f), length+1, dtype=numpy.int32)
+        for i in range(length):
+            if r[i]!=r[i+1]:
+                new_f[i,:] = np.mean(f[r[i]:r[i+1],:], 0)
+            else:
+                new_f[i,:] = f[r[i],:]
+        divided_features.append(new_f)
+    return np.array(divided_features, dtype=np.float32)
+
+    new_feat = np.zeros((self.len, feat.shape[1]), dtype=np.float32)
+    idxs = np.linspace(0, len(feat), self.len+1, dtype=np.int32)
+    
+    #if 'jit' in self.rnd:
+    #    if crop == 1: ## atual vid calling frist time, store jit_idxxs
+    #        log.error(f"{fn} {crop}")
+    #        self.jit_idxx = idxs = self.rnd_jit(idxs, len(feat))
+    #        log.error(f'{idxs=}')
+    #    elif crop != 0: ## consequent
+    #        idxs = self.jit_idxx
+    #        log.warning(f"{fn} {crop}")
+    #        log.warning(f'{idxs=}')
+    #    else: ## only call for vid in question, no need to store
+    #        idxs = self.rnd_jit(idxs, len(feat))    
+        
+        
+    for i in range(self.len):
+        #log.info(f"{fn} {crop}")
+        if idxs[i] != idxs[i+1]:
+            new_feat[i, :] = np.mean(feat[idxs[i]:idxs[i+1], :], axis=0)
+        else:
+            new_feat[i, :] = feat[idxs[i], :]
+    
+    #if 'glob' in self.rnd: new_feat = self.rnd_glob(new_feat)
+        
+    return new_feat

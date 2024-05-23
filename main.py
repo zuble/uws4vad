@@ -4,7 +4,7 @@ print(f"{torch.__version__=}")
 import numpy as np
 
 import data, nets, tmp
-from utils import setup_init, misc
+from utils import setup_init, misc, viz
 from vldt import vldt, metric
 
 parser = argparse.ArgumentParser(description='fext')
@@ -23,7 +23,7 @@ args = parser.parse_args()
 def initialize_modules():
     ## creates a log instance per module so based on cfg.DEBUG the log level is set
     ## init test only if enabled because of interactive mode and ssh con 
-    mods = [data, metric, misc, nets, tmp, vldt ] 
+    mods = [data, metric, misc, nets, tmp, vldt , viz] 
     for mod in mods: mod.init()
 
 

@@ -62,6 +62,7 @@ class Temporal2(nn.Module):
 ## https://arxiv.org/pdf/2309.16309v1.pdf
 ## https://github.com/2023-MindSpore-4/Code4/blob/main/WS-VAD-mindspore-main/non_local.py
 ## taken from RTFM
+## PDC + NLnet
 ## excepts b, f, t
 ## return b, f, t
 class _NonLocalBlockND(nn.Module):

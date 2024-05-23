@@ -5,13 +5,16 @@ import math, os.path as osp , glob , warnings
 import importlib, pkgutil, inspect
 
 #from .layers import *
-from utils import LoggerManager
+from utils import LoggerManager, parse_ptfn
 
 
 ## 1 network definition per file
-## main module named as filename
-## so rigth class can be found interactively without addign conditionals
-## refer to layers/_basepostfwd for more info
+## main module named as Network
+## if not cfg_net.VERSION must have the exact name as chosen
+## glossary of terms
+##  sls -> either represents segment-level scores or snippet-level scores (train/infer)
+##  vls -> video-label scores
+## 
 
 log = None
 def init():
@@ -38,13 +41,14 @@ def weight_init(m):
             m.bias.data.fill_(0)
 
 
-def get_net(cfg, dvc, wght_init=None):
+def get_net(cfg, cfg_frgb, cfg_faud, dvc, wght_init=None, mode='train'):
 
     ## .tmp.py purposes when the dataloader dont run, therefore dont populate those values
-    if not cfg.DATA.RGB.NFEATURES: 
-        log.error("exp .tmp.yml ??")
-        log.warning("using cfg.DATA.RGB/AUD.NFEATURES to be 1024/128")
-        cfg.merge_from_list(['DATA.RGB.NFEATURES', 1024, 'DATA.AUD.NFEATURES', 128]) 
+    #if not cfg.DATA.RGB.NFEATURES: 
+    #    log.error("exp .tmp.yml ??")
+    #    log.warning("using cfg.DATA.RGB/AUD.NFEATURES to be 1024/128")
+    #    cfg.merge_from_list(['DATA.RGB.NFEATURES', 1024, 'DATA.AUD.NFEATURES', 128]) 
+
 
     ## network / classifier cfg 
     cfg_net = getattr(cfg.NET, cfg.NET.NAME.upper(), None)
@@ -56,71 +60,47 @@ def get_net(cfg, dvc, wght_init=None):
         log.error("exp .tmp.yml ?? no network cfg in use")
         
     
-    
-    if 'attnomil' == cfg.NET.NAME.lower():
-        net_mdl = importlib.import_module(".attnomil", package="nets")    
-        
-        if cfg_net.VERSION == "VCls":
-            net = net_mdl.VCls(cfg.DATA.RGB.NFEATURES, cfg_net, cfg_cls)
-            #net = net_mdl.VCls()
-            
-        elif cfg_net.VERSION == "SAVCls":
-            net = net_mdl.SAVCls(cfg.DATA.RGB.NFEATURES, cfg_net)
-            
-        elif cfg_net.VERSION == "SAVCls_lstm":
-            if not cfg_net.LSTM_DIM: raise Exception(f"set cfg.NET.ATTNOMIL.LSTM_DIM")
-            net = net_mdl.SAVCls_lstm()
-            
-        elif cfg_net.VERSION == "LSTMCls":
-            if not cfg_net.LSTM_DIM: log.error(f"set cfg.NET.ATTNOMIL.LSTM_DIM")
-            net = net_mdl.LSTMCls(lstm_dim = cfg_net.LSTM_DIM)
-            
-        else: raise Exception(f'no version {cfg_net.VERSION} in ATNOMIL')
-        
+    '''
         cfg.merge_from_list(["NET.NAME", f"{cfg.NET.NAME}_{cfg_net.VERSION}"])
+    '''
     
-    else:
-        
-        ## every network main module must be named as the filename
-        net_mdl = importlib.import_module(f".{cfg.NET.NAME.lower()}", package="nets")
-        net_classes = inspect.getmembers(net_mdl, inspect.isclass)
-        
-        class_name = cfg.NET.NAME.upper() 
-        ## if theres isnt any cfg_net.VERSION
-        
-        net_class = None
-        for name, cls in net_classes:
-            if name == cfg.NET.NAME.upper():
-                net_class = cls
-                break
-        if net_class is None:
-            raise Exception(f"Class {class_name} not found in module {cfg.NET.NAME.lower()}.py")
-        
-        ## all posible values that network may contain
-        kwargs_mapping = {
-            'rgbnf': cfg.DATA.RGB.NFEATURES,
-            'audnf': cfg.DATA.AUD.NFEATURES,
-            'dvc': dvc,
-            'cfg_net': cfg_net,
-            'cfg_cls': cfg_cls
-        }
-        
-        net_kwargs = {}
-        # Get the constructor parameters of the network class
-        constructor_params = inspect.signature(net_class.__init__).parameters
-        for param_name, param in constructor_params.items():
-            if param_name == 'self':
-                continue
+    ## every network main module must be named as Network
+    net_mdl = importlib.import_module(f".{cfg.NET.NAME.lower()}", package="nets")
+    #net_classes = inspect.getmembers(net_mdl, inspect.isclass)
+    
+    if getattr( cfg_net, 'VERSION', None): 
+        class_name = cfg_net.VERSION
+    else: class_name = "Network"
 
-            if param_name in kwargs_mapping:
-                # Get the corresponding variable from the configuration
-                var = kwargs_mapping[param_name]
-                log.info(f"{var} {param_name}")
-                net_kwargs[param_name] = var
-            else:
-                raise Exception(f"Unexpected keyword argument '{param_name}' in {net_name}")
+    net_class = getattr(net_mdl, class_name, None)
+    if net_class == None: 
+        raise Exception(f"Class {class_name} not found in module {cfg.NET.NAME.lower()}.py") 
+    
+    ## all posible values that network may contain
+    kwargs_mapping = {
+        'rgbnf': cfg_frgb.NFEATS,
+        'audnf': getattr( cfg_faud, 'NFEATS', 0), ## !!
+        'dvc': dvc,
+        'cfg_net': cfg_net,
+        'cfg_cls': cfg_cls
+    }
+    
+    net_kwargs = {}
+    # Get the constructor parameters of the network class
+    constructor_params = inspect.signature(net_class.__init__).parameters
+    for param_name, param in constructor_params.items():
+        if param_name == 'self':
+            continue
 
-        net = net_class(**net_kwargs)
+        if param_name in kwargs_mapping:
+            # Get the corresponding variable from the configuration
+            var = kwargs_mapping[param_name]
+            log.info(f"{var} {param_name}")
+            net_kwargs[param_name] = var
+        else:
+            raise Exception(f"Unexpected keyword argument '{param_name}' in {net_name}")
+
+    net = net_class(**net_kwargs)
     
     log.info(f"NETWORK {cfg.NET.NAME} created")
     log.info('\ncfg_net\n{}\ncfg_cls\n{}'.format(cfg_net.dump(),cfg_cls.dump()) )
@@ -139,16 +119,10 @@ def get_net(cfg, dvc, wght_init=None):
     
     
     ## NetPstFwd
-    ## as cfg.DATA.RGB.NCROPS guides the traindl init,
-    ## assure that if no crops in use, NetPstFwd.ncrops isnt 0
-    ## changing cfg mayb dangerous , confirm reiterations !!!
-    if cfg.DATA.RGB.NCROPS == 0: nc = 1; log.warning(f"NetPstFwd.ncrops set as 1 ({cfg.DATA.RGB.NCROPS=})")
-    else: nc = cfg.DATA.RGB.NCROPS
-    
     net_mdl.init(log)
     net_pst_fwd = net_mdl.NetPstFwd(
         bs=cfg.TRAIN.BS, 
-        ncrops=nc,
+        ncrops=getattr( getattr(cfg, mode.upper()), 'CROPS2USE'),
         dvc=dvc
         )
         
@@ -159,19 +133,19 @@ def get_ldnet(cfg, dvc):
     
     if not cfg.TEST.LOADFROM: raise Exception (f'cfg.TEST.LOADFROM must be set')
     
-    load_mode = parse_ptfn(cfg.TEST.LOADFROM)['load_mode']
+    load_dict = parse_ptfn(cfg.TEST.LOADFROM)
     
     PATH = osp.join(cfg.EXPERIMENTPATH, f"{cfg.TEST.LOADFROM}.pt")
-    log.info(f'loading {load_mode} from {PATH}')
+    log.info(f"loading {load_dict['mode']} from {PATH}")
     
-    if load_mode == 'net': 
+    if load_dict['mode'] == 'net': 
         net = torch.load(PATH)
-    elif load_mode == 'dict':
+    elif load_dict['mode'] == 'dict':
         net = get_net(cfg, dvc)
         net.load_state_dict( torch.load(PATH) )
     else: raise Exception(f'{cfg.TEST.LOADFROM = } and should be (...).["net","dict"]')
     
-    return net
+    return net, load_dict['seed']
 
 
 def save(cfg, net):
@@ -198,50 +172,8 @@ def convin2onnx(cfg):
     return 
 
 
-
-'''
-        elif 'cmala' == cfg.NET.NAME.lower(): 
-            #cmala.init(log)
-            net_mdl = importlib.import_module(".cmala", package="nets")    
-            net = net_mdl.CMA(
-                rgbnf=cfg.DATA.RGB.NFEATURES, 
-                audnf=cfg.DATA.AUD.NFEATURES, 
-                dvc=dvc,
-                cfg_net=cfg_net,
-                cfg_cls=cfg_cls
-                )
-        
-            
-        elif 'dtr' == cfg.NET.NAME.lower():
-            #dtr.init(log)
-            net_mdl = importlib.import_module(".dtr", package="nets")            
-            net = net_mdl.dtr(  
-                rgbnf=cfg.DATA.RGB.NFEATURES, 
-                audnf=cfg.DATA.AUD.NFEATURES, 
-                cfg_net=cfg_net,
-                cfg_cls=cfg_cls
-                )
-        
-            
-        elif 'mindspore' == cfg.NET.NAME.lower():
-            #mindspore.init(log)
-            net_mdl = importlib.import_module(".mindspore", package="nets")    
-            net = net_mdl.MindSpore(  
-                rgbnf=cfg.DATA.RGB.NFEATURES, 
-                dvc=dvc,
-                cfg_net=cfg_net,
-                cfg_cls=cfg_cls
-                )
-        
-            
-        elif 'rtfm' == cfg.NET.NAME.lower():
-            net_mdl = importlib.import_module(".rtfm", package="nets")            
-            net = net_mdl.RTFM(  
-                rgbnf=cfg.DATA.RGB.NFEATURES, 
-                cfg_net=cfg_net,
-                cfg_cls=cfg_cls
-                )
-        
-            
-        else: raise Exception(f'no net name {cfg.NET.NAME}')
-    '''
+def count_parms(net):
+    t = sum(p.numel() for p in net.parameters())
+    log.info(f'{t/1e6:.3f}M parameters')
+    t = sum(p.numel() for p in net.parameters() if p.requires_grad)
+    log.info(f'{t/1e6:.3f}M trainable parameters')

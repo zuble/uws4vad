@@ -101,13 +101,13 @@ def get_ucf_stats():
 ## PATHS AND SUCH
 class FeaturePathListFinder:
     """
-        From cfg_ds.FROOT/fname/ finds a folder with mode in it (train / test)
+        From cfg_ds.FROOT/featdirname/ finds a folder with mode in it (train / test)
         then based on cfg procedes to filter the features paths
         so it retrieves accurate features list to use
         used in data/get_trainloader && data/get_testloader
     """
-    def __init__(self, cfg, mode:str, modality:str, cfg_ds):
-        self.listBG , self.listA = [], []
+    def __init__(self, cfg, mode:str, modality:str, featdirname:str, cfg_ds, cfg_feat):
+        self.listANOM , self.listNORM = [], []
         
         #if not cfg_ds:
         #    if mode in 'train': cfg_ds = getattr(cfg.DS, cfg.TRAIN.DS)
@@ -117,17 +117,9 @@ class FeaturePathListFinder:
         #    ## as train and test might have different ds to operate on
         #    else: raise Exception("cfg_ds is None with mode in test")
         
-        if modality == 'rgb': fname = cfg_ds.RGBFNAME
-        elif modality == 'aud': 
-            fname = cfg_ds.AUDFNAME
-            if not fname :
-                ## UCF
-                log.warning(f'fname is empty for {mode}/aud while being enabled: feature lists empty')
-                return
-            
         fpath = ''
         for root, dirs, _ in os.walk(cfg_ds.FROOT):
-            if fname == osp.basename(root):
+            if featdirname == osp.basename(root):
                 for d in dirs:
                     if mode in d:
                         #log.info(f'{d}')
@@ -135,7 +127,7 @@ class FeaturePathListFinder:
                         log.info(f'{mode} features path {fpath}')
                         break        
         if not fpath: 
-            raise Exception (f'{fname} or {fname}/{mode} not found in {cfg_ds.FROOT=}')
+            raise Exception (f'{featdirname} or {featdirname}/{mode} not found in {cfg_ds.FROOT=}')
 
         flist = glob.glob(fpath + '/**.npy')
         flist.sort()
@@ -153,33 +145,58 @@ class FeaturePathListFinder:
         ##      if test, take unique basename from crop fns -> it'll use only center crop __0.npy
         ## else means that all files are a feature of video full view
 
-        if modality == 'rgb':
-            if cfg.DATA.CROPASVIDEO and mode in 'train':
-                ## Get the unique video identifiers from the first cfg.DATA.RGB.NCROPS * 2 files
-                unique_video_ids = list(OrderedDict.fromkeys([osp.splitext(f)[0][:-3] for f in flist[:cfg.DATA.RGB.NCROPS * 2]]))
-                ## if features dataset ncrops corresponds to cfg.DATA.RGB.NCROPS select all
-                if len(unique_video_ids) == 2: flist = [f[:-4] for f in flist]
-                ## selects only the frist cfg.DATA.RGB.NCROPS crop files
+        if modality.upper() == 'RGB':
+            
+            ## assert cases when there no crops
+            ## not ideal, but both train/test depend on it
+            ## mainly for TrainFrmt.reshape_in and NetPstFwd.reshape_*, although tackle that edges
+            if cfg_feat.NCROPS == 0:
+                c2u = getattr( getattr(cfg, mode.upper()), 'CROPS2USE')
+                if c2u  != 0:
+                    log.warning(f"cfg_f{modality.lower()}.{featdirname} has no crops, while cfg.{mode.upper()}.CROPS2USE is {c2u}")
+                    log.warning(f"overriding cfg.{mode.upper()}.CROPS2USE to 0")
+                    cfg.merge_from_list([f"{mode.upper()}.CROPS2USE", 0])
+            
+            
+            if cfg.TRAIN.CROPASVIDEO and mode in 'train':
+                
+                if cfg.TRAIN.CROPS2USE == cfg_feat.NCROPS:
+                    flist = [f[:-4] for f in flist]
                 else:
                     flist = list(OrderedDict.fromkeys([osp.splitext(f)[0][:-3] for f in flist]))
-                    flist = [f"{f}__{i}" for f in flist for i in range(cfg.DATA.RGB.NCROPS)]
+                    flist = [f"{f}__{i}" for f in flist for i in range(cfg.TRAIN.CROPS2USE)]
+                    
+                ### Get the unique video identifiers from the first cfg.DATA.RGB.NCROPS * 2 files
+                #unique_video_ids = list(OrderedDict.fromkeys([osp.splitext(f)[0][:-3] for f in flist[:cfg.DATA.RGB.NCROPS * 2]]))
+                ### if len is 2: ncrops corresponds to cfg.DATA.RGB.NCROPS select all
+                #if len(unique_video_ids) == 2: flist = [f[:-4] for f in flist]
+                ### selects only the frist cfg.DATA.RGB.NCROPS crop files
+                #else:
+                #    flist = list(OrderedDict.fromkeys([osp.splitext(f)[0][:-3] for f in flist]))
+                #    flist = [f"{f}__{i}" for f in flist for i in range(cfg.DATA.RGB.NCROPS)]
             
             ## cfg.DATA.CROPASVIDEO is False or the mode is "test"
-            elif cfg.DATA.RGB.NCROPS:
+            ## check for use of crops
+            elif mode in 'test' and cfg.TEST.CROPS2USE:
+                ##feature fn from features crop folder without duplicates (__0, __1...) 
+                flist = list(OrderedDict.fromkeys([osp.splitext(f)[0][:-3] for f in flist]))
+                
+            elif mode in 'train' and cfg.TRAIN.CROPS2USE:
                 ##feature fn from features crop folder without duplicates (__0, __1...) 
                 flist = list(OrderedDict.fromkeys([osp.splitext(f)[0][:-3] for f in flist]))
             
             ## ds w/ 1 rgbf per video
             else: flist = [f[:-4] for f in flist]
         
-        ## 1 audf npy per video
+        ## aud 1 .npy per vid
         else: flist = [f[:-4] for f in flist]
 
+
         log.debug(f"feat flist pos-filt in {mode} {modality} : {len(flist)}")
-        
+        #log.warning(f"{flist}")
         
         ######
-        ## filters into anom and norm w/ listA and listBG
+        ## filters into anom and norm w/ listNORM and listANOM
         ## filters for watching purposes w/ fn_label_dict
         self.fn_label_dict = {lbl: [] for lbl in cfg_ds.LBLS_INFO[:-1]}
         fist = list(self.fn_label_dict.keys())[0]  ## 000.NORM
@@ -195,11 +212,11 @@ class FeaturePathListFinder:
             #log.debug(f'{fp} {xearc} ')
             
             if cfg_ds.LBLS[0] in xearc:
-                self.listA.append(fp)
+                self.listNORM.append(fp)
                 self.fn_label_dict[fist].append(fn)
                 #log.debug(f'{xearc} {fn}')
             else:
-                self.listBG.append(fp)
+                self.listANOM.append(fp)
                 self.fn_label_dict[last].append(fn)
 
                 for key in self.fn_label_dict.keys():
@@ -212,8 +229,8 @@ class FeaturePathListFinder:
                 
                 
     def get(self, mode, watch_list=[]):
-        if mode == 'BG': l = self.listBG
-        elif mode == 'A': l = self.listA
+        if mode == 'ANOM': l = self.listANOM
+        elif mode == 'NORM': l = self.listNORM
         elif mode == 'watch': 
             l = []
             for lbl2wtch in watch_list:
@@ -223,3 +240,4 @@ class FeaturePathListFinder:
                 l.extend(self.fn_label_dict[lbl2wtch])
         else: log.error(f'{mode} not found')
         return l
+    

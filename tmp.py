@@ -9,9 +9,9 @@ import os, random, time
 
 import nets ## can use nets.dtr.dtr eg
 from nets import get_net, save
-from utils import LoggerManager, get_optima, Visualizer, hh_mm_ss, mp4_rgb_info
+from utils import LoggerManager, get_optima, Visualizer, hh_mm_ss, mp4_rgb_info, misc
 #from vldt import Metrics, Validate 
-from data import get_trainloader, get_xdv_stats, get_ucf_stats
+from data import get_trainloader, get_xdv_stats, get_ucf_stats, run_dl, FeaturePathListFinder
 from loss import get_loss
 
 log = None
@@ -19,8 +19,25 @@ def init():
     global log
     log = LoggerManager.get_logger(__name__)
 
+## DATA CALLS
+def debug_data(cfg, dvc):
+    
+    
+    ds, modality, featdir = cfg.TRAIN.DS[0].split(".")
+    cfg_ds = getattr(cfg.DS, ds) 
+    cfg_frgb = getattr( getattr( cfg_ds, modality ), featdir)
+    
+    log.error(f"{cfg_frgb}")
+    rgbfplf = FeaturePathListFinder(cfg, 'train', modality, featdir, cfg_ds, cfg_frgb)
+    
+    misc.init_seed(cfg)
+    loader = get_trainloader(cfg)
+    run_dl(loader)
+    return
+
+
 # LOSS / NETS TEST CALLS
-def run_net_loss(cfg, dvc):
+def debug_net_loss(cfg, dvc):
     #A = ['BCE','RNKG','CLAS', 'MBS']
     #A = ['RNKG']
     #cfg.TRAIN.SEQ.LOSS = A
@@ -67,7 +84,7 @@ def run_net_loss(cfg, dvc):
             else: log.info(f"{k} {v}")
         log.info(f"\n\n")
         ######
-        
+    loader = get_trainloader(cfg) ;run_dl(loader); return    
 class Zuader:
     ## encapsulates the dataloader independtly of elements yielded
     def __init__(self, frmt='SEG', *loaders):
@@ -101,7 +118,12 @@ class RndDS(Dataset):
 
 def main(cfg, dvc):
     
-    run_net_loss(cfg, dvc); return
+    debug_data(cfg, dvc); return
+    
+    
+    debug_net_loss(cfg, dvc); return
+    
+    
     
     allow_tf32()
     init_seed(22)

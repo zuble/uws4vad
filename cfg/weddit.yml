@@ -1,12 +1,15 @@
-GPUID: [3]
+## starting point
+## holds all possible entries in default.py
+
+GPUID: [-1]
 SEED: None
 LOG_CFG_INFO: true
 PROFILE: 0
-TMP: true ## FALSE WHEN CREATING NEW EXP FILE
+TMP: false ## FALSE WHEN CREATING NEW EXP FILE
 
 
 DEBUG:
-  ROOT: 0
+  ROOT: 1
   DATA: 0
   LOSS: 1
   METRIC: 1
@@ -62,11 +65,16 @@ TRAIN:
   ENABLE: true  ## true false
   EPOCHS: 5
   BS: 32
-  DS: XDV
-  FRMT: SEG
-  XEL:
-    ENABLE: false
-  SEG:
+  #DS: 
+  CROPS2USE: 1
+  CROPASVIDEO: False
+  RGBL2N: 0
+  AUDL2N: 0
+
+  MIL: True
+
+  FRMT: ITPLT
+  ITPLT:
     LEN: 32
     L2N: 0
     RND: ['']  ## jit / glob
@@ -76,6 +84,8 @@ TRAIN:
     L2N: 0
     RND: ['uni'] ## uni or rnd / jit / glob  
     LOSS: [CLAS]  ## BCE CLAS 
+  XEL:
+    ENABLE: false
 
   VLDT:
     PERIOD: 5
@@ -146,9 +156,11 @@ OPTIMA:
 
 TEST:
   ENABLE: false ## true false
-  DS: UCF
   LOADFROM: ''
   LOADMODE: net ## dict
+
+  DS: [UCF.RGB.CLIPTSA]
+  CROPS2USE: 1
 
   VLDT:
     SAVEPKL: true
@@ -174,26 +186,7 @@ TEST:
 
 
 DATA:
-  CROPASVIDEO: false  ## true false
-  RGB:
-    SEGMENTNFRAMES: 16
-    NCROPS: 2
-    L2N: 0
-  AUD:
-    ENABLE: false
-    SEGMENTNFRAMES: 16
-    L2N: 0
-
   LOADIN2MEM: false
   PINMEM: true
   PERSISTWRK: true
   NWORKERS : 1
-
-
-DS:
-  XDV:
-    RGBFNAME: i3d-features-rgb
-    AUDFNAME: vggish-features ## vgg42-tlpf-aps
-  UCF:
-    RGBFNAME: I3DDEEPMIL
-    #AUDFNAME: vggish-features

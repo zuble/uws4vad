@@ -85,18 +85,19 @@ class LSTMSCls(nn.Module):
 ## 4 attnomil and outputs at vl
 ## bert-rtfm used as substitue of bert 
 class LSTMVCls(nn.Module):
-    def __init__(self, lstm_dim=256, lstm_bd=True):
+    def __init__(self, in_dim, lstm_dim=256, lstm_bd=True, mlp_dim=1):
         super(LSTMVCls,self).__init__()
-        self.lstm = rnn.LSTM(lstm_dim, num_layers=2, layout='NTC', bidirectional=lstm_bd)
         
-        ## attnomil
-        #self.ffn = nn.HybridSequential()
-        #self.ffn.add( nn.Linear(out_features=32, weight_initializer=mxinit.Xavier(), bias_initializer='zeros') )
-        #self.ffn.add ( nn.Dropout(0.5) )
-        #self.ffn.add( nn.Linear(out_features=1, weight_initializer=mxinit.Xavier(), bias_initializer='zeros') )
-        #self.ffn.add( nn.Linear(out_features=1, activation='sigmoid', weight_initializer=mxinit.Xavier(), bias_initializer='zeros') )
+        self.lstm = nn.LSTM(in_dim, lstm_dim, batch_first=True, bidirectional=lstm_bd, num_layers=2)
         
-        self.ffn2 = MLP()
+        if mlp_dim == 1:
+            ## attnomil
+            self.ffn = nn.Sequential(
+                nn.Dropout(p=0.5),
+                nn.Linear( lstm_dim*2 if lstm_bd else lstm_dim ,1),
+                nn.Sigmoid()
+            )
+        else: log.error("")
         
     def forward(self,x):
         b, t, f = x.shape

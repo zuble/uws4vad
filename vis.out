@@ -1,0 +1,26 @@
+INFO:root:Application Started
+INFO:root:Working directory: /home/zuble/.visdom
+INFO:tornado.access:200 POST /env/zutc_vad_weddit (::1) 0.54ms
+INFO:tornado.access:101 GET /vis_socket (::1) 0.38ms
+INFO:root:Opened visdom socket from ip: ::1
+INFO:tornado.access:200 POST /env_state (::1) 1.18ms
+INFO:tornado.access:200 POST /win_exists (::1) 1.14ms
+INFO:tornado.access:200 POST /win_exists (::1) 1.33ms
+INFO:tornado.access:200 POST /env/zutc_vad_weddit (::1) 0.31ms
+INFO:tornado.access:101 GET /vis_socket (::1) 0.34ms
+INFO:root:Opened visdom socket from ip: ::1
+INFO:tornado.access:200 POST /env_state (::1) 0.36ms
+INFO:tornado.access:200 POST /win_exists (::1) 0.29ms
+INFO:tornado.access:200 POST /win_exists (::1) 0.30ms
+INFO:tornado.access:200 POST /env/zutc_vad_weddit (::1) 0.29ms
+INFO:tornado.access:101 GET /vis_socket (::1) 0.29ms
+INFO:root:Opened visdom socket from ip: ::1
+INFO:tornado.access:200 POST /env_state (::1) 0.66ms
+INFO:tornado.access:200 POST /win_exists (::1) 0.54ms
+INFO:tornado.access:200 POST /win_exists (::1) 0.48ms
+INFO:tornado.access:200 POST /env/zutc_vad_weddit (::1) 0.34ms
+INFO:tornado.access:101 GET /vis_socket (::1) 0.29ms
+INFO:root:Opened visdom socket from ip: ::1
+INFO:tornado.access:200 POST /env_state (::1) 1.24ms
+INFO:tornado.access:200 POST /win_exists (::1) 1.31ms
+INFO:tornado.access:200 POST /win_exists (::1) 1.34ms

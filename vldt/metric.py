@@ -28,8 +28,7 @@ class Metrics(object):
         self.vis = vis
         self.mode = mode
         
-        cfg_vldt = getattr(cfg, self.mode.upper()).VLDT
-        cfg_ds = getattr(cfg.DS, getattr(cfg, self.mode.upper()).DS)
+        cfg_vldt = getattr( getattr(cfg, mode.upper()), 'VLDT')
         
         # Visualization and table flags
         self.xtra_mtrcs = cfg_vldt.get('EXTRA_MTRCS', False)
