@@ -1,0 +1,7 @@
+## https://github.com/joos2010kj/CLIP-TSA
+id: CLIPTSA
+ds: 
+  - ucf
+fstep: 8
+nfeats: 512
+ncrops: 0

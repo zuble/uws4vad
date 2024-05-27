@@ -1,0 +1,25 @@
+id: xdv
+lbls: 
+  - 'label_A'
+  - 'B1'
+  - 'B2'
+  - 'B4'
+  - 'B5'
+  - 'B6'
+  - 'G'
+lbls_info: 
+  - '000.NORM'
+  - 'B1.FIGHT'
+  - 'B2.SHOOT'
+  - 'B4.RIOT'
+  - 'B5.ABUSE'
+  - 'B6.CARACC'
+  - 'G.EXPLOS'
+  - '111.ANOM'
+  - 'ALL'
+
+  
+gt: ${hydra:runtime.cwd}/data/gt/xdv.txt
+
+froot: ${path.xdv_froot}
+vroot: ${path.xdv_vroot}

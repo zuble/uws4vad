@@ -1,0 +1,46 @@
+# @package _global_
+
+## specify here default configuration
+## order of defaults determines the order in which configs override each other
+defaults:
+  - _self_
+  - dl: null
+  - model: null
+  - vldt: dflt
+  - path: dflt
+  - xtra: dflt
+  - hydra: dflt 
+  - debug: null ## python main.py debug=dflt
+
+  - exp: null ## god overrider
+
+  ## config for hyperparameter optimization
+  #- hparams_search: null
+
+###############
+## determines path of log @ hydra/dflt.yaml
+## ${path.log_dir}/${name}/${task_name}
+name: 'uws4vad'
+task_name: "000"
+## saved as a seperate tags.log at dyn output
+## use as experiment guides key points
+tags: ["dev"]
+
+## gpu idx or -1 for CPU
+## set trough main wrapper custim resolver
+dvc: ${dyn_dvc:1}
+## if 0 and train: generates trough OS @ utils/env.py
+## test: use seed from load fn .pkl 
+seed: 0
+deterministic: 0
+
+## what file in src to run
+tmp: 0 
+train: 1  
+test: 0  
+
+## affects both train/test 
+load:
+  network_chkpt_path: ~
+  strict_load: false
+  resume_state_path: ~

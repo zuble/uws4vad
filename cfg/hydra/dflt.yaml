@@ -1,0 +1,17 @@
+defaults:
+  - override job_logging: colorlog
+  - override hydra_logging: colorlog
+
+# output directory, generated dynamically on each run
+run:
+  dir: ${path.log_dir}/${name}/${task_name}/runs/${now:%Y-%m-%d}_${now:%H-%M-%S}
+sweep:
+  dir: ${path.log_dir}/${name}/${task_name}/multiruns/${now:%Y-%m-%d}_${now:%H-%M-%S}
+  subdir: ${hydra.job.num}
+
+
+job_logging: #disabled
+  formatters:
+    colorlog:
+      format: '[%(blue)s%(name)s%(reset)s:%(blue)s%(lineno)s%(reset)s][%(log_color)s%(levelname)s%(reset)s] - %(message)s'
+

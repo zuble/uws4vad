@@ -1,0 +1,42 @@
+id: ucf
+lbls: 
+  - 'Normal'
+  - 'Abuse'
+  - 'Arrest'
+  - 'Arson'
+  - 'Assault'
+  - 'Burglary'
+  - 'Explosion'
+  - 'Fighting'
+  - 'RoadAccidents'
+  - 'Robbery'
+  - 'Shooting'
+  - 'Shoplifting'
+  - 'Stealing'
+  - 'Vandalism'
+lbls_info: 
+  - '000.NORM'
+  - '1.ABUSE'
+  - '2.ARREST'
+  - '3.ARSON'
+  - '4.ASSAULT'
+  - '5.BURGLARY'
+  - '6.EXPLOS'
+  - '7.FIGHT'
+  - '8.ROADACC'
+  - '9.ROBBER'
+  - '10.SHOOT'
+  - '11.SHOPLIFT'
+  - '12.STEAL'
+  - '13.VANDAL'
+  - '111.ANOM'
+  - 'ALL'
+
+
+## id value in each dl/ds/(frgb or faud) represents folder name
+## frgb/cliptsa.yaml w/ id: CLIPTSA 
+## excpets 2 folders (train/test) as froot/CLIPTSA/train+test
+
+gt: '${hydra:runtime.cwd}/data/gt/ucf.txt' ## del normal lines
+froot: ${path.ucf_froot}
+vroot: ${path.ucf_vroot}

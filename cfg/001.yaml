@@ -1,0 +1,34 @@
+# @package _global_
+
+## specify here default configuration
+## order of defaults determines the order in which configs override each other
+defaults:
+  - _self_
+  - dl: ucf_cliptsa_mil
+  - model: dflt
+  - vldt: dflt
+  - path: dflt
+  - xtra: dflt
+  - hydra: dflt
+  
+  - exp: null
+  - debug: null
+
+name: 'mir'
+task_name: "001"
+tags: [""]
+
+dvc: ${dyn_dvc:1}
+seed: 0
+deterministic: 0
+
+tmp: 0
+train: 1  
+test: 0  
+
+
+load:
+  network_chkpt_path: ~
+  strict_load: false
+  resume_state_path: ~
+

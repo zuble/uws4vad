@@ -1,0 +1,26 @@
+## https://pytorch.org/docs/1.8.1/data.html?highlight=dataloader#torch.utils.data.DataLoader
+
+train:
+  in2mem: False
+
+  bs: ???
+  #shuffle: True ## theres a rndsampler
+  nworkers: ${dyn_nworkers:0}  ## 0 -> cpu//4 ;; -1 -> all cores
+  pinmem: True
+  droplast: True ## many functions relly on bs, so if true irregular len of batch ...
+  pftch_fctr: 2
+  prstwrk: True
+
+
+## both validate and test reuse this values
+## as the dataloader is created from same point
+test:
+  in2mem: False
+
+  bs: 1
+  shuffle: False
+  nworkers: ${dyn_nworkers:0}  ## 0 -> cpu//4 ;; -1 -> all cores  
+  pinmem: True
+  droplast: False
+  pftch_fctr: 2
+  prstwrk: True

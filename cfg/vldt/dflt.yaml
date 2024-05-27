@@ -1,0 +1,42 @@
+train:
+  ## epoch freq to perform validate
+  ## if != 0 -> epochs // _
+  ## if 0 -> set to 1 epoch
+  freq: ${dyn_vldt:${model.epochs},5}
+  ## per what prespective show metrics
+  ## glob ->  over full/original test
+  ## lbl -> over each indv classes aswell as anomalous set 
+  per_what: lbl  ## glob , lbl
+  ## send intermidiate results to visdom
+  visplot: false
+
+
+  ## periodo to log loss states to visdom
+  ## or to console
+  log_loss: 
+
+
+
+
+test:
+  savepkl: 1
+  frompkl: 0
+
+  per_what: lbl ## glob , lbl , vid
+  mtrc_visplot: 1
+  mtrc_vistabe: 0
+  mtrc_savetable: 0
+  curv_visplot: 1
+  gtfl_visplot: 0 ## to implement ~!!!
+
+  watch: ## B1 FIGHT | B2 SHOOT | B4 RIOT | B5 ABUSE | B6 CARACC | G EXPLOS
+    savepkl: 1
+    fromkpl: 0
+    frtend: visdom
+    frmt: ['asp', 'gtfl']
+    label: ['111']
+    guividsel: true
+    asp:
+      fs: 1
+      th: 0.5
+      cvputfx: float

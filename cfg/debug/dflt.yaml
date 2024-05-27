@@ -1,0 +1,29 @@
+# overwrite task name so debugging logs are stored in separate folder
+task_name: "debug"
+
+# python main.py debug=dflt
+
+# sets level of all command line loggers to 'DEBUG'
+# https://hydra.cc/docs/tutorials/basic/running_your_app/logging/
+hydra:
+  job_logging:
+    root:
+      level: DEBUG
+  #verbose: True  ## use this to also set hydra loggers to 'DEBUG'
+
+#trainer:
+#  max_epochs: 1
+#  accelerator: cpu # debuggers don't like gpus
+#  devices: 1 # debuggers don't like multiprocessing
+#  detect_anomaly: true # raise exception if NaN or +/-inf is detected in any tensor
+
+dl:
+  loader:
+    # debuggers don't like multiprocessing
+    # disable gpu memory pin
+    train:
+      nworkers: 0
+      pinmem: False
+    test:
+      nworkers: 0
+      pinmem: False

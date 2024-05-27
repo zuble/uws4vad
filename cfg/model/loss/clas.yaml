@@ -1,0 +1,7 @@
+clas:
+  _target_: src.model.loss.clas.Loss
+  _cfg:
+    fx: topk  ## topk wink full
+    topk: 16
+    wink: 3
+    winkconv: false

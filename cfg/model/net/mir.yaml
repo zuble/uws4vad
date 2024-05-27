@@ -1,0 +1,10 @@
+defaults:
+  - _globo.yaml
+
+id: mir
+arch:
+  _cfg:
+    neurons: 
+      - 1024
+      - 32
+    do: 0.7

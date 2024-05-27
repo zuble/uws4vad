@@ -1,0 +1,12 @@
+## 16: 512/32 1024/64 2048/128
+## 8: 512/64 1024/128 2048/256
+## 4: 512/128 1024/256 2048/512
+
+id: ???
+## 
+arch:
+  _target_: "src.model.net.${model.net.id}.Network"
+  _cfg: ???
+
+pstfwd:
+  _target_: "src.model.net.${model.net.id}.NetPstFwd"

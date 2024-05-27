@@ -1,0 +1,29 @@
+train:
+  mil: 1
+
+  ## MUST BE SET RIGHT
+  ## 0 : feats in use must have no crops whatsoever, so fn are in format 'fn.npy'  
+  ## 1 : feats in use have crop augm and only center crop is used, eg. 'fn__0.npy'
+  ## 2 : feats in use have crop augm and center + topright (or wtv) eg. 'fn__0.npy' && 'fn__1.npy' ...
+  crops2use: ???
+  cropasvideo: False ## each crop with be treated as a video it self
+  ## disabled for now
+  #rgbl2n: 0 ## if 1 l2norm apllied right after load
+  #audl2n: 0
+  #l2n: 0
+
+  ## uni -> picks len idxs equally spaced trough linspace 
+  ## seq -> picks len idx sequential
+  ## rnd -> picks len idx rnd keeping their temporal order 
+  sel: uni 
+  len: 32
+  ## avg adj sel snippet feats ;; if on defaults sel->uni 
+  intplt: 1  
+  rnd: 
+    ## jit -> jitter selection of adjacent idxs when sel is != seq
+    ## glob -> rnd whole idxs of feat
+    ## each crop will have the same rnd
+    - null
+
+test:
+  crops2use: 1

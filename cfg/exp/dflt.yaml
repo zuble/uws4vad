@@ -1,0 +1,32 @@
+defaults:
+  - override /dl: ucf_cliptsa_mil.yaml
+  - override /model: mir.yaml
+
+name: 'mir'
+task_name: "001"
+tags: ["mlp layer 1024"]
+
+
+model:
+  net:
+    cfg:
+      neurons:
+        - 1024
+  optima:
+    lr: 0.002
+
+  vldt:
+    period: 5
+    ## per what prespective show metrics
+    ## glob ->  over full/original test
+    ## lbl -> over each indv classes aswell as anomalous set 
+    per_what: lbl  ## glob , lbl
+    ## send intermidiate results to visdom
+    visplot: false
+
+    
+dl:
+  loader:
+    train:
+      in2mem: true
+      bs: 32

@@ -1,0 +1,20 @@
+#_target_: src.data.traindl.get_trainloader
+
+defaults:
+  - ds/info: ucf.yaml 
+  - ds/frgb: cliptsa.yaml
+  - ds/faud: null
+  - loader: dflt.yaml
+  - trnsfrm: ucf.yaml
+  - _self_ ## last so anything here override previous
+
+loader:
+  train:
+    in2mem: true
+    bs: 64
+
+trnsfrm:
+  train:
+    crops2use: 0
+  test:
+    crops2use: 0
