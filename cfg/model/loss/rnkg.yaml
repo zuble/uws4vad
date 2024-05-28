@@ -1,5 +1,4 @@
-rnkg:
-  _target_: src.model.loss.parts.rnkg.RankingLoss
-  
-  version: deepmil  ## deepmil milbert tempatt
-  lambda12: [8e-5,8e-5]
+_target_: src.model.loss.rnkg.RankingLoss
+bs: ${dl.loader.train.bs}
+seglen: ${dl.trnsfrm.train.len}
+lambda12: [8e-5,8e-5]

@@ -5,7 +5,7 @@ import glob , os, os.path as osp, math, time
 from collections import OrderedDict
 
 from src.utils import mp4_rgb_info, logger
-log = logger.get_log(__name__,1)
+log = logger.get_log(__name__)
 
 
 ###########
@@ -20,12 +20,12 @@ def run_dl(dl):
                 #if not b_idx: log.info(f"{type(data)} {len(data)} {data}") 
                 if len(data[0]) == 2:
                     (nfeat, nlabel), (afeat, alabel) = data
-                    log.info(f'B[{b_idx+1}] (seg) NORM {nfeat.shape=} {nfeat.dtype} | {nlabel.shape=} {nlabel[0]} {nlabel.dtype}')
-                    log.info(f'B[{b_idx+1}] (seg) ABNORM {afeat.shape=} {afeat.dtype} | {alabel.shape=} {alabel[0]} {alabel.dtype}')
+                    log.debug(f'B[{b_idx+1}] (seg) NORM {nfeat.shape=} {nfeat.dtype} | {nlabel.shape=} {nlabel[0]} {nlabel.dtype}')
+                    log.debug(f'B[{b_idx+1}] (seg) ABNORM {afeat.shape=} {afeat.dtype} | {alabel.shape=} {alabel[0]} {alabel.dtype}')
                 else:
                     cfeat, label = data
-                    log.info(f'B[{b_idx+1}] (seq) {cfeat.shape=} {cfeat.dtype} | {label.shape=} {label.dtype}')
-            log.info(f'[{ii}] time to load {b_idx+1} batches {time.time()-tic}')
+                    log.debug(f'B[{b_idx+1}] (seq) {cfeat.shape=} {cfeat.dtype} | {label.shape=} {label.dtype}')
+            log.debug(f'[{ii}] time to load {b_idx+1} batches {time.time()-tic}')
     except ValueError as e:
         log.error(f'Error unpacking variables in batch {b_idx+1}: {e}')
 

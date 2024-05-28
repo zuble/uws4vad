@@ -18,3 +18,4 @@ from src.utils.misc import (
     )
 from src.utils.logger import get_log
 from src.utils.cfgres import reg_custom_resolvers
+from src.utils.viz import Visualizer

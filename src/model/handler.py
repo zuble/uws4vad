@@ -1,15 +1,15 @@
-import os
-import os.path as osp
+import os, os.path as osp
 from collections import OrderedDict
 import copy
 import math
 
 import torch
 import torch.nn
-
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
+from src.utils import get_log 
+log = get_log(__name__)
 
 def weight_init(m):
     #classname = m.__class__.__name__
@@ -74,113 +74,65 @@ def get_ldnet(cfg, dvc):
 class ModelHandler:
     def __init__(self, cfg):
         self.cfg = cfg
-        self.dvc = self.cfg.dvc
-
-        self.step = 0
-        self.epoch = -1
-        self._logger = get_logger(cfg, os.path.basename(__file__))
-
-    def train_epo(self, traindl):
-        #logger = get_logger(self.cfg, os.path.basename(__file__), disable_console=True)
-        
-        self.net.train()
-        for tdata in tqdm(traindl, leave = False, desc="Training/Batch:", unit='batch'):
-            
-            model_input = model_input.to(self.device)
-            
-            output = self.net(model_input)
-            ndata = net(feat)
-            log.debug(f"{feat.shape} -> ")
-            for key in list(ndata.keys())[1:]: log.debug(f"    {key} {ndata[key].shape}") if type(ndata[key]) == torch.Tensor else None
-            ## if ndata['id'] == '...':
-            
-            loss_indv = netpstfwd.train(ndata, ldata, lossfx) 
-            loss_glob = torch.sum(torch.stack(list(loss_indv.values())))
-            
-            
-            self.optimizer.zero_grad()
-            loss_glob.backward()
-            self.optimizer.step()
-            
-            # set log
-            self.log.loss_v = loss_v.item()
-            loss = self.log.loss_v
-            
-            self.step += 1
-            
-            if loss > 1e8 or math.isnan(loss):
-                logger.error("Loss exploded to %.02f at step %d!" % (loss, self.step))
-                raise Exception("Loss exploded")
-
-
-            if self.step % self.cfg.log.summary_interval == 0:
-                logger.info("Train Loss %.04f at step %d" % (loss, self.step))
-
-
-    def validate(self, test_loader):
-        ## enter validate here
-        
-        self.net.eval()
-        with torch.no_grad():
-            for tdata in tqdm(test_loader, leave = False, desc="Testing/Batch:"):
-                output = self.run_network(model_input)
     
-                
-    def save_network(self, save_file=True):
-        state_dict = self.net.state_dict()
+    def save_net(self, net, trn_inf, save_file=True):
+        
+        state_dict = net.state_dict()
         for key, param in state_dict.items():
             state_dict[key] = param.to("cpu")
         if save_file:
-            fname = "%s_%d.pt" % (self.epoch, self.step)
+            fname = f"{cfg.seed}-{trn_inf['epo']}_{trn_inf['step']}.pt"
             path = osp.join(self.cfg.log.chkpt_dir, fname)
             torch.save(state_dict, save_path)
-            self._logger.info("Saved network checkpoint to: %s" % save_path)
+            log.info("Saved network checkpoint to: %s" % save_path)
         return state_dict
     
-    def load_network(self, loaded_net=None):
+    def load_network(self, net_arch, model_state=None):
         
-        if loaded_net is None:
-            loaded_net = torch.load(
+        if model_state is None:
+            model_state = torch.load(
                 self.cfg.load.network_chkpt_path,
-                map_location=torch.device(self.device),
+                map_location=torch.device(self.cfg.dvc),
             )
-        loaded_clean_net = OrderedDict()  # remove unnecessary 'module.'
-        for k, v in loaded_net.items():
+        model_clean_state = OrderedDict()  # remove unnecessary 'module.'
+        for k, v in model_state.items():
             if k.startswith("module."):
-                loaded_clean_net[k[7:]] = v
+                model_clean_state[k[7:]] = v
             else:
-                loaded_clean_net[k] = v
+                model_clean_state[k] = v
 
-        self.net.load_state_dict(loaded_clean_net, strict=self.cfg.load.strict_load)
-        self._logger.info(
+        net_arch.load_state_dict(model_clean_state, strict=self.cfg.load.strict_load)
+        log.info(
             "Checkpoint %s is loaded" % self.cfg.load.network_chkpt_path
         )
-
-    def save_training_state(self):
-        tmp = "%s_%d.state" % (self.epoch, self.step)
-        save_path = osp.join(self.cfg.path.work_dir, tmp)
+        return net_arch
         
-        net_state_dict = self.save_network(False)
+    def save_training_state(self, net, optima):
+        tmp = f"{cfg.seed}-{trn_inf['epo']}_{trn_inf['step']}.state"
+        save_path = osp.join(self.cfg_path.work_dir, tmp)
+        
+        net_state_dict = self.save_net(False)
         state = {
             "model": net_state_dict,
-            "optimizer": self.optimizer.state_dict(),
-            "step": self.step,
-            "epoch": self.epoch,
+            "optima": optima.state_dict(),
+            "step": trn_inf['step'],
+            "epo": trn_inf['epo'],
         }
         torch.save(state, save_path)
-        self._logger.info("Saved training state to: %s" % save_path)
+        log.info("Saved training state to: %s" % save_path)
 
-    def load_training_state(self):
+    def load_training_state(self, net_arch, optima, trn_inf):
         resume_state = torch.load(
             self.cfg.load.resume_state_path,
-            map_location=torch.device(self.device),
+            map_location=torch.device(self.cfg.dvc),
         )
         
-        self.load_network(loaded_net=resume_state["model"])
-        self.optimizer.load_state_dict(resume_state["optimizer"])
-        self.step = resume_state["step"]
-        self.epoch = resume_state["epoch"]
+        net_loaded = self.load_network(net_arch, state=resume_state["model"])
+        optima.load_state_dict(resume_state["optima"])
+        trn_inf["step"] = resume_state["step"]
+        trn_inf["epo"] = resume_state["epo"]
         
-        self._logger.info(
+        log.info(
             "Resuming from training state: %s" % self.cfg.load.resume_state_path
         )
+        return net_loaded, optima 

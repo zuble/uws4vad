@@ -38,5 +38,6 @@ lbls_info:
 ## excpets 2 folders (train/test) as froot/CLIPTSA/train+test
 
 gt: '${hydra:runtime.cwd}/data/gt/ucf.txt' ## del normal lines
+tframes: '${hydra:runtime.cwd}/data/gt/ucf_tframes.txt'
 froot: ${path.ucf_froot}
 vroot: ${path.ucf_vroot}

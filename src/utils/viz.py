@@ -1,11 +1,7 @@
 import visdom, json, numpy, subprocess
 
-from .logger import get_log
-
-log = None
-def init(cfg):
-    global log
-    log = get_log(cfg, __name__)
+from src.utils import get_log
+log = get_log(__name__)
 
 
 #########################

@@ -16,9 +16,9 @@
 import torch
 
 class BasePstFwd:
-    def __init__(self, cfg: DictConfig = None):
-        self.bs = cfg.dl.loader.train.bs
-        self.ncrops = cfg.dl.loader.train.crops2use
+    def __init__(self, cfg_dl):
+        self.bs = cfg_dl.loader.train.bs
+        self.ncrops = cfg_dl.trnsfrm.train.crops2use
         
     ## mod data['key']: reduce a 3d tensor to a 2d by crop mean or crop0
     def rshp_out(self, data, key, meth):

@@ -2,6 +2,6 @@
 id: CLIPTSA
 ds: 
   - ucf
-fstep: 8
+fstep: 16  ## midle frame from 16 frame snippets
 nfeats: 512
 ncrops: 0

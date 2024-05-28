@@ -1,22 +1,18 @@
 import torch
 import os, os.path as osp, numpy as np, time, cv2, gc
 
-from src.vldt import Metrics
+from src.vldt.metric import Metrics
 from src.data import get_testloader
 from src.utils import get_log, hh_mm_ss
 
-
-log = None
-def init(cfg):
-    global log
-    log = get_log(cfg, __name__)
+log = get_log(__name__)
 
 
 ################
 ## dict handlers
 class WatchInfo:
     def __init__(self, cfg_ds, watching):
-        self.lbl = cfg_ds.LBLS_INFO[-1] ## 'ALL' normal and anom
+        self.lbl = cfg_ds.lbls_info[-1] ## 'ALL' normal and anom
         self.DATA = {self.lbl: {'FN': [], 'GT': [], 'FL': [], 'ATTWS': []}} if watching else {}
         self.watching = watching
 
@@ -57,9 +53,9 @@ class VldtInfo:
     def __init__(self, cfg_ds, per_what):
         self.per_what = per_what
         self.cfg_ds = cfg_ds
-        self.norm = cfg_ds.LBLS_INFO[0]
-        self.anom = cfg_ds.LBLS_INFO[-2]
-        self.all = cfg_ds.LBLS_INFO[-1]
+        self.norm = cfg_ds.lbls_info[0]
+        self.anom = cfg_ds.lbls_info[-2]
+        self.all = cfg_ds.lbls_info[-1]
         
         ## "metrics per_what prespective?"
         if per_what == 'glob':
@@ -69,13 +65,13 @@ class VldtInfo:
             self.updt = self._updt_glob
         elif per_what == 'lbl':
             ## store previous plus specific labels of ds
-            #self.DATA = {lbl: {'GT': [], 'FL': []} for lbl in cfg_ds.LBLS_INFO}
-            self.DATA = {lbl: {'GT': [], 'FL': []} for lbl in cfg_ds.LBLS_INFO[1:]}
+            #self.DATA = {lbl: {'GT': [], 'FL': []} for lbl in cfg_ds.lbls_info}
+            self.DATA = {lbl: {'GT': [], 'FL': []} for lbl in cfg_ds.lbls_info[1:]}
             self.updt = self._updt_lbl
         elif per_what == 'vid':
             ## store previous but keep a record for each video
-            #self.DATA = {lbl: {'FN': [], 'GT': [], 'FL': []} for lbl in cfg_ds.LBLS_INFO}
-            self.DATA = {lbl: {'FN': [], 'GT': [], 'FL': []} for lbl in cfg_ds.LBLS_INFO[1:]}
+            #self.DATA = {lbl: {'FN': [], 'GT': [], 'FL': []} for lbl in cfg_ds.lbls_info}
+            self.DATA = {lbl: {'FN': [], 'GT': [], 'FL': []} for lbl in cfg_ds.lbls_info[1:]}
             self.updt = self._updt_vid 
         else: raise NotImplementedError
     
@@ -140,7 +136,7 @@ class VldtInfo:
 
 ###############
 class Validate:
-    def __init__(self, cfg, cfg_vldt, vis=None, watching=None):
+    def __init__(self, cfg, cfg_vldt, cfg_frgb, vis=None, watching=None):
         
         self.dvc = cfg.dvc
     
@@ -160,8 +156,8 @@ class Validate:
         self.cfg_net = cfg.model.net
         self.fwd = {
             'attnomil': self._fwd_attnomil,
-            'dflt': self._forward_glob,
-        }.get(cfg.model.net.id, self._forward_glob)
+            'dflt': self._fwd_glob,
+        }.get(cfg.model.net.id, self._fwd_glob)
         
         self.vldt_info = VldtInfo(cfg_ds, cfg_vldt.per_what)
         self.watch_info = WatchInfo(cfg_ds, watching)
@@ -189,8 +185,8 @@ class Validate:
         return new_arr
     
     
-    @torch.no_grad()
-    def _forward_attnomil(self, net, netpstfwd, feat):
+    #@torch.no_grad()
+    def _fwd_attnomil(self, net, netpstfwd, feat):
         '''
         as one score per forward, segment&repeat to get len(scores)=len(feats)
         #if self.cfg_frgb.FSTEP == 64: split_size = 8
@@ -227,25 +223,21 @@ class Validate:
             self.attws = torch.cat((self.attws), dim=0)
             log.debug(f"attws: {self.attws.shape} {self.attws.ctx}") 
     
-    @torch.no_grad()    
-    def _forward_glob(self, net, netpstfwd, feat):
+    #@torch.no_grad()    
+    def _fwd_glob(self, net, netpstfwd, feat):
         ndata = net(feat)
         
-        self.scores = net_pst_fwd.infer(ndata)
+        #if self.cfg_net.id == 'zzz':
+        #    if 'attw' in ndata:
+        #        log.debug(f'slcores {ndata["slscores"]=}')
+        #        log.debug(f'attw {ndata["attw"]=}')
+        #        #self.scores = ndata['attw'] * ndata['slscores']
+        #        self.scores = ndata['slscores']
+        #    else:
+        #        self.scores = ndata['slscores']
+                
+        self.scores = netpstfwd.infer(ndata)
 
-        if ndata['id'] == 'zzz':
-            
-            if 'attw' in ndata:
-                log.debug(f'slcores {ndata["slscores"]=}')
-                log.debug(f'attw {ndata["attw"]=}')
-                #self.scores = ndata['attw'] * ndata['slscores']
-                self.scores = ndata['slscores']
-            else:
-                self.scores = ndata['slscores']
-        
-        ## every network outputs slscores
-        #else: self.scores = ndata['slscores']
-        
         ## edge cases    
         log.debug(f'scores post0 {self.scores.shape=}')
         self.scores = self.scores.squeeze() #axis=1
@@ -253,7 +245,7 @@ class Validate:
             self.scores = np.expand_dims(self.scores, axis=0)
         log.debug(f'scores post1 {self.scores.shape=}') #
     
-        
+    @torch.no_grad()    
     def start(self, net, netpstfwd):
         net.eval()
         
@@ -279,12 +271,12 @@ class Validate:
             ## base the length of GT/FL by length of scores (which are at segment level) * length of feat_ext wind
             ##      -> truncate the generated GT (which has video nframes length) to match the FL 
             
-            tmp_gt = self.gtfl.get(osp.join(self.cfg_ds.VROOT,f'{fn}.mp4'))
+            tmp_gt = self.gtfl.get(fn)
             log.debug(f' tmp_gt: {len(tmp_gt)}')
                 
             ## 1 segmnt = self.cfg_frgb.SEGMENTNFRAMES = (64 frames, slowfast mxnet) (32 frames, i3d mxnet) (16, i3dtorchdmil)
             tmp_fl = self.scores.cpu().numpy()
-            tmp_fl = np.repeat(tmp_fl, self.cfg_frgb.FSTEP)
+            tmp_fl = np.repeat(tmp_fl, self.cfg_frgb.fstep)
             log.debug(f' tmp_fl: {len(tmp_fl)} {tmp_fl.shape} {type(tmp_fl)} {type(tmp_fl[0])}')
             
             ########
@@ -292,12 +284,14 @@ class Validate:
             ## fill tmp_fl w/ last value until len is the same as gt
             if len(tmp_fl) < len(tmp_gt):  tmp_fl = self.reshp_nd_fill(tmp_fl, len(tmp_gt))
             ## or truncate tmp_gt with len(tmp_fl), thhis is how RocNG/XDVioDet does
-            #min_len = min(len(tmp_fl), len(tmp_gt))
-            #tmp_fl = tmp_fl[:min_len]
-            #tmp_gt = tmp_gt[:min_len]
+            else:
+                min_len = min(len(tmp_fl), len(tmp_gt))
+                tmp_fl = tmp_fl[:min_len]
+                tmp_gt = tmp_gt[:min_len]
+            ## clip feats can accomodate more "snippets" ??
             log.debug(f' tmp_fl_rshp: {len(tmp_fl)}')
             
-            assert len(tmp_fl) == len(tmp_gt), f'{self.cfg_frgb.FSTEP} cfg_frgb.FSTEP * {self.scores.shape[0]} seqlen  != {len(tmp_gt)} orign video frames'
+            assert len(tmp_fl) == len(tmp_gt), f'{self.cfg_frgb.fstep} cfg_frgb.FSTEP * {self.scores.shape[0]} len  != {len(tmp_gt)} orign video frames'
             
             self.vldt_info.updt(label, fn, tmp_gt, tmp_fl)
             self.watch_info.updt(fn, tmp_gt, tmp_fl, self.attws)
@@ -324,30 +318,25 @@ class GTFL:
     '''
     def __init__(self, cfg_ds):
         #log.debug(f'GTFL:\n{cfg_ds}')
-        self.gt_path = cfg_ds.GT
-        self.vroot_path = cfg_ds.VROOT
-        self.get_data()
-
-    def get_data(self):
-        with open(self.gt_path, 'r') as txt: txt_data = txt.read()
-        self.vlines = [line.split() for line in txt_data.split('\n') if line]
+        self.get_data(cfg_ds.gt, cfg_ds.tframes)
         
-    def get(self, vpath, nframes=0):
-        vn = osp.basename(vpath)
+    def get_data(self, gt, tf):
+        with open(gt, 'r') as txt: data = txt.read()
+        self.gtlines = [line.split() for line in data.split('\n') if line]
         
-        if not nframes:
-            tmp_cv = cv2.VideoCapture( vpath )
-            nframes = int(tmp_cv.get(cv2.CAP_PROP_FRAME_COUNT))
-            tmp_cv.release()
-            
+        with open(tf, 'r') as txt: data = txt.read()
+        self.tflines = [line.split('@') for line in data.split('\n') if line]
+        
+    def get(self, vn):
+        nframes = next(( int(item[1]) for item in self.tflines if str(item[0]) == vn), None)    
         tmp_gt = [0 for _ in range(nframes)]
         
-        vline = next((item for item in self.vlines if str(item[0]) in vn), None)
+        vline = next((item for item in self.gtlines if str(item[0]) in vn), None)
         ## if in annotations -> abnormal
         if vline is not None:
             log.debug(f'GTFL.get({vn}) found {vline}')
             
-            ## ucf: Burglary005_x264.mp4 Burglary 4710 5040 -1 -1
+            ## ucf: Burglary005_x264 Burglary 4710 5040 -1 -1
             if len(vline) > 1 and vline[1].isalpha(): 
                 pairs = [(vline[i], vline[i+1]) for i in range(2, len(vline), 2) if vline[i+1] != '-1']
             
@@ -361,7 +350,7 @@ class GTFL:
                 for frame in range(start_anom, min(end_anom, nframes)):
                     tmp_gt[frame] = 1
         
-        #else: its normal full 0's     
+        #else: full 0's     
             
         log.debug(f'GTFL.get({vn}) gt {len(tmp_gt)}')
         return np.array(tmp_gt)

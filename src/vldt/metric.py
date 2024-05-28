@@ -13,12 +13,8 @@ from plotly.subplots import make_subplots
 from tabulate import tabulate
 from PIL import Image
 
-from utils import get_log
-
-log = None
-def init(cfg):
-    global log
-    log = get_log(cfg, __name__)
+from src.utils import get_log
+log = get_log(__name__)
 
 
 class Metrics(object):
@@ -27,16 +23,15 @@ class Metrics(object):
         self.vis = vis
 
         # Visualization and table flags
-        self.xtra_mtrcs = cfg_vldt.get('EXTRA_MTRCS', False)
+        self.xtra_mtrcs = cfg_vldt.get('extra_metrics', False)
         self.mtrc_vis_plot = cfg_vldt.get('mtrc_visplot', False)
         self.mtrc_vis_table = cfg_vldt.get('mtrc_vistabe', False)
         self.mtrc_save_table = cfg_vldt.get('mtrc_savetable', False)
         self.curv_vis_plot = cfg_vldt.get('curv_visplot', False)
-        self.gtfl_vis_plot = cfg_vldt.get('GTFL_VISPLOT', False)
+        self.gtfl_vis_plot = cfg_vldt.get('gtfl_visplot', False)
         
-        self.net_name = cfg.mode.net.id
+        #self.net_name = cfg.model.net.id
         
-    
     def calc_mtrc(self, gt, predictions, key):
         assert len(gt) == len(predictions), f'len GT {len(gt)} != len FL {len(predictions)}'
         

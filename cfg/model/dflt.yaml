@@ -1,37 +1,39 @@
 defaults:
-  - _self_ ## if anything need to be overide from net
+  #- _self_ ## if anything need to be overide from net
   - net: mir
   - optima: adam
   - lrs: null
-  
+  #- _self_
 
 epochs: 5
-#epochbatchs: ${dyn_eb:${model.epochs},${dl.loader.train.bs}}
-#must be set during get_trainloader
 
+## ex
 net:
   arch:
     _cfg:
       neurons: 
         - 1024
+        - 32
 
-
-#optima:
-#  lr: 3.0e-4
-#  weight_decay: 1.0e-5
+optima:
+  lr: 1.0e-3
+  weight_decay: 1.0e-5
 
 loss: 
-  rnkg: ## key in lossfx dict later in netpstfwd
+  rnkg: 
     _target_: src.model.loss.rnkg.RankingLoss
-    _cfg: 
-      lambda12: [8e-5,8e-5]
-  clas:
-    _target_: src.model.loss.clas.Loss
     _cfg:
-      fx: topk  ## topk wink full
-      topk: 16
-      wink: 3
-      winkconv: false
+      bs: ${dl.loader.train.bs}
+      seglen: ${dl.trnsfrm.train.len}
+      lambda12: [8e-5,8e-5]
+    
+  #clas:
+  #  _target_: src.model.loss.clas.Loss
+  #  _cfg:
+  #    fx: topk  ## topk wink full
+  #    topk: 16
+  #    wink: 3
+  #    winkconv: false
 
 
 

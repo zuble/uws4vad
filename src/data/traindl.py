@@ -60,7 +60,7 @@ def get_trainloader(cfg):
         ads = TrainDS(cfg_loader, cfg_ds, cfg_trnsfrm, argbfl, aaudfl, 'ABNORMAL')
         nds = TrainDS(cfg_loader, cfg_ds, cfg_trnsfrm, nrgbfl, naudfl, 'NORMAL')
         
-        arsampler, nrsampler, cfg.train.epoch_nbatch = get_milRS(cfg_loader.bs, ads, nds)
+        arsampler, nrsampler, cfg.dl.loader.train.itersepo = get_milRS(cfg_loader.bs, ads, nds)
         ald = DataLoader(ads, 
                         batch_sampler=BatchSampler(arsampler, batch_size=cfg_loader.bs//2 , drop_last=cfg_loader.droplast),
                         num_workers=cfg_loader.nworkers,
@@ -85,7 +85,7 @@ def get_trainloader(cfg):
         log.info(f'TRAIN: RGB {len(rgbfl)} feats')
         
         ds = TrainDS(cfg_loader, cfg_ds, cfg_trnsfrm, rgbfl, audfl)  
-        rsampler = get_seqRS(cfg_loader.bs, ds)
+        rsampler, cfg.dl.loader.train.itersepo = get_seqRS(cfg_loader.bs, ds)
         ld0 = DataLoader( ds,
                             batch_sampler= BatchSampler(rsampler , cfg_loader.bs , cfg_loader.droplast),
                             num_workers=cfg_loader.nworkers,
@@ -101,34 +101,33 @@ def get_milRS(bs, ads, nds):
     
     def get_rnd_smp(ds, nsamples, gen):
         is_oversampling = len(ds) < nsamples
-        log.info(f"{is_oversampling = }")
+        log.debug(f"{is_oversampling = }")
         return RandomSampler(ds, 
                             replacement=is_oversampling, 
                             num_samples=nsamples if is_oversampling else None, 
                             generator=gen)
         
     maxlends = max(len(ads),len(nds))
-    epoch_nbatch = maxlends // (bs // 2) #math.ceil(maxlends / cfg.TRAIN.BS)
-    #cfg.TRAIN.EPOCHBATCHS = epoch_nbatch
-    log.error(f'TRAIN: {maxlends=} {bs=}  -> epoch_nbatch not set , set in future trainer')
+    itersepo = maxlends // (bs // 2) #math.ceil(maxlends / cfg.TRAIN.BS)
+    log.debug(f'TRAIN: {maxlends=} {bs=}  -> itersepo not set , set in future trainer')
     
     #gen = torch.Generator().manual_seed(cfg.SEED) #log.error(f"{gen.initial_seed()}")
     
     ## as abnormal/normal not balanced set replacement True for smaller ds
-    log.info(f'TRAIN: {len(ads)=}')
+    log.debug(f'TRAIN: {len(ads)=}')
     arsampler = get_rnd_smp(ads, maxlends, TCRNG)
-    log.info(f'TRAIN: {len(nds)=}')
+    log.debug(f'TRAIN: {len(nds)=}')
     nrsampler = get_rnd_smp(nds, maxlends, TCRNG)
     
-    return arsampler, nrsampler, epoch_nbatch
+    return arsampler, nrsampler, itersepo
 
 def get_seqRS(bs, ds):
-    epoch_nbatch = len(ds) // bs
-    #cfg.TRAIN.EPOCHBATCHS = epoch_nbatch
-    log.error(f'TRAIN: {len(ds)=} {bs=}  -> epoch_nbatch not set , set in future trainer')
+    itersepo = len(ds) // bs
+    #cfg.TRAIN.EPOCHBATCHS = itersepo
+    log.debug(f'TRAIN: {len(ds)=} {bs=}  -> itersepo not set , set in future trainer')
     
     #gen = torch.Generator().manual_seed(cfg.seed)
-    return RandomSampler(ds, generator=TCRNG), epoch_nbatch
+    return RandomSampler(ds, generator=TCRNG), itersepo
 
 
 class TrainDS(Dataset):
@@ -140,7 +139,7 @@ class TrainDS(Dataset):
         self.audflst = audflst
         
         self.trnsfrm = FeatSegm(cfg_trnsfrm)
-        log.info(f'TRAIN TRNSFRM: {self.trnsfrm=}')
+        log.debug(f'TRAIN TRNSFRM: {self.trnsfrm=}')
         
         self.cropasvideo = cfg_trnsfrm.cropasvideo
         self.rgb_ncrops = cfg_trnsfrm.crops2use
@@ -174,7 +173,7 @@ class TrainDS(Dataset):
         tojo2 = np.load(peakboo2)    
         assert nfeats == tojo2.shape[-1]
         self.nfeats += nfeats
-        log.info(f'TRAIN: AUD {osp.basename(peakboo2)} {np.shape(tojo2)}')    
+        log.debug(f'TRAIN: AUD {osp.basename(peakboo2)} {np.shape(tojo2)}')    
     
     
     def load_data(self,idx): return self.get_feat(idx), self.get_label(idx)
@@ -226,10 +225,10 @@ class TrainDS(Dataset):
                         aud_feats = self.trnsfrm.interpolate(aud_feats, rgb_feat_crop.shape[0], None) 
                         log.debug(f'vid[{idx}] AUD : seg in2 {aud_feats.shape}')
                     
-                    if self.audl2n: aud_feats = self.l2normfx(aud_feats)
+                    #if self.audl2n: aud_feats = self.l2normfx(aud_feats)
                     
                 try: feat_crop = np.hstack((rgb_feat_crop, aud_feats))
-                except: log.info(f'{rgb_feat_crop} {aud_feats.shape}')
+                except: log.error(f'{rgb_feat_crop} {aud_feats.shape}')
                 log.debug(f'vid[{idx}][{i}][MIX] {feat_crop.shape} {feat_crop.dtype}')
                 
             else: feat_crop = rgb_feat_crop
@@ -237,9 +236,9 @@ class TrainDS(Dataset):
             ## if segmentation the means betwen adjacent selected segmetns is done
             ## if aud enabled, as its cat over feat dim
             #if self.l2n == 1: feat_crop = self.l2normfx(feat_crop)
-            #log.info(f'vid[{idx}]: PRE-SEQ {feat_crop.shape}')
+            #log.debug(f'vid[{idx}]: PRE-SEQ {feat_crop.shape}')
             feats[i] = self.trnsfrm.fx(feat_crop, idxs['idxs']) 
-            #log.info(f'vid[{idx}]: PST-SEQ {feats[i].shape}')
+            #log.debug(f'vid[{idx}]: PST-SEQ {feats[i].shape}')
             #if self.l2n == 2: feats[i] = self.l2normfx(feats[i],a=2)
 
             if idxs['rnd_glob'] is not None:
@@ -267,7 +266,7 @@ class TrainDS(Dataset):
             aud_fp = f"{self.audflst[aud_idx]}.npy"
             aud_feats = np.load( aud_fp ).astype(np.float32)
             
-            if self.audl2n: aud_feats = self.l2normfx(aud_feats)
+            #if self.audl2n: aud_feats = self.l2normfx(aud_feats)
             log.debug(f'vid[{idx}][AUD] {aud_feats.shape} {aud_feats.dtype}  {osp.basename(aud_fp)}')
             
             #############################
@@ -280,9 +279,9 @@ class TrainDS(Dataset):
                 #for af in aud_feats[:16]: log.debug(f'{af[:40]}')
                 log.debug(f'vid[{idx}][AUD] seg in2 {aud_feats.shape}')
             
-            #log.info(f'vid[{idx}]: PRE-SEQ {aud_feats.shape}')
+            #log.debug(f'vid[{idx}]: PRE-SEQ {aud_feats.shape}')
             aud_feats = self.trnsfrm.fx(aud_feats, fprep_idxs['idxs']) 
-            #log.info(f'vid[{idx}]: PST-SEQ {aud_feats.shape}')
+            #log.debug(f'vid[{idx}]: PST-SEQ {aud_feats.shape}')
         
             feats = np.hstack((rgb_feats, aud_feats))
             log.debug(f'vid[{idx}][MIX] {feats.shape} {feats.dtype}')
@@ -290,9 +289,9 @@ class TrainDS(Dataset):
         else: feats = rgb_feats     
 
         
-        #log.info(f'vid[{idx}]: PRE-SEQ {rgb_feats.shape}')
+        #log.debug(f'vid[{idx}]: PRE-SEQ {rgb_feats.shape}')
         feats = self.trnsfrm.fx(feats, fprep_idxs['idxs']) 
-        #log.info(f'vid[{idx}]: PST-SEQ {rgb_feats.shape}')
+        #log.debug(f'vid[{idx}]: PST-SEQ {rgb_feats.shape}')
         
         if fprep_idxs['rnd_glob'] is not None:
             feats = feats[fprep_idxs['rnd_glob']]
@@ -315,7 +314,7 @@ class TrainDS(Dataset):
             label = self.get_label(idx)
             feats = self.get_feat(idx)
         
-        #log.info(f'f[{idx}]: {feats.shape}')    
+        #log.debug(f'f[{idx}]: {feats.shape}')    
         return feats, label
 
     def __len__(self):
@@ -417,7 +416,7 @@ class FeatSegm():
         
         new_feat = np.zeros((self.len, feat.shape[1]), dtype=np.float32)
         for i in range(self.len):
-            #log.info(f"{fn} {crop}")
+            #log.debug(f"{fn} {crop}")
             if idxs[i] != idxs[i+1]:
                 ## t, f
                 new_feat[i, :] = np.mean(feat[idxs[i]:idxs[i+1], :], axis=0)
@@ -576,7 +575,7 @@ def segment_feat_crop(feat, length ):
         
         
     for i in range(self.len):
-        #log.info(f"{fn} {crop}")
+        #log.debug(f"{fn} {crop}")
         if idxs[i] != idxs[i+1]:
             new_feat[i, :] = np.mean(feat[idxs[i]:idxs[i+1], :], axis=0)
         else:

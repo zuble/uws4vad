@@ -34,8 +34,7 @@ def main(cfg: DictConfig) -> None:
     #log.debug(utils.collect_random_states())
     
     if cfg.get("tmp"):
-        #from src import tmp        
-        
+        #from src import tmp
         
         pass
     else:

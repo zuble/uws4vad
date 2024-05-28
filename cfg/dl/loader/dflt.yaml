@@ -2,6 +2,7 @@
 
 train:
   in2mem: False
+  itersepo: ~ ## assigned in runtime @ get_trainloader 
 
   bs: ???
   #shuffle: True ## theres a rndsampler
@@ -16,7 +17,9 @@ train:
 ## as the dataloader is created from same point
 test:
   in2mem: False
+  itersepo: ~ ## assigned in runtime @ get_testloader 
 
+  
   bs: 1
   shuffle: False
   nworkers: ${dyn_nworkers:0}  ## 0 -> cpu//4 ;; -1 -> all cores  

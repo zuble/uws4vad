@@ -77,7 +77,7 @@ def print_config_tree(
             f"Field '{field}' not found in config. Skipping '{field}' config printing..."
         )
 
-    if cfg.xtra.get("log_cfg") > 1:
+    if cfg.xtra.get("cfg") > 1:
         # add all the other fields to queue (not specified in `print_order`)
         for field in cfg:
             if field not in queue:

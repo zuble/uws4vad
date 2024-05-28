@@ -7,14 +7,14 @@ train:
   ## glob ->  over full/original test
   ## lbl -> over each indv classes aswell as anomalous set 
   per_what: lbl  ## glob , lbl
-  ## send intermidiate results to visdom
-  visplot: false
+  ## send intermidiate metrics results to visdom
+  mtrc_visplot: false
 
-
-  ## periodo to log loss states to visdom
-  ## or to console
-  log_loss: 
-
+  ## batx freq to log loss parts to console
+  ## if 0 -> cfg.dl.loader.train.itersepo//2
+  loss_log: 0 
+  ## if 1: send loss values for each part to visdom
+  loss_visplot: 1  
 
 
 
@@ -27,7 +27,9 @@ test:
   mtrc_vistabe: 0
   mtrc_savetable: 0
   curv_visplot: 1
-  gtfl_visplot: 0 ## to implement ~!!!
+  #### !!!!!!1
+  gtfl_visplot: 0 ## to implement ~!!!!!!
+  #### !!!!!!
 
   watch: ## B1 FIGHT | B2 SHOOT | B4 RIOT | B5 ABUSE | B6 CARACC | G EXPLOS
     savepkl: 1

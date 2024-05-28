@@ -22,8 +22,8 @@ class RankingLoss(nn.Module):
     def __init__(self, _cfg):
         super(RankingLoss, self).__init__()
         
-        self.bs = 32 #_cfg.bs
-        self.nsegments = 32
+        self.bs = _cfg.bs
+        self.seglen = _cfg.seglen
         self.lambda1 = _cfg.lambda12[0] 
         self.lambda2 = _cfg.lambda12[1] 
 
@@ -44,26 +44,26 @@ class RankingLoss(nn.Module):
             loss =  torch.sum(arr)
         return self.lambda2 * loss
 
-    def ranking_deepmil(self, slscores):
+    def forward(self, slscores):
         ## https://github.com/Roc-Ng/DeepMIL
         
         if slscores.ndim == 2:
-            slscores = np.reshape(slscores, -1)
+            slscores = slscores.view(-1)
             log.debug(f"{slscores.shape}")
             
         L = []
         for i in range(self.bs//2):
             ## norm
-            startn = i * self.nsegments
-            endn = (i + 1) * self.nsegments
+            startn = i * self.seglen
+            endn = (i + 1) * self.seglen
             maxn = torch.max( slscores[ startn : endn ] ) 
-            #maxn = torch.mean( torch.topk( slscores[ startn : endn ], k=self.nsegments//4) )
+            #maxn = torch.mean( torch.topk( slscores[ startn : endn ], k=self.seglen//4) )
             
             ## anom
-            starta = (i * self.nsegments + (self.bs//2) * self.nsegments)
-            enda = (i + 1) * self.nsegments + (self.bs//2) * self.nsegments
+            starta = (i * self.seglen + (self.bs//2) * self.seglen)
+            enda = (i + 1) * self.seglen + (self.bs//2) * self.seglen
             maxa = torch.max( slscores[ starta : enda ] ) ##that
-            #maxa = torch.mean( torch.topk( slscores[ starta : enda ], k=self.nsegments//4) )
+            #maxa = torch.mean( torch.topk( slscores[ starta : enda ], k=self.seglen//4) )
             
             tmp = F.relu(1.0 - maxa + maxn)
             loss = tmp + self.sparsity(slscores[ starta : enda ]) ## + self.smooth(slscores[ starta : enda ])
@@ -77,8 +77,7 @@ class RankingLoss(nn.Module):
             L.append(loss)
         L = torch.stack(L, dim=0)
 
-
-        loss_mil = torch.mean(loss_mil)
+        loss_mil = torch.mean(L)
         log.debug(f'RNKG/{loss_mil=} {loss_mil.shape=}')
         
         return {

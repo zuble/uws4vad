@@ -65,7 +65,7 @@ class TestDS(Dataset):
 
         self.rgbflst = rgbflst
         self.audflst = audflst
-        self.lbl_mng = LBL(cfg_ds)
+        self.lbl_mng = LBL(cfg_ds.info)
         self.crops2use = cfg_trnsfrm.crops2use
 
         if cfg_loader.in2mem: self.loadin2mem(cfg_loader.nworkers)
@@ -156,7 +156,7 @@ class LBL:
         self.encod = {
             'ucf': self.ucf_encod,
             'xdv': self.xdv_encod
-        }.get(self.cfg_ds.info.id)
+        }.get(self.cfg_ds.id)
         
     def ucf_encod(self, fn):
         ## ucf
@@ -164,20 +164,20 @@ class LBL:
         ##aux = [ osp.basename(fn) ]
         #aux = [fn[:fn.find("_x264")-3]]
         
-        idxs = [self.cfg_ds.LBLS.index(a) for a in aux]
-        aux = [self.cfg_ds.LBLS_INFO[i] for i in idxs]
+        idxs = [self.cfg_ds.lbls.index(a) for a in aux]
+        aux = [self.cfg_ds.lbls_info[i] for i in idxs]
             
         return aux
     
     def xdv_encod(self, fn):
         assert 'label_' in fn ## xdv
         ## norm
-        if self.cfg_ds.LBLS[0] in fn: aux = [self.cfg_ds.LBLS_INFO[0]]
+        if self.cfg_ds.lbls[0] in fn: aux = [self.cfg_ds.lbls_info[0]]
         else:
             ## A = 0 , B1-B4-B6 = 146 , B1-B5-G = 157 , B4-0-0 = 400
             ## oldie aux = aux.replace('B', '').replace('-', '').replace('A', '0').replace('G', '7')   
             aux = fn[fn.find('label_')+len('label_'):]
             aux = [ a for a in aux.split('-') if a != '0']
-            idxs = [self.cfg_ds.LBLS.index(a) for a in aux]
-            aux = [self.cfg_ds.LBLS_INFO[i] for i in idxs]
+            idxs = [self.cfg_ds.lbls.index(a) for a in aux]
+            aux = [self.cfg_ds.lbls_info[i] for i in idxs]
         return aux

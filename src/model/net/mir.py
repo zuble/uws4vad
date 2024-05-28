@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from omegaconf.dictconfig import DictConfig
+from src.model.net.layers import BasePstFwd
 
+from omegaconf.dictconfig import DictConfig
 from src.utils.logger import get_log
 log = get_log(__name__)
 
@@ -10,7 +11,7 @@ log = get_log(__name__)
 
 
 class Network(nn.Module):
-    def __init__(self, feat_len: int, _cfg: DictConfig = None):
+    def __init__(self, feat_len: int, _cfg: DictConfig):
         super(Network, self).__init__()
         neurons = _cfg.neurons
         dropout = _cfg.do
@@ -27,37 +28,31 @@ class Network(nn.Module):
             )
     def forward(self, x):
         b, t, f = x.shape
-        return self.cls(x).view(b,t)
+        out = self.cls(x).view(b,t)
+        return {
+            'slscores': out
+        }
 
 
-class NetPstFwd():
-    def __init__(self, ): #, cfg: DictConfig
-        super(NetPstFwd, self).__init__()
-        #self.cfg = cfg
+class NetPstFwd(BasePstFwd):
+    def __init__(self, cfg_dl):
+        super(NetPstFwd, self).__init__(cfg_dl)
         
     def train(self, ndata, ldata, lossfx):
-        log.debug(f"NETPSTFWD")
         
+        super().rshp_out(ndata, 'slscores', 'mean') ## crop0
+        #log.info(f" pos_rshp: {ndata['slscores'].shape}")
         
-        super().rshp_out(ndata, '', 'mean') ## crop0
-        log.debug(f" pos_rshp: {ndata[''].shape}")
+        L0 = lossfx['rnkg'](ndata['slscores'])
         
-        ## every lossfx returns a dict
-        L0 = lossfx[''](ndata[''])
-        L1 = lossfx[''](ndata[''])
-        
-        ## later indiv metered and summed to .backward 
-        return L0.update(
-            L1
-            )
+        return L0
         
 
 
     def infer(self, ndata):
-        pass
         ## output is excepted to be segment level 
         
         #log.debug(f"")
         #log.debug(f"slscores: {ndata['slscores']=}")
-        #
-        #return ndata['slscores']    
+        
+        return ndata['slscores']    

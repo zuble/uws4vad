@@ -1,25 +1,29 @@
 import torch
 import numpy as np
+import math 
 
-import time , os, os.path as osp, gc
-from collections import  defaultdict, deque
+from hydra.utils import instantiate as instantiate
+import time , os, os.path as osp, gc, traceback
+from collections import defaultdict, deque
+from tqdm import tqdm
 
 from src.data import get_trainloader, get_testloader, run_dl
 from src.model import ModelHandler
-
-#from loss import get_loss
-#from nets import get_net, save
-#from data import get_trainloader, TrainFrmter, run_dl
-#from utils import Visualizer, hh_mm_ss, get_optima, get_log
-#from vldt import Validate, Metrics
+from src.vldt import Validate, Metrics
+from src.utils import hh_mm_ss, get_log, Visualizer
+log = get_log(__name__)
 
 
 def trainer(cfg):
-    traindl, trainfrmt = data.get_trainloader(cfg) #;run_dl(loader); return
+    traindl, trainfrmt = get_trainloader(cfg) 
+    if cfg.get("debug").get("data") > 1: run_dl(traindl) #;return
+    
+    model_handler = ModelHandler(cfg)
     
     ## ARCH
     #log.info(cfg.model.net.arch)
-    self.net = instantiate(cfg.model.net.arch, feat_len=1024).to(self.dvc)
+    feat_len = cfg.dl.ds.frgb.nfeats + (cfg.dl.ds.faud.nfeats if cfg.dl.ds.get("faud") else 0)
+    net = instantiate(cfg.model.net.arch, feat_len=feat_len).to(cfg.dvc)
     log.debug(net)
     
     ## PSTFWD
@@ -33,15 +37,17 @@ def trainer(cfg):
     log.info(optima)
 
     ## LRS
+    lrs = None
     if cfg.model.get("lrs"):
         log.info(cfg.model.lrs)
         lrs = instantiate( cfg.model.lrs, optimizer=optima, _convert_="partial")
         log.info(lrs)
     
-    ## LOSSFXS
-    lossfxs = {lid: instantiate(cfg.model.loss[lid]) for lid in cfg.model.loss}
-    for key, value in lossfxs.items():
+    ## LOSSFX
+    lossfx = {lid: instantiate(cfg.model.loss[lid]) for lid in cfg.model.loss}
+    for key, value in lossfx.items():
         log.info({key: value})
+    ldata = {}
     #aux_params = set()    
     #for lid, lcfg in cfg.model.loss.items():
     #    if lcfg.get("aux"):
@@ -51,79 +57,100 @@ def trainer(cfg):
     #    ## Update individual loss parts
     #    log.info({key: value}) 
     
-    
     ## Monitor
-    #vis = Visualizer(f'{cfg.EXPERIMENTPROJ}_{cfg.EXPERIMENTID}', restart=False, del_all=False)
-    #vis.delete(f'{cfg.EXPERIMENTPROJ}/{cfg.EXPERIMENTID}')
+    vis = Visualizer(f'{cfg.name}/{cfg.task_name}', restart=False, del_all=False)
+    #vis.delete(f'{cfg.name}/{cfg.task_name}')
     
-
-    vldt = Validate(cfg, cfg.vldt.train) #vldt.start(net);return
-    #if not cfg.model.log_loss: cfg.merge_from_list(["TRAIN.LOG_PERIOD", cfg.TRAIN.EPOCHBATCHS // 2])
+    cfg_vldt = cfg.vldt.train
+    vldt = Validate(cfg, cfg_vldt, cfg.dl.ds.frgb, vis)
+    if cfg.get("debug").get("vldt") > 1: vldt.start(net) #;return
+    
     
     ## Train
-    tmeter = TrainMeter(cfg)
+    tmeter = TrainMeter( cfg.dl.loader.train, cfg_vldt, vis)
     trn_inf = {
         'epo': 0,
+        'bat': 0,
+        'step': 0,
         'ttic': time.time(),
+        'dvc': cfg.dvc
     }
     try:
-        for epo, tdata in enumerate(tqdm(cfg.model.epochs, leave = False, desc="Training/Batch:", unit='batch')):
-        #for epo in range(cfg.model.epochs):
-            trn_inf['epo'] = epo
+        #for epo in tqdm(range(0,cfg.model.epochs), desc="Epoch", unit='epo'):
+        for epo in range(cfg.model.epochs):
+            trn_inf['epo'] = epo+1
             trn_inf['etic'] = time.time()
             
             ##########
-            train_epo(cfg, loader, frmter, net, net_pst_fwd, lossfx, ldata, optima, tmeter, trn_inf)
-            ##########
+            net.train()    
+            #for tdata in tqdm(traindl, leave = False, desc="Batch:", unit='bat'):
+            for tdata in traindl:
+                trn_inf['bat'] =+ 1
+                trn_inf['step'] =+ 1
+                btic = time.time()
+
+                feat = trainfrmt.fx(tdata, ldata, trn_inf)
+                ndata = net(feat)
+                log.debug(f"{feat.shape} -> ")
+                for key in list(ndata.keys())[:]: log.debug(f"    {key} {ndata[key].shape}") if type(ndata[key]) == torch.Tensor else None
+                ## if ndata['id'] == '...':
+
+                loss_indv = netpstfwd.train(ndata, ldata, lossfx) 
+                loss_glob = torch.sum(torch.stack(list(loss_indv.values())))
+                
+                #######
+                optima.zero_grad()
+                loss_glob.backward()
+                optima.step() 
+                #######
+                
+                if loss_glob.item() > 1e8 or math.isnan(loss_glob.item()):
+                    logger.error(f"E[{trn_inf['epo']}] B[{trn_inf['bat']}] S[{(trn_inf['step'])}] Loss exploded {loss_glob.item()}")
+                    raise Exception("Loss exploded")
+                
+                ## monitor
+                tmeter.update({'bat': loss_glob.item()})
+                for key, value in loss_indv.items():
+                    ## Update individual loss parts
+                    tmeter.update({key: value.item()})  
+                tmeter.log_bat(trn_inf)
             
+            if lrs is not None: lrs.step()
+            ##########
+                
             ## monitor 
             tmeter.log_epo(trn_inf)
             tmeter.reset()
-                
-            ## validat
+            
+            ## eval
             if (epo + 1) % cfg_vldt.freq == 0:
                 log.info(f'$$$ Validation at epo {epo+1}')
-                ## !!!! anything similiar in torch ?? 
-                #if not cfg.TRAIN.VLDT.CUDDNAUTOTUNE: os.environ['MXNET_CUDNN_AUTOTUNE_DEFAULT'] = '0'
-                _, _, mtrc_info = vldt.start(net)
-                if cfg_vldt.visplot: vis.plot_vldt_mtrc(mtrc_info,epo)
+                torch.backends.cudnn.benchmark = False
+                _, _, mtrc_info = vldt.start(net, netpstfwd)
+                if cfg_vldt.mtrc_visplot: vis.plot_vldt_mtrc(mtrc_info,epo)
                 vldt.reset()
-                #if not cfg.TRAIN.VLDT.CUDDNAUTOTUNE: os.environ['MXNET_CUDNN_AUTOTUNE_DEFAULT'] = '1'    
-            
-            lrs.step() ## adjust lr
-            
-        log.info(f"$$$$ TRAIN completed in {hh_mm_ss(time.time() - ttic)}")
+                torch.backends.cudnn.benchmark = True
         
-        if not cfg.DEBUG.TRAIN or not cfg.DEBUG.ROOT: save(cfg, net)
+        log.info(f"$$$$ train done in {hh_mm_ss(time.time() - trn_inf['ttic'])}")
+        
+        if not cfg.get("debug"): 
+            model.save_net(net, trn_info, )
 
     except Exception as e:
         log.error(traceback.format_exc())
 
 
 
-
-
-    # load training state / network checkpoint
-    if cfg.load.get("resume_state_path"): model.load_training_state()
-    elif cfg.load.get("network_chkpt_path"): model.load_network()
-    else:  log.info("Starting new training run.")
-
-    try:
-        epoch_step = 1
-            
-        for epoch in tqdm(range(model.epoch + 1, cfg.train.num_epoch, epoch_step), desc="Epoch", unit='epoch'):
-            model.epoch = epoch
-            model.train_epo(train_loader)
-            
-            if model.epoch % cfg.log.chkpt_interval == 0:
-                model.save_network()
-                model.save_training_state()
-            model.test_model(test_loader)
-        
-        log.info("End of Train")
-        
-    except Exception as e:
-            log.error(traceback.format_exc())
+    ## load training state / network checkpoint
+    #if cfg.load.get("resume_state_path"): 
+    #    model.load_training_state(net, optima, trn_inf)
+    #elif cfg.load.get("network_chkpt_path"): 
+    #    model.load_network(net)
+    #else: log.info("Starting new training run.")
+    #
+    #if model.epoch % cfg.log.chkpt_interval == 0:
+    #    model.save_network(net, trn_inf)
+    #    model.save_training_state()
 
 
 
@@ -149,15 +176,16 @@ class ScalarMeter(object):
         return self.total/self.count
 
 class TrainMeter:
-    def __init__(self, cfg, vis=None):
-        self._cfg = cfg
+    def __init__(self, cfg_loader, cfg_vldt, vis):
+        
+        if cfg_vldt.get("loss_log") == 0:
+            self.logfreq = cfg_loader.itersepo//2
+        else:self.logfreq = cfg_vldt.loss_log
+
         self.vis = vis
-        self.plot = cfg.TRAIN.PLOT_LOSS
-        self.epochbatchs = cfg.TRAIN.EPOCHBATCHS
-        self.log_period = cfg.TRAIN.LOG_PERIOD
-        self.loss_meters = defaultdict(lambda: ScalarMeter(cfg.TRAIN.LOG_PERIOD))
+        self.plot = cfg_vldt.loss_visplot
+        self.loss_meters = defaultdict(lambda: ScalarMeter(cfg_vldt.loss_log))
         self.spacer = 0
-        self.log = logger.get_log(cfg, __name__)
         
     def update(self, lbat_indv):
         for loss_name, l in lbat_indv.items():
@@ -170,8 +198,8 @@ class TrainMeter:
     
     def log_bat(self, trn_inf):
         ## logs / plots to visdom every loss_meter loss_bat_..
-        if (trn_inf['bat'] + 1) % self.log_period == 0:
-            sms = f" E[{trn_inf['epo']+1}] B[{trn_inf['bat']+1}] S[{(trn_inf['epo'])*self.epochbatchs+(trn_inf['bat']+1)}]"
+        if (trn_inf['bat']) % self.logfreq == 0:
+            sms = f" E[{trn_inf['epo']}] B[{trn_inf['bat']}] S[{(trn_inf['step'])}]"
             self.spacer = len(sms)
             for loss_name, meter in self.loss_meters.items():
                 sms += f" {loss_name} {meter.get_win_avg():.4f}" #Med {meter.get_win_median():.4f},
@@ -179,7 +207,7 @@ class TrainMeter:
             
     def log_epo(self, trn_inf):
         ## logs / plots to visdom loss_epo_..
-        sms = f"*E[{trn_inf['epo']+1}]"
+        sms = f"*E[{trn_inf['epo']}]"
         if self.spacer: sms += " "*(self.spacer-len(sms))
         for loss_name, meter in self.loss_meters.items():
             sms += f" {loss_name} {meter.get_global_avg():.4f}"

@@ -12,7 +12,7 @@ out_dir: ${hydra:runtime.output_dir}
 
 
 ##########
-## each dl/ds/info has both  gt/vroot/froot point to these
+## each dl/ds/info has both gt/vroot/froot point to these
 #data_root: /run/media/zuble/T77
 data_root: /mnt/t77
 
