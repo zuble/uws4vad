@@ -4,7 +4,7 @@ train:
   in2mem: False
   itersepo: ~ ## assigned in runtime @ get_trainloader 
 
-  bs: ???
+  bs: 32 #???
   #shuffle: True ## theres a rndsampler
   nworkers: ${dyn_nworkers:0}  ## 0 -> cpu//4 ;; -1 -> all cores
   pinmem: True

@@ -1,110 +1,106 @@
-import mxnet as mx
-from mxnet import np, npx
-
-import cv2, av, decord ##order matters
+import torch
+import numpy as np
+import math 
+import cv2
+#import av, decord ##order matters
 #from gluoncv.utils.filesystem import try_import_decord
 #decord = try_import_decord()
 #import av ## otehrwise vis.video gives segment fault
 
+from hydra.utils import instantiate as instantiate
 import os, os.path as osp, numpy, time, tkinter as tk, sys, select
-import matplotlib.pyplot as plt, matplotlib
-matplotlib.use('TkAgg')
+
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
+import matplotlib.pyplot as plt, matplotlib
+matplotlib.use('TkAgg')
 
-from nets import get_ldnet, convin2onnx
-from utils import LoggerManager, FeaturePathListFinder, hh_mm_ss, Visualizer, load_pkl, save_pkl
-from vldt import Metrics, Validate
+from src.model import ModelHandler, build_net
+from src.vldt import Validate, Metrics
+from src.utils import hh_mm_ss, get_log, Visualizer
+log = get_log(__name__)
 
-log = None
-def init():
-    global log
-    log = LoggerManager.get_logger(__name__)
-    
 
-def test(cfg, dvc):
+def test(cfg):
     
-    ## debug onnx export
-    #convin2onnx(cfg)
-    #return
+    cfg_vldt = cfg.vldt.test
+    log.error(cfg_vldt)
     
-    cfg_ds = getattr(cfg.DS, cfg.TEST.DS)
-    cfg_vldt = cfg.TEST.VLDT
-    vis = Visualizer(f'{cfg.EXPERIMENTPROJ}_{cfg.EXPERIMENTID}', restart=False, del_all=False)
+    ## Monitor
+    vis = Visualizer(f'{cfg.name}/{cfg.task_name}', restart=False, del_all=False)
+    #vis.delete(f'{cfg.name}/{cfg.task_name}')
     
     ## shortcut to validate directly from a watch_info.pkl w/o Validate
-    if cfg.TEST.VLDT.FROMPKL:
+    if cfg_vldt.frompkl:
         tic = time.time()
         log.info(f'$$$$ Validating from pkl')
-        vldt_info = load_pkl(cfg.EXPERIMENTPATH, 'vldt')
-        log.info(f'$$ {vldt_info.per_what=}')
-        Metrics(cfg, 'test', vis).get_fl(vldt_info)
-        log.info(f'$$$$ vldt done in {hh_mm_ss(time.time() - tic)}')
+        raise NotImplementedError
+        #vldt_info = load_pkl(cfg.EXPERIMENTPATH, 'vldt')
+        #log.info(f'$$ {vldt_info.per_what=}')
+        #Metrics(cfg, 'test', vis).get_fl(vldt_info)
+        #log.info(f'$$$$ vldt done in {hh_mm_ss(time.time() - tic)}')
         return
     
     ## shortcut to watch directly from a watch_info.pkl w/o Validate
-    if cfg.TEST.WATCH.FROMPKL:
+    if cfg_vldt.watch.frompkl:
         tic = time.time()
         log.info(f'$$$$ Watching from pkl')
-        watch_info = load_pkl(cfg.EXPERIMENTPATH,'watch')
-        Watch(cfg, cfg_ds, watch_info, vis)
-        log.info(f'$$$$ watched 4 {hh_mm_ss(time.time() - tic)}')
+        raise NotImplementedError
+        #watch_info = load_pkl(cfg.EXPERIMENTPATH,'watch')
+        #Watch(cfg, watch_info, vis)
+        #log.info(f'$$$$ watched 4 {hh_mm_ss(time.time() - tic)}')
         return
     
-    
     tic = time.time()
-    log.info(f'$$$$ TEST starting w/ cfg\n{cfg.TEST}')
+    log.info(f'$$$$ TEST starting')
 
     ### !!
     ## make standart key troughout out of net with att
-    if 'attws' in cfg.TEST.WATCH.FRMT:
+    if 'attws' in cfg.test.watch.frmt:
+        raise NotImplementedError
         ## asserts that cfg is ready to watch attention_weights
-        if 'attnomil' not in cfg.NET.NAME:
-            cfg.TEST.WATCH.FRMT.remove('attws')
-            log.warning(f'cfg.TEST.WATCH.ATTWS clear as the net in use ({cfg.NET.NAME}) isnt attnomil ')
-        else: cfg.NET.ATTNOMIL.RET_ATT = True
+        if 'attnomil' not in cfg.model.net.id:
+            cfg_vldt.watch.frmt.remove('attws')
+            log.warning(f'cfg_vldt.watch.ATTWS clear as the net in use ({cfg.NET.NAME}) isnt attnomil ')
+        else: cfg.model.net.main._cfg.ret_att = True
 
-    
-    watching = cfg.TEST.WATCH.FRMT
-    metrics = Metrics(cfg, 'test', vis)
-    
-    #os.environ['MXNET_CUDNN_AUTOTUNE_DEFAULT'] = '0'
-    V = Validate(cfg, cfg_ds, cfg_vldt, dvc, metrics, watching)
-    
+    watching = [] #cfg_vldt.watch.frmt
+    V = Validate(cfg, cfg_vldt, cfg.data.ds.frgb, vis, watching)
+    if cfg.get("debug") and cfg.get("debug").get("vldt") > 1: vldt.start(net) #;return
+
     ## create network after Validate is constructed
     ## as testloader is created there
     ## so cfg features dim information is filled
     ## as it may be need to net class in use
-    net = get_ldnet(cfg, dvc)
-    net.hybridize()
+    #net = get_ldnet(cfg, dvc)
     #net(np.random.uniform(size=(32,2048),ctx=dvc[0]))
     
-    vldt_info, watch_info, _ = V.start(net) ## class, dict, _
+    #vldt_info, watch_info, _ = V.start(net) ## class, dict, _
 
-    if cfg.TEST.VLDT.SAVEPKL: save_pkl(cfg.EXPERIMENTPATH, vldt_info, 'vldt')
-    if cfg.TEST.WATCH.SAVEPKL: save_pkl(cfg.EXPERIMENTPATH, watch_info, 'watch')
-    if watching: Watch(cfg, cfg_ds, watch_info, vis)
+    #if cfg_vldt.savepkl: save_pkl(cfg.EXPERIMENTPATH, vldt_info, 'vldt')
+    #if cfg_vldt.watch.savepkl: save_pkl(cfg.EXPERIMENTPATH, watch_info, 'watch')
+    #if watching: Watch(cfg, watch_info, vis)
 
     log.info(f'$$$$ Test Completed in {hh_mm_ss(time.time() - tic)}')
 
 
 class Watch:
-    def __init__(self, cfg, cfg_ds, watch_info, vis):
+    def __init__(self, cfg, watch_info, vis):
         self.cfg = cfg
-        self.cfg_ds = cfg_ds
+        self.cfg_dsinf = cfg.data.ds.info
         self.data = watch_info
-        self.cfg_wtc = cfg_wtc = cfg.TEST.WATCH
+        self.cfg_wtc = cfg_wtc = cfg_vldt.watch
         
-        if not cfg_wtc.FRMT: cfg_wtc.FRMT = input(f"asp,gtfl,attws ? and/or comma separated").split(",")
+        if not cfg_wtc.frmt: cfg_wtc.frmt = input(f"asp,gtfl,attws ? and/or comma separated").split(",")
         
         ## anomaly score player
-        if 'asp' in cfg_wtc.FRMT: self.asp = ASPlayer(cfg_wtc, vis).play
+        if 'asp' in cfg_wtc.frmt: self.asp = ASPlayer(cfg_wtc, vis).play
         else: self.asp = lambda *args, **kwargs: None
         log.info(f"Watch.asp {self.asp}")
         
         ## gtfl(grount-truth frame-level) ( /attws)
-        if any(x in cfg_wtc.FRMT for x in ['gtfl', 'attws']):
-            self.plot = Plotter(cfg_wtc.FRTEND, vis, 'asp' in cfg_wtc.FRMT).fx
+        if any(x in cfg_wtc.frmt for x in ['gtfl', 'attws']):
+            self.plot = Plotter(cfg_wtc.frtend, vis, 'asp' in cfg_wtc.frmt).fx
         else: self.plot = lambda *args, **kwargs: None
         log.info(f"Watch.plot {self.plot}")
         
@@ -120,16 +116,16 @@ class Watch:
         log.info(f'watch {fn} , gt {len(gt)} {type(gt)} | fl {len(fl)} {type(fl)} | attw {type(attw)} {len(attw)} ')
         
         self.plot(fn, gt, fl, attw) ## plot with full lenght of vframes
-        vpath = osp.join(self.cfg_ds.VROOT , fn)+'.mp4'
+        vpath = osp.join(self.cfg_dsinf.vroot , fn)+'.mp4'
         stop = self.asp(vpath, gt, fl) ## play with frame_skip
         return stop
     
     def init_lst(self):
-        if not self.cfg_wtc.LABEL:
-            self.cfg_wtc.LABEL = input(f"1 or + labels from: {self.cfg_ds.LABELS_STR} 'label1,labeln' ").split(",")
+        if not self.cfg_wtc.label:
+            self.cfg_wtc.label = input(f"1 or + labels from: {self.cfg_dsinf.lbls} 'label1,labeln' ").split(",")
         
-        fnlist = FeaturePathListFinder(self.cfg, 'test', 'rgb', self.cfg_ds).get('watch', self.cfg_wtc.LABEL)
-        log.info(f'Watching lst init in {self.cfg_wtc.FRMT} formats for {self.cfg_wtc.LABEL} w/ {len(fnlist)} vids')
+        fnlist = FeaturePathListFinder(self.cfg, 'test', 'rgb', self.cfg_dsinf).get('watch', self.cfg_wtc.label)
+        log.info(f'Watching lst init in {self.cfg_wtc.frmt} formats for {self.cfg_wtc.label} w/ {len(fnlist)} vids')
         for fn in fnlist: 
             stop = self.process(fn)
             if stop: log.warning(f"watch.init_lst just broke"); break
@@ -296,13 +292,13 @@ class Plotter:
 ## cv windows viewer of results 
 class ASPlayer:
     def __init__(self, cfg_wtc, vis):
-        self.frtend = cfg_wtc.FRTEND
-        self.frame_skip = cfg_wtc.ASP.FS
-        self.thrashold = cfg_wtc.ASP.TH
+        self.frtend = cfg_wtc.frtend
+        self.frame_skip = cfg_wtc.asp.fs
+        self.thrashold = cfg_wtc.asp.th
         self.cvputfx = {
             'float': self.cvputfloat,
             'color': self.cvputcolor
-        }.get(cfg_wtc.ASP.CVPUTFX)
+        }.get(cfg_wtc.asp.cvputfx)
         self.vis = vis
 
     def cvputfloat(self, frame, gt_fidx, fl_fidx):    
@@ -370,7 +366,7 @@ class ASPlayer:
             self.data["fl"].append(fl_fidx)
     
     def play(self, vpath, gt, fl):
-        log.info(f"ASP playing {vpath}")
+        log.info(f"asp playing {vpath}")
         self.overlay(vpath, gt, fl)
         
         if self.frtend == 'wnshow':

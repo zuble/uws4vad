@@ -2,7 +2,7 @@ import torch
 import os, os.path as osp, numpy as np, time, cv2, gc
 
 from src.vldt.metric import Metrics
-from src.data import get_testloader
+from src.data import get_testloader, run_dl
 from src.utils import get_log, hh_mm_ss
 
 log = get_log(__name__)
@@ -77,12 +77,11 @@ class VldtInfo:
     
     def _updt_glob(self, label, fn, gt, fl):
         ## updates the global view of validation
-        ## the NORMAL/frist key and ABNORMAL/last key lists in dict
-        ## GT/FL is viewed for ALL anomalies
+        ## keeps track of anom only + total dataset
         if label[0] != self.norm:
             self.DATA[self.anom]['GT'].append(gt)
             self.DATA[self.anom]['FL'].append(fl)
-        #else:#if label[0] != self.norm:
+        #else:
         #    self.DATA[self.norm]['GT'].append(gt)
         #    self.DATA[self.norm]['FL'].append(fl)
             
@@ -91,6 +90,7 @@ class VldtInfo:
         
     def _updt_lbl(self, label, fn, gt, fl):
         ## updates anomalies subclasses with GT/FL
+        ## keeps track of each anom sublabel
         if label[0] != self.norm:
             for lbl in label:
                 self.DATA[lbl]['GT'].append(gt)
@@ -140,11 +140,12 @@ class Validate:
         
         self.dvc = cfg.dvc
     
-        self.cfg_ds = cfg_ds = cfg.dl.ds.info
-        self.cfg_frgb = cfg_frgb
+        self.cfg_ds = cfg_ds = cfg.data.ds.info
+        self.cfg_frgb = cfg_frgb ## to get fstep used during fext
         self.cfg_vldt = cfg_vldt
 
-        self.DL = get_testloader(cfg) #;run_dl(loader); return
+        self.DL = get_testloader(cfg) 
+        if cfg.get("debug") and cfg.get("debug").get("data") > 1: run_dl(self.DL) #;return
         log.info(f'Validate w/ DL{self.DL}\n')
         
         self.metrics = Metrics(cfg_vldt, vis)
@@ -189,9 +190,9 @@ class Validate:
     def _fwd_attnomil(self, net, netpstfwd, feat):
         '''
         as one score per forward, segment&repeat to get len(scores)=len(feats)
-        #if self.cfg_frgb.FSTEP == 64: split_size = 8
-        #elif self.cfg_frgb.FSTEP == 32: split_size = 16 
-        #elif self.cfg_frgb.FSTEP == 16: split_size = 9 ## orignal
+        #if self.cfg_frgb.fstep == 64: split_size = 8
+        #elif self.cfg_frgb.fstep == 32: split_size = 16 
+        #elif self.cfg_frgb.fstep == 16: split_size = 9 ## orignal
         '''
         split_size = self.cfg_net.vldt_split
         
@@ -212,9 +213,9 @@ class Validate:
             #log.debug(f'[{ci}] {chuck} {feat[:,chuck].shape} --> {out["scores"]}')
             
             if self.ret_att: ## out['attw'].shape (nsegments, 3)
-                #tmp_attw = np.repeat( out['attw'], self.cfg_frgb.SEGMENTNFRAMES, axis=0 )
+                #tmp_attw = np.repeat( out['attw'], self.cfg_frgb.fstep, axis=0 )
                 #log.debug(f'tmp_attw[{ci}] {tmp_attw.shape} {type(tmp_attw)}')
-                self.attws.append( out['attw'].repeat( self.cfg_frgb.SEGMENTNFRAMES, dim=0 ) )
+                self.attws.append( out['attw'].repeat( self.cfg_frgb.fstep, dim=0 ) )
 
         self.scores = torch.cat((self.scores), dim=0)
         log.debug(f'scores: {self.scores.shape} {self.scores.ctx}')
@@ -259,7 +260,7 @@ class Validate:
             log.debug(f'[{i}] ********************')
 
             feat=data[0][0].to(self.dvc); label=data[1][0]; fn=data[2][0]
-            feat = feat.unsqueeze(0)
+            #feat = feat.unsqueeze(0)
             log.debug(f'[{i}] {feat.shape} , {fn} , {label}')
             self.fwd(net, netpstfwd, feat)
             ## self.scores is at segment level 
@@ -274,13 +275,13 @@ class Validate:
             tmp_gt = self.gtfl.get(fn)
             log.debug(f' tmp_gt: {len(tmp_gt)}')
                 
-            ## 1 segmnt = self.cfg_frgb.SEGMENTNFRAMES = (64 frames, slowfast mxnet) (32 frames, i3d mxnet) (16, i3dtorchdmil)
+            ## 1 segmnt = self.cfg_frgb.fstep = (64 frames, slowfast mxnet) (32 frames, i3d mxnet) (16, i3dtorchdmil)
             tmp_fl = self.scores.cpu().numpy()
             tmp_fl = np.repeat(tmp_fl, self.cfg_frgb.fstep)
             log.debug(f' tmp_fl: {len(tmp_fl)} {tmp_fl.shape} {type(tmp_fl)} {type(tmp_fl[0])}')
             
             ########
-            ## as len of seqlen * self.cfg_frgb.FSTEP != number frames original video
+            ## as len of seqlen * self.cfg_frgb.fstep != number frames original video
             ## fill tmp_fl w/ last value until len is the same as gt
             if len(tmp_fl) < len(tmp_gt):  tmp_fl = self.reshp_nd_fill(tmp_fl, len(tmp_gt))
             ## or truncate tmp_gt with len(tmp_fl), thhis is how RocNG/XDVioDet does
@@ -291,7 +292,7 @@ class Validate:
             ## clip feats can accomodate more "snippets" ??
             log.debug(f' tmp_fl_rshp: {len(tmp_fl)}')
             
-            assert len(tmp_fl) == len(tmp_gt), f'{self.cfg_frgb.fstep} cfg_frgb.FSTEP * {self.scores.shape[0]} len  != {len(tmp_gt)} orign video frames'
+            assert len(tmp_fl) == len(tmp_gt), f'{self.cfg_frgb.fstep} cfg_frgb.fstep * {self.scores.shape[0]} len  != {len(tmp_gt)} orign video frames'
             
             self.vldt_info.updt(label, fn, tmp_gt, tmp_fl)
             self.watch_info.updt(fn, tmp_gt, tmp_fl, self.attws)
@@ -305,7 +306,7 @@ class Validate:
         self.watch_info.log()
 
         mtrc_info = self.metrics.get_fl(self.vldt_info)
-        
+        log.error(mtrc_info)
         log.info(f'$$$$ VALIDATE completed in {hh_mm_ss(time.time() - tic)}')
         return self.vldt_info, self.watch_info.DATA, mtrc_info
 
@@ -313,8 +314,9 @@ class Validate:
 ###########
 class GTFL:
     '''
-        Retrieves the Ground Truth Frame Level for the specified vpath
+        Retrieves the Ground Truth Frame Level for the specified video
         either for the XDV or UCF dataset
+        based on total frames / annotations
     '''
     def __init__(self, cfg_ds):
         #log.debug(f'GTFL:\n{cfg_ds}')

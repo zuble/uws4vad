@@ -1,14 +1,24 @@
 defaults:
-  - _globo.yaml
+  - main: dflt
+  - cls: mlp
+  - pstfwd: dflt
 
-## 16: 512/32 1024/64 2048/128
-## 8: 512/64 1024/128 2048/256
-## 4: 512/128 1024/256 2048/512
+id: mir ## used as a class reference in both main/pstfwd
+wght_init: xavier0 ## xavier uniform upon weihghts / bias 0
 
-id: mir
-arch:
-  _cfg:
-    neurons: 
-      - 512
-      - 32
-    do: 0.7
+## the simplest example
+## the classifier is build upon cls cfg if given
+## if not pass parameters for the chosen in Network.init at _cfg
+
+#main:
+#  _cfg:
+#    rate: 
+#    - 8
+#    - 4
+#    do: 0.7
+
+cls:
+  rate: 
+    - 4
+    - 4
+  do: 0.7

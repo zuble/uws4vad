@@ -9,6 +9,9 @@ train:
   per_what: lbl  ## glob , lbl
   ## send intermidiate metrics results to visdom
   mtrc_visplot: false
+  ## if empty metric: ucf -> AUC_ROC | xdv -> AUC_PR
+  record_mtrc: ${dyn_vldtmtrc:${data.ds.info.id},''}
+  record_lbl: 111.ANOM #${cfg.data.ds.info.lbls_info[-2]}
 
   ## batx freq to log loss parts to console
   ## if 0 -> cfg.dl.loader.train.itersepo//2
@@ -16,10 +19,11 @@ train:
   ## if 1: send loss values for each part to visdom
   loss_visplot: 1  
 
+  
 
 
 test:
-  savepkl: 1
+  savepkl: 0
   frompkl: 0
 
   per_what: lbl ## glob , lbl , vid
@@ -32,10 +36,12 @@ test:
   #### !!!!!!
 
   watch: ## B1 FIGHT | B2 SHOOT | B4 RIOT | B5 ABUSE | B6 CARACC | G EXPLOS
-    savepkl: 1
-    fromkpl: 0
+    savepkl: 0
+    frompkl: 0
     frtend: visdom
-    frmt: ['asp', 'gtfl']
+    frmt: 
+      - asp
+      - gtfl
     label: ['111']
     guividsel: true
     asp:

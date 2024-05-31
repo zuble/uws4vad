@@ -16,9 +16,9 @@
 import torch
 
 class BasePstFwd:
-    def __init__(self, cfg_dl):
-        self.bs = cfg_dl.loader.train.bs
-        self.ncrops = cfg_dl.trnsfrm.train.crops2use
+    def __init__(self, _cfg):
+        self.bs = _cfg.bs
+        self.ncrops = _cfg.ncrops
         
     ## mod data['key']: reduce a 3d tensor to a 2d by crop mean or crop0
     def rshp_out(self, data, key, meth):
@@ -59,11 +59,15 @@ class BasePstFwd:
                     arr = arr[:, 0, :, :]
         return arr
 
+    def merge(self, *dicts):
+        res = {}
+        for d in dicts: res.update(d)
+        return res
         
 ## exemplar
 class NetPstFwdEx(BasePstFwd):
-    def __init__(self, bs, ncrops, dvc):
-        super().__init__(bs, ncrops, dvc)
+    def __init__(self, _cfg):
+        super().__init__(_cfg)
 
     def train(self, ndata, ldata, lossfx):
         log.debug(f"")

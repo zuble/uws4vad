@@ -2,10 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-log = None
-def init(l):
-    global log
-    log = l
+from src.utils.logger import get_log
+log = get_log(__name__)
     
     
 #####################
@@ -14,20 +12,22 @@ def init(l):
 # outputs at SL, (b,t)
 # without sigmoid 
     
-class MLP(nn.Module):
-    def __init__(self, feat_len, neurons=[512,512//4], activa='relu', dropout=0.7):
-        super(MLP, self).__init__()
-        ## 16: 512/32 1024/64 2048/128
-        ## 8: 512/64 1024/128 2048/256
-        ## 4: 512/128 1024/256 2048/512
-        self.feat_len = feat_len
+class SMlp(nn.Module):
+    def __init__(self, dfeat, rate=[4,4], do=0.7):
+        super(SMlp, self).__init__()
+        ##     2048    1024   512
+        ## 16: 128/16  64/4   32/2
+        ## 8:  256/64  128/16 64/8
+        ## 4: 512/128  256/64 
+        neurons = [ dfeat//rate[0] , dfeat//(rate[0]*rate[1])]
+        self.dfeat = dfeat
         self.cls = nn.Sequential(
-            nn.Linear(self.feat_len, neurons[0]),
+            nn.Linear(self.dfeat, neurons[0]),
             nn.ReLU(),
-            nn.Dropout(dropout), 
+            nn.Dropout(do), 
             nn.Linear(neurons[0], neurons[1]),
             #nn.ReLU(), ## bert-rtfm mentioned worse perform w/ relu
-            nn.Dropout(dropout), 
+            nn.Dropout(do), 
             nn.Linear(neurons[1], 1),
             #nn.Sigmoid(),
             )
@@ -36,10 +36,10 @@ class MLP(nn.Module):
         return self.cls(x).view(b,t)
 
 
-class ConvCLS(nn.Module):
-    def __init__(self, feat_len, ks):
-        super(ConvCLS, self).__init__()
-        self.cls = nn.Conv1d(feat_len, 
+class SConv(nn.Module):
+    def __init__(self, dfeat, ks):
+        super(SConv, self).__init__()
+        self.cls = nn.Conv1d(dfeat, 
                             out_channels=1, 
                             kernel_size=ks)
         self.ks = ks
@@ -57,9 +57,9 @@ class ConvCLS(nn.Module):
         return x
 
         
-class LSTMSCls(nn.Module):
+class SLstm(nn.Module):
     def __init__(self, lstm_dim=256 , lstm_bd=True):
-        super(LSTMSCls,self).__init__()
+        super(SLstm,self).__init__()
         self.lstm_dim=lstm_dim
 
         self.lstm = rnn.LSTM(lstm_dim, num_layers=2, layout='NTC', bidirectional=lstm_bd)
@@ -80,13 +80,11 @@ class LSTMSCls(nn.Module):
         return out
 
 
-
-
 ## 4 attnomil and outputs at vl
 ## bert-rtfm used as substitue of bert 
-class LSTMVCls(nn.Module):
+class VLstm(nn.Module):
     def __init__(self, in_dim, lstm_dim=256, lstm_bd=True, mlp_dim=1):
-        super(LSTMVCls,self).__init__()
+        super(VLstm,self).__init__()
         
         self.lstm = nn.LSTM(in_dim, lstm_dim, batch_first=True, bidirectional=lstm_bd, num_layers=2)
         

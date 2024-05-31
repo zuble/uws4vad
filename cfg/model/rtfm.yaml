@@ -1,0 +1,29 @@
+defaults:
+  #- _self_ 
+  - net: rtfm
+  - optima: adam
+  - lrs: null
+  - loss: null
+  #- _self_
+
+epochs: 5
+
+optima:
+  lr: 1.0e-4
+  weight_decay: 1.0e-5
+
+loss: 
+  mgnt:
+    _target_: src.model.loss.mgnt.Rtfm
+    _cfg:
+      k: 3
+      alpha: 0.0001
+      margin: 100
+
+  smooth: 
+    _target_: src.model.loss._parts.smooth
+
+  spars:
+    _target_: src.model.loss._parts.sparsity
+
+

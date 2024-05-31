@@ -1,5 +1,5 @@
 import torch
-import numpy as np
+import numpy as np, random
 
 import glob , os, os.path as osp, math, time
 from collections import OrderedDict
@@ -30,6 +30,94 @@ def run_dl(dl):
         log.error(f'Error unpacking variables in batch {b_idx+1}: {e}')
 
 
+def debug_cfg_data(cfg_data):
+    """
+    """
+    ID_DL = cfg_data.id
+    cfg_dsinf = cfg_data.ds.info
+    cfg_trnsfrm = cfg_data.trnsfrm
+    
+    #log.debug("DEBUG RGB")
+    cfg_frgb = cfg_data.ds.frgb
+    ID_RGB = cfg_frgb.id
+    assert cfg_dsinf.id in cfg_frgb.ds  
+    
+    ## TRAIN TEST FOLDERS
+    root_rgb = cfg_dsinf.froot+"/RGB/"+ID_RGB
+    assert osp.exists(root_rgb), f"{root_rgb} does not exist"
+    assert osp.exists(f"{root_rgb}/TRAIN")
+    assert osp.exists(f"{root_rgb}/TEST")
+    #log.debug(f"[{ID_DL}] {root_rgb} w/ TRAIN + TEST folders")
+    
+    
+    fpaths_train = glob.glob(f"{root_rgb}/TRAIN/*.npy")
+    fpaths_train.sort()
+    #log.debug(f"[{ID_DL}] found {len(fpaths_train)} .npy files")
+    
+    fpaths_test = glob.glob(f"{root_rgb}/TEST/*.npy")
+    fpaths_test.sort()
+    #log.debug(f"[{ID_DL}] found {len(fpaths_test)} .npy files")
+    
+    
+    ## NUMBER OF .npy FEATS NCROPS ASSERT
+    if cfg_frgb.ncrops:
+        
+        if cfg_trnsfrm.train.crops2use == 0:
+            log.error(f"[{ID_DL}] wrong {cfg_trnsfrm.train.crops2use=}  while {ID_RGB}.NCROPS {cfg_frgb.ncrops}")
+            raise Exception 
+        if cfg_trnsfrm.test.crops2use == 0:
+            log.error(f"[{ID_DL}] wrong {cfg_trnsfrm.test.crops2use=}  while {ID_RGB}.NCROPS {cfg_frgb.ncrops}")
+            raise Exception
+        
+        assert len(fpaths_train) == (cfg_dsinf.train.normal + cfg_dsinf.train.abnormal) * cfg_frgb.ncrops
+        #log.debug(f"[{ID_DL}] {ID_RGB}.NCROPS match number of files in {cfg_dsinf.froot}/RGB/TRAIN/{ID_RGB}")
+        assert len(fpaths_test) == (cfg_dsinf.test.normal + cfg_dsinf.test.abnormal) * cfg_frgb.ncrops    
+        #log.debug(f"[{ID_DL}] {ID_RGB}.NCROPS match number of files in {cfg_dsinf.froot}/RGB/TEST/{ID_RGB}")
+        
+    else:
+        if cfg_trnsfrm.train.crops2use > 0:
+            log.error(f"[{ID_DL}] wrong {cfg_trnsfrm.train.crops2use=} while {ID_RGB}.NCROPS {cfg_frgb.ncrops}")
+            raise Exception 
+        if cfg_trnsfrm.test.crops2use > 0:
+            log.error(f"[{ID_DL}] wrong {cfg_trnsfrm.test.crops2use=}  while {ID_RGB}.NCROPS {cfg_frgb.ncrops}")
+            raise Exception
+        
+        if cfg_trnsfrm.train.cropasvideo: 
+            log.error(f"[{ID_DL}] {cfg_frgb.ncrops=} while cropasvideo is True")
+            raise Exception 
+        
+        assert len(fpaths_train) == (cfg_dsinf.train.normal + cfg_dsinf.train.abnormal)
+        #log.debug(f"[{ID_DL}] {ID_RGB}.NCROPS match number of files in {cfg_dsinf.froot}/RGB/TRAIN/{ID_RGB}")
+        
+        assert len(fpaths_test) == (cfg_dsinf.test.normal + cfg_dsinf.test.abnormal)
+        #log.debug(f"[{ID_DL}] {ID_RGB}.NCROPS match number of files in {cfg_dsinf.froot}/RGB/TEST/{ID_RGB}")
+    
+    
+    ## FEAT LEN ASSERT
+    tmp = np.load(fpaths_train[random.randint(0,len(fpaths_train))])
+    assert tmp.shape[1] == cfg_frgb.dfeat
+    #log.debug(f"[{ID_DL}] {cfg_frgb.dfeat=} match train .npy files")
+    
+    tmp = np.load(fpaths_test[random.randint(0,len(fpaths_test))])
+    assert tmp.shape[1] == cfg_frgb.dfeat
+    #log.debug(f"[{ID_DL}] {cfg_frgb.dfeat=} match test .npy files")
+    
+    
+    ## FEATUREATHLISTFINDER
+    rgbfplf = FeaturePathListFinder(cfg_data, 'train', 'rgb')
+    rgbfl = rgbfplf.get('ANOM') + rgbfplf.get('NORM')
+    #log.debug(f'TRAIN: RGB {len(rgbfl)} feats')
+    
+    rgbfplf = FeaturePathListFinder(cfg_data, 'test', 'rgb')
+    rgbfl = rgbfplf.get('ANOM') + rgbfplf.get('NORM')
+    #log.debug(f'TEST: RGB {len(rgbfl)} feats')
+    
+    
+    if cfg_data.ds.get("faud"):
+        raise NotImplementedError
+    
+    
+    
 ##############
 ## XDV/UCF DS
 def get_testxdv_info(txt_path):
@@ -89,92 +177,70 @@ def get_ucf_stats():
         log.info(f"TOTAL ANOMALY FRAMES: {total[1]} {(total[1]/(total[0]+total[1]))*100:2f}%\n\n")
 
 
+
+
 ####################
 ## PATHS AND SUCH
 class FeaturePathListFinder:
     """
-        From cfg_dl.ds.info.froot/cfg_feat.id/ finds a folder with mode in it (train / test)
-        then based on cfg_dl procedes to filter the features paths
+        From cfg_data.ds.info.froot/cfg_feat.id/ finds a folder with mode in it (train / test)
+        then based on cfg_data procedes to filter the features paths
         so it retrieves accurate features list to use
         used in data/get_trainloader && data/get_testloader
     """
-    def __init__(self, cfg_dl, mode:str, modality:str):
+    def __init__(self, cfg_data, mode:str, modality:str):
         self.listANOM , self.listNORM = [], []
+        
+        cfg_dsinf = cfg_data.ds.info
+        cfg_trnsfrm = cfg_data.trnsfrm.get(mode)
+        cfg_feat = cfg_data.ds.get(f"f{modality}")
+
         mode = mode.upper()
         modality = modality.upper()
         
-        if modality == 'AUD':
-            cfg_feat = cfg_dl.ds.faud
-        else: cfg_feat = cfg_dl.ds.frgb
-        
-        fpath = ''
-        for root, dirs, _ in os.walk(cfg_dl.ds.info.froot+'/'+modality):
-            if cfg_feat.id == osp.basename(root):
-                for d in dirs:
-                    if mode in d:
-                        #log.info(f'{d}')
-                        fpath = osp.join(root, d)
-                        log.debug(f'{mode} features path {fpath}')
-                        break        
-        if not fpath: 
-            raise Exception (f'{cfg_feat.id} or {cfg_feat.id}/{mode} not found in {cfg_dl.ds.info.froot=}')
-
-        flist = glob.glob(fpath + '/**.npy')
+        ID_FEAT = cfg_feat.id
+        fpath = cfg_dsinf.froot+'/'+modality+"/"+ID_FEAT+"/"+mode
+        flist = glob.glob(fpath + '/*.npy')
+        if not len(flist): 
+            raise Exception (f'{fpath} has NADA')
         flist.sort()
         log.debug(f"feat flist pre-filt in {mode} {modality} : {len(flist)}")
         
         #################        
         ## if cropasvideo
         ##      if train, 
-        ##          if cfg_dl.ds.frgb.ncrops == to the amount of crops in the flist 
+        ##          if cfg_data.ds.frgb.ncrops == to the amount of crops in the flist 
         ##              all features will treatead as a video so leave all fn in list
-        ##          if != load only correspondant crop based cfg_dl.trnsfrm.train.crops2use , 
-        ##              eg if cfg_dl.ds.frgb.ncrops == 1 and the flist contains 5 crops for each vid, form flist with flist excluding the __1.npy __2.npy __3.npy __4.npy crops for each video 
+        ##          if != load only correspondant crop based cfg_data.trnsfrm.train.crops2use , 
+        ##              eg if cfg_data.ds.frgb.ncrops == 1 and the flist contains 5 crops for each vid, form flist with flist excluding the __1.npy __2.npy __3.npy __4.npy crops for each video 
         ##      if test, take unique basename from crop fns -> it'll use only center crop __0.npy
-        ## elif cfg_dl,DATA.ncrops is set means that features files have crops even if only 1 is used
+        ## elif cfg_data,DATA.ncrops is set means that features files have crops even if only 1 is used
         ##      if train, take unique basename from crop fns -> feed each crop feat -> mean scores over crop dimension
         ##      if test, take unique basename from crop fns -> it'll use only center crop __0.npy
         ## else means that all files are a feature of video full view
 
-        if modality == 'RGB':
-            cfg_trnsfrm = cfg_dl.trnsfrm
-            ## assert cases when there no crops
-            ## not ideal, but both train/test depend on it
-            ## mainly for TrainFrmt.reshape_in and NetPstFwd.reshape_*, although tackle that edges
-            if cfg_feat.ncrops == 0:
-                if cfg_trnsfrm.train.crops2use > 0 or cfg_trnsfrm.test.crops2use > 0:
-                    log.warning(f"cfg_dl.ds.frgb.{cfg_feat.id} has no crops, while cfg_trnsfrm.{mode}.crops2use is {cfg_trnsfrm.train.crops2use}")
-                    raise Exception 
+        if modality == 'RGB' and mode == 'TRAIN':
 
-            if cfg_trnsfrm.train.cropasvideo and mode in 'TRAIN':
+            if cfg_trnsfrm.get("cropasvideo"):
                 
-                if cfg_trnsfrm.train.crops2use == cfg_feat.ncrops:
-                    flist = [f[:-4] for f in flist]
-                else:
+                if cfg_trnsfrm.crops2use == cfg_feat.ncrops: ## get full list w/o ".npy"
+                    flist = [f[:-4] for f in flist] 
+                else: ## get only rigth crop idx
                     flist = list(OrderedDict.fromkeys([osp.splitext(f)[0][:-3] for f in flist]))
                     flist = [f"{f}__{i}" for f in flist for i in range(cfg_trnsfrm.train.crops2use)]
                     
-                ### Get the unique video identifiers from the first cfg_dl.DATA.RGB.ncrops * 2 files
-                #unique_video_ids = list(OrderedDict.fromkeys([osp.splitext(f)[0][:-3] for f in flist[:cfg_dl.DATA.RGB.ncrops * 2]]))
-                ### if len is 2: ncrops corresponds to cfg_dl.DATA.RGB.ncrops select all
-                #if len(unique_video_ids) == 2: flist = [f[:-4] for f in flist]
-                ### selects only the frist cfg_dl.DATA.RGB.ncrops crop files
-                #else:
-                #    flist = list(OrderedDict.fromkeys([osp.splitext(f)[0][:-3] for f in flist]))
-                #    flist = [f"{f}__{i}" for f in flist for i in range(cfg_dl.DATA.RGB.ncrops)]
-            
-            ## cfg_dl.DATA.cropasvideo is False or the mode is "test"
-            ## check for use of crops
-            elif mode in 'test' and cfg_trnsfrm.test.crops2use:
+            elif cfg_trnsfrm.crops2use: ## >= 1
                 ##feature fn from features crop folder without duplicates (__0, __1...) 
                 flist = list(OrderedDict.fromkeys([osp.splitext(f)[0][:-3] for f in flist]))
                 
-            elif mode in 'train' and cfg_trnsfrm.train.crops2use:
+        elif modality == 'RGB' and mode == 'TEST': 
+            
+            if cfg_trnsfrm.crops2use == 1: ## == 1
                 ##feature fn from features crop folder without duplicates (__0, __1...) 
                 flist = list(OrderedDict.fromkeys([osp.splitext(f)[0][:-3] for f in flist]))
-            
-            ## ds w/ 1 rgbf per video
-            else: flist = [f[:-4] for f in flist]
+                
+            else: ## ds w/ 1 rgbf per video
+                flist = [f[:-4] for f in flist]
         
         ## aud 1 .npy per vid
         else: flist = [f[:-4] for f in flist]
@@ -186,7 +252,7 @@ class FeaturePathListFinder:
         ######
         ## filters into anom and norm w/ listNORM and listANOM
         ## filters for watching purposes w/ fn_label_dict
-        self.fn_label_dict = {lbl: [] for lbl in cfg_dl.ds.info.lbls_info[:-1]}
+        self.fn_label_dict = {lbl: [] for lbl in cfg_dsinf.lbls_info[:-1]}
         fist = list(self.fn_label_dict.keys())[0]  ## 000.NORM
         last = list(self.fn_label_dict.keys())[-1] ## 111.ANOM
 
@@ -199,7 +265,7 @@ class FeaturePathListFinder:
             
             #log.debug(f'{fp} {xearc} ')
             
-            if cfg_dl.ds.info.lbls[0] in xearc:
+            if cfg_dsinf.lbls[0] in xearc: ## Assault018
                 self.listNORM.append(fp)
                 self.fn_label_dict[fist].append(fn)
                 #log.debug(f'{xearc} {fn}')

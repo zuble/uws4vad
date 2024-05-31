@@ -1,32 +1,51 @@
-defaults:
-  - override /dl: ucf_cliptsa_mil.yaml
-  - override /model: mir.yaml
+# @package _global_
 
-name: 'mir'
-task_name: "001"
-tags: ["mlp layer 1024"]
+defaults:
+  - override /data: ucf_i3drocng_mil
+  - override /dataloader: high
+  - override /model: rtfm
+  - override /vldt: dflt
+  - override /path: ion
+
+
+name: 'rtfm'
+task_name: "000"
+#tags: ["mlp layer 1024"]
+
+#load:
+#  ckpt_path: "/mnt/t77/TH/zutc_vad_hydra/log/rtfm/000/runs/31-05_02-19-59/2000861580--1_1.state"
+
+
+data:
+  trnsfrm:
+    train:
+      mil: 1
+      crops2use: 1
+      itrplt: 0
+      len: 64
+      rnd:
+        - glob
+
+
+dataloader:
+  train:
+    bs: 16
+  test:
+    in2mem: True
 
 
 model:
-  net:
-    cfg:
-      neurons:
-        - 1024
-  optima:
-    lr: 0.002
+  epochs: 1
 
-  vldt:
-    period: 5
-    ## per what prespective show metrics
-    ## glob ->  over full/original test
-    ## lbl -> over each indv classes aswell as anomalous set 
-    per_what: lbl  ## glob , lbl
-    ## send intermidiate results to visdom
-    visplot: false
+  #net:
+  #  main:
+  #    _cfg:
+  #      do: 0.7
 
-    
-dl:
-  loader:
-    train:
-      in2mem: true
-      bs: 32
+  #optima:
+  #  lr: 0.001
+
+vldt:
+  train:
+    per_what: lbl
+

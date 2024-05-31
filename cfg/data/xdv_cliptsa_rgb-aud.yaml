@@ -1,0 +1,17 @@
+#_target_: src.data.traindl.get_trainloader
+
+defaults:
+  - ds/info: xdv.yaml 
+  - ds/frgb: cliptsa.yaml
+  - ds/faud: vggish.yaml
+  - trnsfrm: seq.yaml
+  - _self_ ## last so anything here override previous
+
+
+id: xdv_cliptsa_rgb-aud
+
+trnsfrm:
+  train:
+    crops2use: 0
+  test:
+    crops2use: 0

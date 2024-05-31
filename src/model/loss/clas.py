@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from src.utils.logger import get_log
+log = get_log(__name__)
+
 
 class Loss(nn.Module):
     def __init__(self, _cfg):
@@ -40,5 +43,5 @@ class Loss(nn.Module):
         
         l = self.crit(vl_scores, label)
         return {
-            'loss_clas': l
+            'clas': l
             }

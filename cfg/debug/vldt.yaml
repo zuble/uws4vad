@@ -1,4 +1,6 @@
 defaults:
   - dflt.yaml
 
-vldt: 1
+vldt: 
+  - "src.vldt.vldt.Validate"
+  - "src.vldt.metric.Metrics"

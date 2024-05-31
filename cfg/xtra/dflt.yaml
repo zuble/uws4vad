@@ -7,3 +7,5 @@ cfg: 0
 # 0 -> no print
 # 1 -> prints dflts on utils.xtra
 # >1 -> print all blocks
+
+net: 1

@@ -1,0 +1,17 @@
+defaults:
+  - main: dflt
+  - cls: mlp
+  - pstfwd: dflt
+
+id: rtfm
+wght_init: xavier0 
+
+main:
+  _cfg:
+    do: 0.7
+    
+cls:
+  rate:
+    - 4
+    - 4
+  do: 0.7

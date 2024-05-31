@@ -2,6 +2,7 @@
 id: CLIPTSA
 ds: 
   - ucf
+  - xdv
 fstep: 16  ## midle frame from 16 frame snippets
-nfeats: 512
+dfeat: 512
 ncrops: 0

@@ -44,9 +44,9 @@ class Metrics(object):
         precision, recall, thresholds = precision_recall_curve(gt, predictions)
         au_prc = auc(recall, precision)
         
-        #self.mtrc_info[key] = { 'AP': [ap], 'AU_PRC': [au_prc], 'AUC_ROC': [auc_roc] }
+        #self.mtrc_info[key] = { 'AP': [ap], 'AUC_PR': [au_prc], 'AUC_ROC': [auc_roc] }
         self.mtrc_info[key]['AP'].append(ap)
-        self.mtrc_info[key]['AU_PRC'].append(au_prc)
+        self.mtrc_info[key]['AUC_PR'].append(au_prc)
         self.mtrc_info[key]['AUC_ROC'].append(auc_roc)
 
         if self.curv_vis_plot: 
@@ -107,7 +107,7 @@ class Metrics(object):
             
             ## get metrics per vid
             ## reset dicts
-            self.mtrc_info = {lbl: {'FN': [], 'AP': [], 'AU_PRC': [], 'AUC_ROC': []} for lbl in self.lbls4plot}
+            self.mtrc_info = {lbl: {'FN': [], 'AP': [], 'AUC_PR': [], 'AUC_ROC': []} for lbl in self.lbls4plot}
             #self.curv_info = {lbl: {} for lbl in self.lbls4plot}
             self.curv_info = {lbl: {'precision': [], 'recall': [], 'fpr': [], 'tpr': []} for lbl in self.lbls4plot}
             
@@ -123,7 +123,7 @@ class Metrics(object):
             self.proc_mtrc_vid()
             
         else: ## glob && lbl
-            self.mtrc_info = {lbl: {'AP': [], 'AU_PRC': [], 'AUC_ROC': []} for lbl in self.lbls4plot}
+            self.mtrc_info = {lbl: {'AP': [], 'AUC_PR': [], 'AUC_ROC': []} for lbl in self.lbls4plot}
             self.curv_info = {lbl: {'precision': [], 'recall': [], 'fpr': [], 'tpr': []} for lbl in self.lbls4plot}
             #self.mtrc_info = {lbl: {} for lbl in self.lbls4plot}
             #self.curv_info = {lbl: {} for lbl in self.lbls4plot}
@@ -188,9 +188,9 @@ class Metrics(object):
     def proc_mtrc_vid(self):  
         ## table-it, 1 per lbl with all videos metrics ordered by AP high to low
         for class_name, metrics in self.mtrc_info.items():
-            tmp = list(zip(metrics['FN'], metrics['AP'], metrics['AU_PRC'], metrics['AUC_ROC']))
+            tmp = list(zip(metrics['FN'], metrics['AP'], metrics['AUC_PR'], metrics['AUC_ROC']))
             tmp = sorted(tmp, key=lambda x: x[1], reverse=True) ## 1-ap 2-au_prc
-            metrics['FN'], metrics['AP'], metrics['AU_PRC'], metrics['AUC_ROC'] = zip(*tmp) 
+            metrics['FN'], metrics['AP'], metrics['AUC_PR'], metrics['AUC_ROC'] = zip(*tmp) 
             
             headers = [class_name] + list(metrics.keys())[1:] ; rows = []
             for i in range(len(metrics['FN'])):
@@ -291,8 +291,8 @@ class Metrics(object):
     
     def plot_metrics(self):
         ## 1 plot per metric, xaxis is lbls
-        metrics_data = { 'AP': [], 'AU_PRC': [], 'AUC_ROC': [] }
-        self.vis.close(f'AP');self.vis.close(f'AU_PRC');self.vis.close(f'AUC_ROC')
+        metrics_data = { 'AP': [], 'AUC_PR': [], 'AUC_ROC': [] }
+        self.vis.close(f'AP');self.vis.close(f'AUC_PR');self.vis.close(f'AUC_ROC')
         
         for label_str, metrics in self.mtrc_info.items():
             #log.debug(f"{label_str} {metrics = }")

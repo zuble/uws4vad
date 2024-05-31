@@ -4,5 +4,5 @@ id: I3DROCNG
 ds: 
   - ucf
 fstep: 16
-nfeats: 1024
+dfeat: 1024
 ncrops: 10

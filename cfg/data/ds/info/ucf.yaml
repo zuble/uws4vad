@@ -32,6 +32,13 @@ lbls_info:
   - '111.ANOM'
   - 'ALL'
 
+## 950A 950N
+train: ## 1610
+  normal: 800
+  abnormal: 810
+test: ## 300
+  normal: 150
+  abnormal: 140
 
 ## id value in each dl/ds/(frgb or faud) represents folder name
 ## frgb/cliptsa.yaml w/ id: CLIPTSA 

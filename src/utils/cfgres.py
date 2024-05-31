@@ -33,8 +33,12 @@ def dyn_vldt(epochs,x):
     if x == 0 or x > epochs: return 1
     else: return epochs // x
 
-#def dyn_eb(epochs,bs):
-
+def dyn_vldtmtrc(ds, mtrc):
+    if not mtrc:
+        if ds == 'ucf': return 'AUC_ROC'
+        elif ds == 'xdv': return 'AUC_PR'
+    return mtrc    
+    
 def reg_custom_resolvers(version_base: str, config_path: str, config_name: str) -> Callable:
     ## Initialize the Global Hydra if not already
     with initialize_config_dir(version_base=version_base, config_dir=config_path):
@@ -50,7 +54,10 @@ def reg_custom_resolvers(version_base: str, config_path: str, config_name: str) 
 
     if not OmegaConf.has_resolver("dyn_vldt"):
         OmegaConf.register_new_resolver("dyn_vldt", dyn_vldt)
-    
+        
+    if not OmegaConf.has_resolver("dyn_vldtmtrc"):
+        OmegaConf.register_new_resolver("dyn_vldtmtrc", dyn_vldtmtrc)
+        
     def decorator(function: Callable) -> Callable:
         @wraps(function)
         def wrapper(*args: Any, **kwargs: Any) -> Any:

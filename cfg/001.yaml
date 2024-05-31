@@ -4,10 +4,11 @@
 ## order of defaults determines the order in which configs override each other
 defaults:
   - _self_
-  - dl: ucf_cliptsa_mil
-  - model: dflt
+  - data: ucf_i3drocng_mil #ucf_cliptsa_mil
+  - dataloader: low
+  - model: mir
   - vldt: dflt
-  - path: dflt
+  - path: slarch #  ion # 
   - xtra: dflt
   - hydra: dflt
   
@@ -18,17 +19,16 @@ name: 'mir'
 task_name: "001"
 tags: [""]
 
-dvc: ${dyn_dvc:1}
+dvc: ${dyn_dvc:-1}
 seed: 0
 deterministic: 0
 
 tmp: 0
-train: 1  
 test: 0  
+train: 1   
 
 
 load:
-  network_chkpt_path: ~
   strict_load: false
-  resume_state_path: ~
-
+  ckpt_path: ~
+  

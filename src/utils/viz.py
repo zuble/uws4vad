@@ -29,9 +29,9 @@ class Visualizer(object):
         
         log.info(f"vis envs: {self.vis.get_env_list()}")
         log.info(f"vis created for {env = }")
-        log.info(f'vis connection check {self.vis.check_connection()}')
+        log.debug(f'vis connection check {self.vis.check_connection()}')
         if del_all:
-            log.info(f"vis delleting all envs")
+            log.warning(f"vis delleting all envs")
             self.delete(all=True)
         if restart:
             log.info(f"vis restarted {env = }")

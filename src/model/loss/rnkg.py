@@ -5,27 +5,16 @@ import torch.nn.functional as F
 from src.utils.logger import get_log
 log = get_log(__name__)
 
-class BCE(nn.Module):
-    def __init__(self):
-        super(BCE, self).__init__()
-        self.crit = nn.BCELoss()
-        
-    def forward(self, scores, label):
-        #log.debug(f"BCE/{scores.shape} {scores.context} {label.shape} {label.context}")
-        l = self.crit(scores, label)
-        return {
-            'loss_bce': l
-            }
 
-
-class RankingLoss(nn.Module):
+class Loss(nn.Module):
     def __init__(self, _cfg):
-        super(RankingLoss, self).__init__()
-        
-        self.bs = _cfg.bs
-        self.seglen = _cfg.seglen
-        self.lambda1 = _cfg.lambda12[0] 
-        self.lambda2 = _cfg.lambda12[1] 
+        super(Loss, self).__init__()
+        log.info(_cfg)
+        ## when instanteate partial cant do _cfg.bs
+        self.bs = _cfg.get("bs")
+        self.seglen = _cfg.get("seglen")
+        self.lambda1 = _cfg.get("lambda12")[0]
+        self.lambda2 = _cfg["lambda12"][1] 
 
     ## MotionAware found it harmfull
     def smooth(self, arr):
@@ -81,6 +70,6 @@ class RankingLoss(nn.Module):
         log.debug(f'RNKG/{loss_mil=} {loss_mil.shape=}')
         
         return {
-            'loss_mil': loss_mil
+            'rnkg': loss_mil
         }
     

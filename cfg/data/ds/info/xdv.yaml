@@ -18,6 +18,14 @@ lbls_info:
   - '111.ANOM'
   - 'ALL'
 
+## 2405 ANOM / 2349 NORM
+train: ## 3954
+  normal: 2049
+  abnormal: 1905
+test: ## 800
+  normal: 300
+  abnormal: 500
+
   
 gt: ${hydra:runtime.cwd}/data/gt/xdv.txt
 

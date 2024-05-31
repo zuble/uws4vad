@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 root = pyrootutils.setup_root(
     search_from=__file__,
-    indicator=[".git", "pyproject.toml"],
+    indicator=[".git"],
     pythonpath=True,
     dotenv=True,
 )
@@ -29,25 +29,27 @@ def main(cfg: DictConfig) -> None:
     #log.debug(f"Working dir : {os.getcwd()}")
     #log.debug(f"Output dir  : {hydra.core.hydra_config.HydraConfig.get().runtime.output_dir}")
     #log.debug(f"Original dir : {hydra.utils.get_original_cwd()}")
-    
-    utils.xtra(cfg)
+
     #log.debug(utils.collect_random_states())
     
     if cfg.get("tmp"):
-        #from src import tmp
+        from src import tmp
+        utils.xtra(cfg)
         
-        pass
-    else:
-
-        if cfg.get("train"):
-            from src import train
-            utils.init_seed(cfg)
-            loader = train.trainer(cfg)
+        tmp.Debug(cfg)
+        
+        
+    elif cfg.get("test"):
+        from src import test
+        utils.init_seed(cfg, False)
+        utils.xtra(cfg)
+        test.test(cfg)
             
-        if cfg.get("test"):
-            from src import test
-            utils.init_seed(cfg, False)
-            test.test(cfg)
+    elif cfg.get("train"):
+        from src import train
+        utils.init_seed(cfg)
+        utils.xtra(cfg)
+        loader = train.trainer(cfg)
 
 
 if __name__ == "__main__":
@@ -57,6 +59,8 @@ if __name__ == "__main__":
     print(f"{torch.backends.cuda.matmul.allow_tf32=} {torch.backends.cudnn.allow_tf32=}")
     print(f"{torch.get_default_dtype()=}")
     #torch.set_default_dtype('float32')
+    os.environ.setdefault('HYDRA_FULL_ERROR', '1')
+    #torch.cuda.set_per_process_memory_fraction(0.7, device=f"cuda:0")
     
     print('\n\n',' '*11,'_'*33,'\n\n')
     main()

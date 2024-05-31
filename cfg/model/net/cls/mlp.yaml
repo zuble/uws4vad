@@ -1,0 +1,5 @@
+_target_: "src.model.net.layers.classifier.SMlp"
+rate: 
+  - 4
+  - 4
+do: 0.7

@@ -1,11 +1,9 @@
-import os
-import random
-from typing import Any, Dict, Callable
-
 import torch
+import random
 import numpy as np
 
-
+import os, os.path as osp
+from typing import Any, Dict, Callable
 
 from src.utils.logger import get_log
 log = get_log(__name__)
@@ -28,17 +26,21 @@ def init_seed(cfg, istrain=True):
         seed = cfg.get("seed")
         if seed == 0: ## failed to get from cfg
             seed = get_seed()
-    else: 
-        seed = parse_ptfn(cfg.TEST.LOADFROM)['seed']
-        if seed == 0: ## failed to get from filename
+    else:
+        if not cfg.load.get("ckpt_path"): raise Exception
+        seed = int(osp.basename(cfg.load.ckpt_path).split("--")[0])
+        if seed is None: ## failed to get from filename
+            log.warning(f'seed not in ckpt_path filename !!')
             seed = cfg.get("seed")
             if seed == 0:
                 seed = get_seed()
-                log.warning(f'seed not present in net filename, using a newly generated')
-            else: log.warning(f'seed not present in net filename, using cfg.seed')
+                log.warning(f'using a newly generated')
+            else: log.warning(f'using cfg.seed')
+        else: log.info(f'using ckpt_path filename seed :)')
 
     log.info(f'SEEDIT~WEEDIT {seed}')
     os.environ['PYTHONHASHSEED'] = str(seed)
+    cfg.seed = seed
     
     random.seed(seed)
     np.random.seed(seed)
@@ -59,14 +61,14 @@ def init_seed(cfg, istrain=True):
 def seed_sade(worker_id):
     ## https://pytorch.org/docs/stable/notes/randomness.html
     wi = torch.utils.data.get_worker_info()
-    log.warning(f'seed_sade {worker_id=} {wi}')
+    log.debug(f'seed_sade {worker_id=} {wi}')
     
     tmp = torch.initial_seed() % 2**32
     np.random.seed(tmp)
     random.seed(tmp)       
 
 def parse_ptfn(fn):
-    match = re.match(r'(.*)_(\d+)\.(net|dict)$', fn)
+    match = re.match(r'(.*)--(\d+)\.(state|pt)$', fn)
     if not match: 
         log.warming(f'no match for pattern name_seed.[net|dict]')
         d = {'bn':None,'seed':None,'mode':None}

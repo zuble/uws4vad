@@ -1,0 +1,16 @@
+#_target_: src.data.traindl.get_trainloader
+
+defaults:
+  - ds/info: ucf.yaml 
+  - ds/frgb: i3drocng.yaml
+  - ds/faud: null
+  - trnsfrm: mil_intrplt.yaml
+  #- _self_ ## last so anything here override previous
+
+id: ucf_i3drocng_mil
+
+#trnsfrm:
+#  train:
+#    crops2use: 0
+#  test:
+#    crops2use: 0

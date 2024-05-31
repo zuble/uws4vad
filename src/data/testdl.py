@@ -12,19 +12,20 @@ log = logger.get_log(__name__)
 #############################
 ## TEST
 def get_testloader(cfg):
-    from ._data import FeaturePathListFinder
+    from ._data import FeaturePathListFinder, debug_cfg_data
+    debug_cfg_data(cfg.data)
     
-    cfg_ds = cfg.dl.ds
-    cfg_loader = cfg.dl.loader.test
-    cfg_trnsfrm = cfg.dl.trnsfrm.test
+    cfg_ds = cfg.data.ds
+    cfg_loader = cfg.dataloader.test
+    cfg_trnsfrm = cfg.data.trnsfrm.test
     
     if cfg_ds.get('faud'):
-        audfplf = FeaturePathListFinder(cfg.dl, 'test', 'AUD')
+        audfplf = FeaturePathListFinder(cfg.data, 'test', 'aud')
         audfl = audfplf.get('ANOM') + audfplf.get('NORM')
         log.info(f'TEST: AUD ON {len(audfl)} feats')
     else: audfl = []
         
-    rgbfplf = FeaturePathListFinder(cfg.dl, 'test', 'RGB')
+    rgbfplf = FeaturePathListFinder(cfg.data, 'test', 'rgb')
     rgbfl = rgbfplf.get('ANOM') + rgbfplf.get('NORM')
     log.info(f'TEST: RGB {len(rgbfl)} feats')
 
@@ -56,7 +57,7 @@ def get_testloader(cfg):
                         prefetch_factor=cfg_loader.pftch_fctr,
                         pin_memory=cfg_loader.pinmem, 
                         persistent_workers=cfg_loader.prstwrk 
-                        ) 
+                        )
     return loader
 
 
@@ -85,7 +86,7 @@ class TestDS(Dataset):
     def get_label(self,idx):
         fn = osp.basename(self.rgbflst[int(idx)])
         label = self.lbl_mng.encod(fn)
-        log.debug(f'vid[{idx}] {label=} {type(label)} {fn}')
+        #log.debug(f'vid[{idx}] {label=} {type(label)} {fn}')
         return label , fn
     
     def get_feat(self,idx):
@@ -95,7 +96,7 @@ class TestDS(Dataset):
             for i in range(self.crops2use):
                 fp_crop = f"{self.rgbflst[int(idx)]}__{i}.npy"
                 feat_crop = np.load(fp_crop).astype(np.float32)  ## (timesteps, 1024)
-                log.debug(f'crop[{i}] {osp.basename(fp_crop)}: {feat_crop.shape} {feat_crop.dtype}')                
+                #log.debug(f'crop[{i}] {osp.basename(fp_crop)}: {feat_crop.shape} {feat_crop.dtype}')                
                 #features[i] = np.array(feat_crop)
                 rgb_feats.append(feat_crop)
             rgb_feats = np.array(rgb_feats)

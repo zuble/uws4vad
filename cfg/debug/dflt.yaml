@@ -12,34 +12,32 @@ hydra:
   verbose: False  ## sets hydra loggers to debug
 
 
+## header of each file call src.utils.logger.get_log 
+## this defined the src.___ 
+## if > 0: logger level is set 2 debug for all files within
+## e.g.: python main.py debug=dflt debug.data=1 
+data: 0 ## if > 1 : runs the dataloader twice
+vldt: 0 ## if > 1 : runs a validation fwd
+train: 0 ##
+model: 0
+full: 0 ## if > 1 : all the above , therefore all loggers set to debug
+
+## put the debug simply by for loop over if cfg.debug.model[i] == module_name
+#model:
+#  - "src.model.net"
+
+dataloader:
+  train:
+    #in2mem: False
+    nworkers: 0
+    pinmem: False
+  test:
+    #in2mem: False
+    nworkers: 0
+    pinmem: False
+
 #trainer:
 #  max_epochs: 1
 #  accelerator: cpu # debuggers don't like gpus
 #  devices: 1 # debuggers don't like multiprocessing
 #  detect_anomaly: true # raise exception if NaN or +/-inf is detected in any tensor
-
-
-## header of each file call src.utils.logger.get_log 
-## if == 1: logger level is set 2 debug if key in __name__ 
-## e.g.: python main.py debug=dflt debug.data=1 
-data: 0 ## if > 1 : runs the dataloader twice
-vldt: 0 ## if > 1 : runs a validation fwd
-train: 0 ##
-net: 0
-loss: 0
-full: 0 ## if > 1 : all the above , therefore all loggers set to debug
-
-
-dl:
-  loader:
-    # debuggers don't like multiprocessing
-    # disable gpu memory pin
-    train:
-      #in2mem: False
-      nworkers: 0
-      pinmem: False
-    test:
-      #in2mem: False
-      nworkers: 0
-      pinmem: False
-

@@ -1,0 +1,8 @@
+## https://github.com/nwpu-zxr/VadCLIP
+id: VADCLIP
+ds: 
+  - ucf
+  - xdv
+fstep: 16  ## midle frame from 16 frame snippets
+dfeat: 512
+ncrops: 10

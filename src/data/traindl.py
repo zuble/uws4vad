@@ -13,13 +13,13 @@ log = logger.get_log(__name__)
 NPRNG = None
 TCRNG = None
 def get_rng(seed):
+    global NPRNG, TCRNG
     NPRNG = np.random.default_rng(seed)
     ## https://pytorch.org/docs/1.8.1/generated/torch.Generator.html#torch.Generator
     TCRNG = torch.Generator().manual_seed(seed)
 
 
-#############################
-## TRAIN
+
 class Zuader:
     ## encapsulates the dataloader independtly of elements yielded
     def __init__(self, mil, *loaders):
@@ -35,24 +35,28 @@ class Zuader:
 
 
 def get_trainloader(cfg):
-    from ._data import FeaturePathListFinder
+    from ._data import FeaturePathListFinder, debug_cfg_data
+    debug_cfg_data(cfg.data)
+    
     log.info(f'TRAIN: getting trainloader')
 
-    cfg_ds = cfg.dl.ds
-    cfg_loader = cfg.dl.loader.train
-    cfg_trnsfrm = cfg.dl.trnsfrm.train
+    cfg_ds = cfg.data.ds
+    cfg_loader = cfg.dataloader.train
+    cfg_trnsfrm = cfg.data.trnsfrm.train
     
     get_rng(cfg.seed)
     
+    
+    aaudfl, naudfl = [], []
     if cfg_ds.get('faud'):
-        audfplf = FeaturePathListFinder(cfg.dl, 'train', 'AUD')
+        audfplf = FeaturePathListFinder(cfg.data, 'train', 'aud')
         aaudfl, naudfl = audfplf.get('ANOM'),  audfplf.get('NORM')
         log.info(f'TRAIN: AUD on {len(naudfl)} normal, {len(aaudfl)} abnormal')    
-    else: aaudfl, naudfl = [], []
     
-    rgbfplf = FeaturePathListFinder(cfg.dl, 'train', 'RGB')
+    rgbfplf = FeaturePathListFinder(cfg.data, 'train', 'rgb')
     argbfl, nrgbfl = rgbfplf.get('ANOM'), rgbfplf.get('NORM')
     log.info(f'TRAIN: RGB {len(nrgbfl)} normal, {len(argbfl)} abnormal') 
+    
     
     if cfg_trnsfrm.mil:
         
@@ -60,7 +64,7 @@ def get_trainloader(cfg):
         ads = TrainDS(cfg_loader, cfg_ds, cfg_trnsfrm, argbfl, aaudfl, 'ABNORMAL')
         nds = TrainDS(cfg_loader, cfg_ds, cfg_trnsfrm, nrgbfl, naudfl, 'NORMAL')
         
-        arsampler, nrsampler, cfg.dl.loader.train.itersepo = get_milRS(cfg_loader.bs, ads, nds)
+        arsampler, nrsampler, cfg.dataloader.train.itersepo = get_milRS(cfg_loader.bs, ads, nds)
         ald = DataLoader(ads, 
                         batch_sampler=BatchSampler(arsampler, batch_size=cfg_loader.bs//2 , drop_last=cfg_loader.droplast),
                         num_workers=cfg_loader.nworkers,
@@ -82,10 +86,9 @@ def get_trainloader(cfg):
     else:
         rgbfl = argbfl + nrgbfl
         audfl = aaudfl + naudfl
-        log.info(f'TRAIN: RGB {len(rgbfl)} feats')
         
         ds = TrainDS(cfg_loader, cfg_ds, cfg_trnsfrm, rgbfl, audfl)  
-        rsampler, cfg.dl.loader.train.itersepo = get_seqRS(cfg_loader.bs, ds)
+        rsampler, cfg.dataloader.train.itersepo = get_seqRS(cfg_loader.bs, ds)
         ld0 = DataLoader( ds,
                             batch_sampler= BatchSampler(rsampler , cfg_loader.bs , cfg_loader.droplast),
                             num_workers=cfg_loader.nworkers,
@@ -109,7 +112,7 @@ def get_milRS(bs, ads, nds):
         
     maxlends = max(len(ads),len(nds))
     itersepo = maxlends // (bs // 2) #math.ceil(maxlends / cfg.TRAIN.BS)
-    log.debug(f'TRAIN: {maxlends=} {bs=}  -> itersepo not set , set in future trainer')
+    log.debug(f'TRAIN: {maxlends=} {bs=}')
     
     #gen = torch.Generator().manual_seed(cfg.SEED) #log.error(f"{gen.initial_seed()}")
     
@@ -123,8 +126,7 @@ def get_milRS(bs, ads, nds):
 
 def get_seqRS(bs, ds):
     itersepo = len(ds) // bs
-    #cfg.TRAIN.EPOCHBATCHS = itersepo
-    log.debug(f'TRAIN: {len(ds)=} {bs=}  -> itersepo not set , set in future trainer')
+    log.debug(f'TRAIN: {len(ds)=} {bs=}')
     
     #gen = torch.Generator().manual_seed(cfg.seed)
     return RandomSampler(ds, generator=TCRNG), itersepo
@@ -132,7 +134,6 @@ def get_seqRS(bs, ds):
 
 class TrainDS(Dataset):
     def __init__(self, cfg_loader, cfg_ds, cfg_trnsfrm, rgbflst, audflst, xtra=''):
-        self.xtra = xtra
         self.norm_lbl = cfg_ds.info.lbls[0]
         
         self.rgbflst = rgbflst
@@ -148,10 +149,10 @@ class TrainDS(Dataset):
         #self.rgbl2n = cfg_trnsfrm.rgbl2n
         #self.audl2n = cfg_trnsfrm.audl2n
         
-        self.nfeats = cfg_ds.frgb.nfeats
-        if audflst: self.peakboo_aud(cfg_ds.faud.nfeats)
+        self.dfeat = cfg_ds.frgb.dfeat
+        if audflst: self.peakboo_aud(cfg_ds.faud.dfeat)
         
-        log.info(f'TRAIN {xtra}: ({self.rgb_ncrops} ncrops, {self.len} maxseqlen/nsegments, {self.nfeats} feats')    
+        log.info(f'TRAIN {xtra}: ({self.rgb_ncrops} ncrops, {self.len} maxseqlen/nsegments, {self.dfeat} feats')    
         log.info(f'TRAIN {xtra}: cropasvideo is {self.cropasvideo}')
 
         self.get_feat = {
@@ -162,33 +163,33 @@ class TrainDS(Dataset):
         if cfg_loader.in2mem: 
             ## rnd state will b de same troughout epo iters
             ## or load full arrays int memory
-            self.loadin2mem( cfg_loader.nworkers )
+            self.loadin2mem( cfg_loader.nworkers, xtra )
         else: self.in2mem = 0
             
-    def peakboo_aud(self, nfeats):
+    def peakboo_aud(self, dfeat):
         ## pekaboo AUD features
         if not self.cropasvideo:
             assert len(self.rgbflst) == len(self.audflst)
         peakboo2 = f"{self.audflst[-1]}.npy"
         tojo2 = np.load(peakboo2)    
-        assert nfeats == tojo2.shape[-1]
-        self.nfeats += nfeats
+        assert dfeat == tojo2.shape[-1]
+        self.dfeat += dfeat
         log.debug(f'TRAIN: AUD {osp.basename(peakboo2)} {np.shape(tojo2)}')    
     
     
     def load_data(self,idx): return self.get_feat(idx), self.get_label(idx)
     
-    def loadin2mem(self, nworkers):
+    def loadin2mem(self, nworkers, xtra):
         self.in2mem = 1
-        log.info(f'LOADING TRAIN {self.xtra} DS IN2 MEM'); t=time.time()
+        log.info(f'LOADING TRAIN {xtra} DS IN2 MEM'); t=time.time()
         with Pool(processes=nworkers) as pool:
             self.data = pool.map(self.load_data, range(len(self.rgbflst)))  
-        log.info(f'COMPLETED TRAIN {self.xtra} LOAD IN {hh_mm_ss(time.time()-t)}')
+        log.info(f'COMPLETED TRAIN {xtra} LOAD IN {hh_mm_ss(time.time()-t)}')
         
     
     def l2normfx(self, x, a=-1): return x / np.linalg.norm(x, ord=2, axis=a, keepdims=True)
     
-    
+
     def get_label(self,idx):
         #if 'label_A' in self.rgbflst[int(idx)]: return int(0)
         #else: return int(1)
@@ -196,9 +197,9 @@ class TrainDS(Dataset):
         else: return np.float32(1.0)
     
         
-    ## (ncrops, len, nfeats)
+    ## (ncrops, len, dfeat)
     def get_feat_wcrop(self,idx):
-        feats = np.zeros((self.rgb_ncrops, self.len, self.nfeats), dtype=np.float32)
+        feats = np.zeros((self.rgb_ncrops, self.len, self.dfeat), dtype=np.float32)
         
         for i in range(self.rgb_ncrops):
             
@@ -207,7 +208,7 @@ class TrainDS(Dataset):
             rgb_feat_crop = np.load(rgb_fp_crop).astype(np.float32)
             
             if not i: ## crop 0
-                idxs = self.trnsfrm.get_idxs(len(rgb_feat_crop))
+                idxs_trnsf = self.trnsfrm.get_idxs(len(rgb_feat_crop))
             
             #if self.rgbl2n: rgb_feat_crop = self.l2normfx(rgb_feat_crop)
             #if idx == 0: view_feat(feat_crop.asnumpy())
@@ -237,19 +238,19 @@ class TrainDS(Dataset):
             ## if aud enabled, as its cat over feat dim
             #if self.l2n == 1: feat_crop = self.l2normfx(feat_crop)
             #log.debug(f'vid[{idx}]: PRE-SEQ {feat_crop.shape}')
-            feats[i] = self.trnsfrm.fx(feat_crop, idxs['idxs']) 
+            feats[i] = self.trnsfrm.fx(feat_crop, idxs_trnsf['idxs']) 
             #log.debug(f'vid[{idx}]: PST-SEQ {feats[i].shape}')
             #if self.l2n == 2: feats[i] = self.l2normfx(feats[i],a=2)
 
-            if idxs['rnd_glob'] is not None:
+            if idxs_trnsf['rnd_glob'] is not None:
                 ## rnd ovre same idxs per crop
-                feats[i] = feats[i, idxs['rnd_glob']]
+                feats[i] = feats[i, idxs_trnsf['rnd_glob']]
             
         log.debug(f'vid[{idx}] {feats.shape} {feats.dtype}')
         return feats
     
     
-    ## (len, nfeats)
+    ## (len, dfeat)
     def get_feat_wocrop(self,idx):
         rgb_fp = f"{self.rgbflst[int(idx)]}.npy"
         rgb_feats = np.load(rgb_fp).astype(np.float32)
@@ -257,7 +258,7 @@ class TrainDS(Dataset):
         #if self.rgbl2n: rgb_feats = self.l2normfx(rgb_feats)
         log.debug(f"vid[{idx}][RGB] {rgb_feats.shape} {rgb_feats.dtype}  {osp.basename(rgb_fp)}")
 
-        fprep_idxs = self.trnsfrm.get_idxs(len(rgb_feats))
+        idxs_trnsf = self.trnsfrm.get_idxs(len(rgb_feats))
         
         if self.audflst:
             if self.cropasvideo: aud_idx = int(idx)//self.rgb_ncrops
@@ -280,7 +281,7 @@ class TrainDS(Dataset):
                 log.debug(f'vid[{idx}][AUD] seg in2 {aud_feats.shape}')
             
             #log.debug(f'vid[{idx}]: PRE-SEQ {aud_feats.shape}')
-            aud_feats = self.trnsfrm.fx(aud_feats, fprep_idxs['idxs']) 
+            aud_feats = self.trnsfrm.fx(aud_feats, idxs_trnsf['idxs']) 
             #log.debug(f'vid[{idx}]: PST-SEQ {aud_feats.shape}')
         
             feats = np.hstack((rgb_feats, aud_feats))
@@ -290,11 +291,11 @@ class TrainDS(Dataset):
 
         
         #log.debug(f'vid[{idx}]: PRE-SEQ {rgb_feats.shape}')
-        feats = self.trnsfrm.fx(feats, fprep_idxs['idxs']) 
+        feats = self.trnsfrm.fx(feats, idxs_trnsf['idxs']) 
         #log.debug(f'vid[{idx}]: PST-SEQ {rgb_feats.shape}')
         
-        if fprep_idxs['rnd_glob'] is not None:
-            feats = feats[fprep_idxs['rnd_glob']]
+        if idxs_trnsf['rnd_glob'] is not None:
+            feats = feats[idxs_trnsf['rnd_glob']]
         
         log.debug(f'vid[{idx}] {feats.shape} {feats.dtype}')
         return feats
@@ -472,14 +473,19 @@ class TrainFrmter():
         else: assert x.ndim == 3 ## no crops
         return x 
 
+    ## a prior function common to both can occurs
+    ## to deal with multiommdality
+    ## and have each modal in a seprate loader
+
     def milfrmter(self, tdata, ldata, trn_inf):
         (nfeat, nlabel), (afeat, alabel) = tdata
+        
         
         ## simply know that bs/2 *0 , bs/2 *1 ?
         ## or add no mather what ?
         ldata["label"] = torch.cat((nlabel, alabel), 0).to(trn_inf['dvc']) 
         
-        cfeat = torch.cat((nfeat, afeat), 0) ## (2*bs, (ncrops), seglen , nfeats)
+        cfeat = torch.cat((nfeat, afeat), 0) ## (2*bs, (ncrops), seglen , dfeat)
         
         log.debug(f"E[{trn_inf['epo']+1}]B[{trn_inf['bat']+1}] nfeat: {nlabel[0]} {nfeat.dtype} {nfeat.shape} {nfeat.device} , afeat: {alabel[0]} {afeat.dtype} {afeat.shape} {afeat.device}")
         log.debug(f"E[{trn_inf['epo']+1}]B[{trn_inf['bat']+1}] cfeat: {cfeat.shape} {cfeat.dtype} {cfeat.device}")
@@ -493,7 +499,7 @@ class TrainFrmter():
         
         ## better add no mater what 
         #if "seqlen" in ldata: ## for CLAS loss fx
-        if cfeat.ndim == 4: ##  b4 rshp in2 (bs*ncrops,maxseqlen,nfeats), as its equals to all ncrops views 
+        if cfeat.ndim == 4: ##  b4 rshp in2 (bs*ncrops,maxseqlen,dfeat), as its equals to all ncrops views 
             seqlen = np.sum(np.max(np.abs(cfeat[:,0,:,:]), axis=2) > 0, axis=1)
         else: seqlen = np.sum(np.max(np.abs(cfeat), axis=2) > 0, axis=1)
         ldata["seqlen"] = seqlen.to(trn_inf['dvc'])

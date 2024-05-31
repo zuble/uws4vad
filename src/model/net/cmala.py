@@ -117,9 +117,9 @@ class CMA_LA(nn.Module):
         return new_x
 
 
-class Model(nn.Module):
+class Network(nn.Module):
     def __init__(self, args):
-        super(Model, self).__init__()
+        super(Network, self).__init__()
 
         n_features = args.feature_size
         n_class = args.num_classes

@@ -1,19 +1,20 @@
 #_target_: src.data.traindl.get_trainloader
 
 defaults:
-  - ds/info: ucf.yaml 
+  - ds/info: xdv.yaml 
   - ds/frgb: cliptsa.yaml
   - ds/faud: null
-  - loader: dflt.yaml
-  - trnsfrm: ucf.yaml
+  #- loader: dflt.yaml
+  - trnsfrm: seq.yaml
   - _self_ ## last so anything here override previous
 
 
+id: xdv_cliptsa
 
-loader:
-  train:
-    in2mem: true
-    bs: 64
+#loader:
+#  train:
+#    in2mem: true
+#    bs: 64
 
 trnsfrm:
   train:
