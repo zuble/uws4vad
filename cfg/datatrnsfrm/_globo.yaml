@@ -5,7 +5,10 @@ train:
   ## 0 : feats in use must have no crops whatsoever, so fn are in format 'fn.npy'  
   ## 1 : feats in use have crop augm and only center crop is used, eg. 'fn__0.npy'
   ## 2 : feats in use have crop augm and center + topright (or wtv) eg. 'fn__0.npy' && 'fn__1.npy' ...
-  crops2use: ${data.ds.frgb.ncrops}
+  ## if -1: crops2use set to maximum
+  ## if data has no crops , aut0set to 0
+  ## using 1 bcs my pc burns
+  crops2use: ${dyn_crops2use:${data.frgb.ncrops},train,1}
   cropasvideo: False ## each crop with be treated as a video it self
   ## disabled for now
   #rgbl2n: 0 ## if 1 l2norm apllied right after load
@@ -17,8 +20,7 @@ train:
   ## rnd -> picks len idx rnd keeping their temporal order 
   sel: ??? 
   len: ???
-  ## avg adj sel snippet feats ;; if on defaults sel->uni 
-  intplt: ???  
+  intplt: ???  ## avg adj sel snippet feats ;; if on defaults sel->uni 
   rnd: 
     ## jit -> jitter selection of adjacent idxs when sel is != seq
     ## glob -> rnd whole idxs of feat
@@ -26,4 +28,4 @@ train:
     - null
 
 test:
-  crops2use: 1
+  crops2use: ${dyn_crops2use:${data.frgb.ncrops},test,1}

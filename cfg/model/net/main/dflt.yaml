@@ -1,2 +1,7 @@
-_target_: "src.model.net.${model.net.id}.Network"
-_cfg: ~ 
+_target_: ${dyn_mainet:${model.net.id},${model.net.vrs}} 
+_cfg: 
+
+  ## defaults this even if network dont have this option
+  ## serves as a indicator in Validate.fwd to either save the attws or not
+  ## then on each network with such, use dyn res (example in attnmil)
+  ret_att: False

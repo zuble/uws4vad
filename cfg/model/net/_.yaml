@@ -1,0 +1,9 @@
+#defaults:
+#  - main: ~
+#  - cls: ~
+#  - pstfwd: ~
+
+id: ???
+vrs: ""
+wght_init: xavier0 
+

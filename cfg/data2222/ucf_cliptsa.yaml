@@ -1,0 +1,9 @@
+#_target_: src.data.traindl.get_trainloader
+
+defaults:
+  - ds/info: ucf.yaml 
+  - ds/frgb: cliptsa.yaml
+  - ds/faud: null
+  #- _self_ 
+
+id: ucf_cliptsa

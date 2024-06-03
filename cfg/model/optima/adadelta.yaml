@@ -1,0 +1,7 @@
+#_target_: torch.optim.Adadelta
+#rho: 0.9
+#eps: 1e-6
+#lr: 1.0
+#weight_decay: 0.0
+
+## broke in curr env

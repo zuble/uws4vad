@@ -1,0 +1,14 @@
+# @package _global_
+
+
+defaults:
+  - dflt.yaml
+
+debug:
+  path: 
+    - "src.train"
+    #- "src.data.traindl"
+
+model:
+  epoch: 1
+

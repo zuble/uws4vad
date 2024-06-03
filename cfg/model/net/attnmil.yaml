@@ -1,0 +1,27 @@
+defaults:
+  - main: dflt
+  - cls: ~
+  - pstfwd: dflt
+
+id: attnmil
+vrs: VCls ## modulate in exp
+wght_init: xavier0 
+
+
+main:
+  _cfg:
+    att_dim: 64
+    r: 3
+    do: 0.3
+    cls_dim: 32
+
+    spat: False  ## only SAVCls 
+    
+    ## only SAVCls_lstm 
+    lstm_dim: 256  
+    lstm_bd: false 
+    
+
+    ## if in test and watching attws -> set to True
+    ## ndata has "attws" key populated
+    ret_att: ${dyn_retatt:${vldt.test.watch.frmt},${test}}

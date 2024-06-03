@@ -1,0 +1,19 @@
+defaults:
+  - _globo.yaml
+
+train:
+  mil: 1
+  #crops2use:
+  cropasvideo: False 
+
+  sel: uni 
+  len: 32
+  intplt: 1  
+  rnd: 
+    ## jit -> jitter selection of adjacent idxs when sel is != seq
+    ## glob -> rnd whole idxs of feat
+    ## each crop will have the same rnd
+    - null
+
+#test:
+#  crops2use: 1

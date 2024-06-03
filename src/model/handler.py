@@ -28,21 +28,25 @@ def wght_init(m):
             m.bias.data.fill_(0)
 
 def build_net(cfg):
-    
     ## ARCH
     #log.info(cfg.model.net.arch)
-    dfeat = cfg.data.ds.frgb.dfeat + (cfg.data.ds.faud.dfeat if cfg.data.ds.get("faud") else 0)
+    ## in Network.innit sum or ..
+    dfeat = [ cfg.data.frgb.dfeat, (cfg.data.faud.dfeat if cfg.data.get("faud") else 0)]
+    log.debug(f"{dfeat}")
     
+    ## if theres cls, instaneate it inside Network.innit
+    ## otherwise import from layers.classifier or construct
     if cfg.model.net.get("cls"): 
         net = instantiate(cfg.model.net.main, dfeat=dfeat, _cls=cfg.model.net.cls, _recursive_=False).to(cfg.dvc)
     else:
         net = instantiate(cfg.model.net.main, dfeat=dfeat).to(cfg.dvc)
     
-    if cfg.get("debug") and cfg.get("debug").get("model") > 1:
-        nc = cfg.data.trnsfrm.train.crops2use
+    if cfg.model.dryfwd:
+        log.debug("DBG DRY FWD")
+        nc = 1 if cfg.datatrnsfrm.train.crops2use == 0 else cfg.datatrnsfrm.train.crops2use 
         bs = cfg.dataloader.train.bs
-        t = cfg.data.trnsfrm.train.len
-        feat = torch.randn( (nc*bs, t, dfeat)).view( nc*bs, t, dfeat)
+        t = cfg.datatrnsfrm.train.len
+        feat = torch.randn( (nc*bs, t, sum(dfeat) ))
         _ = net(feat)
     
     ## PSTFWD   
@@ -59,19 +63,27 @@ def build_net(cfg):
         #for name, param in net.named_parameters():
         #    log.info(f"Layer: {name} | Size: {param.size()} | Values : {param[:2]} \n")
         log.info(netpstfwd)
-    
+        
     return net, netpstfwd
 
 
 class ModelHandler:
     def __init__(self, cfg):
         self.cfg = cfg
+        
+        self.id = f"{cfg.model.net.id}" ## if using dyn_name -> cfg.name can be used
+        if cfg.model.net.vrs: self.id = self.id+f"_{cfg.model.net.vrs}"
+        ## used later on test load to pre check if atual arch match state
+        ## can fall into cases where eg cls used is diff !!??
+        ## construct a + reliable id
+        
         self.ckpt_path = cfg.load.ckpt_path
+        ## only for train
         self.high_info = {
             'lbl2wtc': cfg.vldt.train.record_lbl,
             'mtrc2wtch': cfg.vldt.train.record_mtrc,
-            'rec_val': 0.00
-            }
+            'rec_val': 0.6500
+        }
         self.high_state = {
             "net": None,
             "optima": None,
@@ -95,54 +107,77 @@ class ModelHandler:
                             
     def record(self, mtrc_info, net, optima, trn_inf):
         
-        tmp = mtrc_info[ self.high_info['lbl2wtc'] ][ self.high_info['mtrc2wtch'] ][0]
-        if  tmp > self.high_info['rec_val']:
+        ## make modular by acpeting both subset and full metrcs
+        ## and ssave high sate by pais
+        ## sure there are some fx for this...
+        tmp_res = mtrc_info[ self.high_info['lbl2wtc'] ][ self.high_info['mtrc2wtch'] ][0]
+        if  tmp_res > self.high_info['rec_val']:
             ttic = time.time()
-            
+            ## deepcopy to avoid mess with runtime
             nett = copy.deepcopy(net).cpu()
             optimaa = copy.deepcopy(optima)
             self.optima_to(optimaa) 
         
             self.high_state = {
+                "id": self.id,
                 "net": nett.state_dict(),
                 "optima": optimaa.state_dict(),
                 "step": trn_inf['step'],
                 "epo": trn_inf['epo']
             }
-            log.info(f"saved new high {self.high_info['rec_val']} -> {tmp}  @{hh_mm_ss( time.time() - ttic)}")
-            self.high_info['rec_val'] = tmp
-        
+            log.info(f"saved new high {self.high_info['rec_val']} -> {tmp_res}  @{hh_mm_ss( time.time() - ttic)}")
+            self.high_info['rec_val'] = tmp_res
+        ## this can be used by ssetting an additional low_info
+        ## that saves independent of hitting the rec_val when is eg 0.7500
+        #else: ## still keep last vldt metrics results
+        #    self.last_state = {
+        #        "id": self.id,
+        #        "net": None,
+        #        "optima": None,
+        #        "step": trn_inf['step'],
+        #        "epo": trn_inf['epo'],
+        #        "tmp_res": tmp_res
+        #    }
     def save_state(self, net, optima, trn_inf):
-        tmp = f"{self.cfg.seed}--{trn_inf['epo']}_{trn_inf['step']}"
-        save_path = osp.join(self.cfg.path.out_dir, tmp)
         
         if self.high_state['net'] is not None:
-            mstate = self.high_state
-            log.info("saving from high state")
-        else:
-            ## fine since endotrain
-            net.to("cpu")
-            self.optima_to(optima)
+            tmp_fn = f"{self.cfg.seed}--{self.high_state['epo']}_{self.high_state['step']}"
+            save_path = osp.join(self.cfg.path.out_dir, tmp_fn)
             
-            mstate = {
-                "net": net.state_dict(), ## net state (needs same net def) 
-                "optima": optima.state_dict(),
-                "step": trn_inf['step'],
-                "epo": trn_inf['epo'],
-            }
+            mstate = self.high_state
+            log.info(f"saving from high state {self.high_info['rec_val']} {self.high_info['mtrc2wtch']} as : {tmp_fn}  ")
+            
+        else: raise NotImplementedError
+        #    tmp_fn = f"{self.cfg.seed}--{trn_inf['epo']}_{trn_inf['step']}"
+        #    save_path = osp.join(self.cfg.path.out_dir, tmp_fn)
+        #    
+        #    log.info(f"saving from last state {self.last_state['rec_val']} {self.high_info['mtrc2wtch']} as : {tmp_fn}  ")
+        #    
+        #    ## fine since endotrain
+        #    net.to("cpu")
+        #    self.optima_to(optima)
+        #    
+        #    mstate = {
+        #        "id": self.id,
+        #        "net": net.state_dict(), ## net state (needs same net def) 
+        #        "optima": optima.state_dict(),
+        #        "step": trn_inf['step'],
+        #        "epo": trn_inf['epo'],
+        #    }
             
         torch.save(mstate, f"{save_path}.state.pt")
         torch.save(net, f"{save_path}.pt")
-        log.info(f"mstate save @ {osp.basename(save_path)}.state/pt")
+        log.info(f"mstate save @ {save_path}.state.pt/.pt")
     
     def load_net_state(self, net_arch, net_state):
+        log.warning(net_state)
         net_state_clean = OrderedDict()  # remove unnecessary 'module.'
         for k, v in net_state.items():
             if k.startswith("module."):
                 net_state_clean[k[7:]] = v
             else:
                 net_state_clean[k] = v
-
+        log.warning(net_state_clean)
         return net_arch.load_state_dict(net_state_clean, strict=self.cfg.load.strict_load)
     
     ########
@@ -150,7 +185,7 @@ class ModelHandler:
     def load_train_state(self, trn_inf, net_arch, optima):
         if net_arch is None or optima is None: 
             raise NotImplementedError
-        assert self.ckpt_path.slipt(".")[-1] == "state"
+        assert self.ckpt_path.slipt(".")[-2] == "state" ## _.state.pt
         
         mstate = torch.load(
             self.ckpt_path,
@@ -169,17 +204,20 @@ class ModelHandler:
     ## TEST
     def load_net(self, net_arch=None):
         mstate = torch.load(
-            self.cfg.load.ckpt_path,
+            self.ckpt_path,
             map_location=torch.device(self.cfg.dvc),
         )
         
-        if self.ckpt_path.slipt(".")[-1] == "pt":
-            log.warning("loading a full net struct from .pt")
+        if self.ckpt_path.split(".")[-2] != "state":
+            log.warning(f"loading a full net struct from {ckpt_path}.pt")
             net = mstate
         
         elif net_arch is not None: 
+            ## net_arch need to match struct of ones in mstate
+            ## assert mstate['id'] == self.id
+            log.info(f"loading state id @ epo {mstate['epo']}  step {mstate['step']} :: {osp.basename(self.ckpt_path)}")
             net = self.load_net_state(net_arch, mstate["net"])
-        
+
         else: raise NotImplementedError
         
         return net

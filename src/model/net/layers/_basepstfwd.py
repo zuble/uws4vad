@@ -59,6 +59,33 @@ class BasePstFwd:
                     arr = arr[:, 0, :, :]
         return arr
 
+    def split_per_crop(self, feats, t, f, labels=None):
+        
+        ## rtfm per now
+        if self.ncrops > 1:
+            
+            abnr_feats = feats[self.bs//2*self.ncrops:] 
+            abnr_feats = abnr_feats.view(self.bs//2, self.ncrops, t, f)
+            abnr_feats = abnr_feats.permute(1, 0, 2, 3) ## (ncrops, bs/2, t, f)
+            
+            norm_feats = feats[0:self.bs//2*self.ncrops]
+            norm_feats = norm_feats.view(self.bs//2, self.ncrops, t, f)
+            norm_feats = norm_feats.permute(1, 0, 2, 3) ## (ncrops, bs/2, t, f)
+            
+        else:
+            
+            abnr_feats = feats[self.bs//2:] 
+            abnr_feats = abnr_feats.view(self.bs//2, 1, t, f)
+            abnr_feats = abnr_feats.permute(1, 0, 2, 3) ## (ncrops, bs/2, t, f)
+            
+            norm_feats = feats[0:self.bs//2]
+            norm_feats = norm_feats.view(self.bs//2, 1, t, f)
+            norm_feats = norm_feats.permute(1, 0, 2, 3) ## (ncrops, bs/2, t, f)
+            
+            return abnr_feats, norm_feats
+    
+    
+    
     def merge(self, *dicts):
         res = {}
         for d in dicts: res.update(d)
@@ -80,9 +107,7 @@ class NetPstFwdEx(BasePstFwd):
         L1 = lossfx[''](ndata[''])
         
         ## later indiv metered and summed to .backward 
-        return L0.update(
-            L1
-            ) 
+        return super().merge(L0, L1)
 
     def infer(self, ndata):
         ## output is excepted to be segment level 

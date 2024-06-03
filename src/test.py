@@ -17,21 +17,21 @@ matplotlib.use('TkAgg')
 
 from src.model import ModelHandler, build_net
 from src.vldt import Validate, Metrics
-from src.utils import hh_mm_ss, get_log, Visualizer
+from src.utils import hh_mm_ss, get_log, Visualizer, save_pkl, load_pkl
 log = get_log(__name__)
 
 
 def test(cfg):
-    
     cfg_vldt = cfg.vldt.test
-    log.error(cfg_vldt)
     
     ## Monitor
+    ## create a lambda var to return when in debug
     vis = Visualizer(f'{cfg.name}/{cfg.task_name}', restart=False, del_all=False)
     #vis.delete(f'{cfg.name}/{cfg.task_name}')
     
+    
     ## shortcut to validate directly from a watch_info.pkl w/o Validate
-    if cfg_vldt.frompkl:
+    if osp.exists(cfg_vldt.frompkl):
         tic = time.time()
         log.info(f'$$$$ Validating from pkl')
         raise NotImplementedError
@@ -42,7 +42,7 @@ def test(cfg):
         return
     
     ## shortcut to watch directly from a watch_info.pkl w/o Validate
-    if cfg_vldt.watch.frompkl:
+    if osp.exists(cfg_vldt.watch.frompkl):
         tic = time.time()
         log.info(f'$$$$ Watching from pkl')
         raise NotImplementedError
@@ -54,32 +54,37 @@ def test(cfg):
     tic = time.time()
     log.info(f'$$$$ TEST starting')
 
-    ### !!
-    ## make standart key troughout out of net with att
-    if 'attws' in cfg.test.watch.frmt:
-        raise NotImplementedError
-        ## asserts that cfg is ready to watch attention_weights
-        if 'attnomil' not in cfg.model.net.id:
-            cfg_vldt.watch.frmt.remove('attws')
-            log.warning(f'cfg_vldt.watch.ATTWS clear as the net in use ({cfg.NET.NAME}) isnt attnomil ')
-        else: cfg.model.net.main._cfg.ret_att = True
+    ## MODEL
+    net, netpstfwd = build_net(cfg)
 
-    watching = [] #cfg_vldt.watch.frmt
-    V = Validate(cfg, cfg_vldt, cfg.data.ds.frgb, vis, watching)
-    if cfg.get("debug") and cfg.get("debug").get("vldt") > 1: vldt.start(net) #;return
+    ##
+    if 'attws' in cfg_vldt.watch.frmt[:]:
+        ## from dflt all net.main._cfg has ret_att set to false
+        ## as long as the dyn_retatt is in use, if attws in frmt -> ret_att set to true
+        ## even if the net doesnt has that option is handled in Validate
+        assert cfg.model.net.main._cfg.ret_att == True, log.error(f"{cfg.model.net.id} w ret_att False ???")
+        #raise NotImplementedError
+        log.warning(f'watch attws from {cfg.model.net.id}')
+        
+    watching = cfg_vldt.watch.frmt
+    VLDT = Validate(cfg, cfg_vldt, cfg.data.ds.frgb, vis, watching)
+    if cfg.vldt.dryrun:
+        log.info("DBG DRY VLDT RUN")
+        VLDT.start(net, netpstfwd); VLDT.reset() #;return
 
-    ## create network after Validate is constructed
-    ## as testloader is created there
-    ## so cfg features dim information is filled
-    ## as it may be need to net class in use
-    #net = get_ldnet(cfg, dvc)
-    #net(np.random.uniform(size=(32,2048),ctx=dvc[0]))
+
+    ## LOAD
+    MH = ModelHandler(cfg)
+    if cfg.load.get("ckpt_path"): 
+        net = MH.load_net(net_arch=net)
+    else: raise Exception("provide load.ckpt_path")
     
-    #vldt_info, watch_info, _ = V.start(net) ## class, dict, _
+    vldt_info, watch_info, _ = VLDT.start(net, netpstfwd) ## class, dict, _
 
+    
     #if cfg_vldt.savepkl: save_pkl(cfg.EXPERIMENTPATH, vldt_info, 'vldt')
     #if cfg_vldt.watch.savepkl: save_pkl(cfg.EXPERIMENTPATH, watch_info, 'watch')
-    #if watching: Watch(cfg, watch_info, vis)
+    if watching: Watch(cfg, watch_info, vis)
 
     log.info(f'$$$$ Test Completed in {hh_mm_ss(time.time() - tic)}')
 

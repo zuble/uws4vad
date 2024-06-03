@@ -1,18 +1,37 @@
+## runs a fwd validation pass on start of either train/test
+## set to true when debug=vldt
+dryrun: False 
+
+## VALIDATE
+## 0 -> glob: means that full feat arr is input
+## >1 -> controls chunck size to divid input feats
+##  atm only network depended of this is attnmil, although it might be a good exp
+fwd_siz: ${dyn_vldtfwd:${model.net.id},9}
+
+
 train:
   ## epoch freq to perform validate
   ## if != 0 -> epochs // _
   ## if 0 -> set to 1 epoch
   freq: ${dyn_vldt:${model.epochs},5}
+  
+  ## VDLTINFO + METRICS
   ## per what prespective show metrics
   ## glob ->  over full/original test
   ## lbl -> over each indv classes aswell as anomalous set 
   per_what: lbl  ## glob , lbl
+
+  ## METRICS
   ## send intermidiate metrics results to visdom
   mtrc_visplot: false
+  
+  ## MODELHANDLER
+  ## metrc and lbl to watch results for record wghts
   ## if empty metric: ucf -> AUC_ROC | xdv -> AUC_PR
-  record_mtrc: ${dyn_vldtmtrc:${data.ds.info.id},''}
+  record_mtrc: ${dyn_vldtmtrc:${data.id},''}
   record_lbl: 111.ANOM #${cfg.data.ds.info.lbls_info[-2]}
 
+  ## TRAINMETER
   ## batx freq to log loss parts to console
   ## if 0 -> cfg.dl.loader.train.itersepo//2
   loss_log: 0 
@@ -21,30 +40,65 @@ train:
 
   
 
-
 test:
+  ## saves vldt_info returned per Validate into .pkl format
   savepkl: 0
-  frompkl: 0
+  ## jumps Validate and uses vldt_info.pkl if already generated
+  frompkl: ""
 
-  per_what: lbl ## glob , lbl , vid
+  ## per_what perspectives to show validation results
+  per_what: lbl ## lbl , vid
+  ## send barplot per metric to visdom server (xaxis is labels)
+  ## useful for compare same metrics per multiples experiments in visdom
   mtrc_visplot: 1
+  ## sends metrics table as png to visdom server
   mtrc_vistabe: 0
+  ## saves metrics table as png
   mtrc_savetable: 0
+  ## sends plotly figs roc/pr curves 2 visdom
   curv_visplot: 1
   #### !!!!!!1
   gtfl_visplot: 0 ## to implement ~!!!!!!
   #### !!!!!!
 
+  
+
   watch: ## B1 FIGHT | B2 SHOOT | B4 RIOT | B5 ABUSE | B6 CARACC | G EXPLOS
+    ## saves watch_info returned per Validate into .pkl format
     savepkl: 0
-    frompkl: 0
-    frtend: visdom
+    ## jumps Validate and uses watch_info.pkl if already generated
+    frompkl: ""
+    ## FORMAT to watch the results
+    ## []: disabled
+    ## asp (anomaly score player): 
+    #   video player with GT and anomaly scores overlayed
+    ## gtfl (grount-truth frame-level): 
+    #   xaxis: frames // yaxis: gt and fl
+    ## attws (attention-weights): colormap xaxis: 
+    #   frames / yaxis: ATTNOMIL.R att_weights 
+    #   usable for NET.NAME==attnomil
     frmt: 
       - asp
       - gtfl
+    ## vizualitation frontend
+    ## how are the seleted formats watched
+    ## wnshow:  uses opencv.imshow for asp | matplt.show for gtfl/attws
+    ## visdom: sends everything to visdom utils/misc.py/Visualizer
+    frtend: visdom
+    ## 1 or multiples numbers of selected dataset LBLS_INFO
+    ## eg: UCF abuse and vandalism ['1','13']
+    ## if None selected , it will be prompted after getting the results of validation
     label: ['111']
+    ## interactively selection of vpath to watch
+    ## enables a terminal diving menu into vldt_info dict
+    ## if false cycles trough videos of seleted WATCH.LABEL
     guividsel: true
     asp:
+      ## frames 2 skip in hte overlayed video to save time :)
       fs: 1
-      th: 0.5
+      ## float: scores in text/numbers
+      ## overlay: half machine other half gt , green-normal / red-abn
       cvputfx: float
+      ## anomaly score [0:1[ thrashold to trigger red/green colors when cvputfx is overlay
+      th: 0.5
+      

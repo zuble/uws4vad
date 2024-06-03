@@ -1,0 +1,42 @@
+# @package _global_
+## represent soem sane defaults for each dataset
+## modulate in exp cfg or
+## python main.py -cn ucf data/frgb=cliptsa model=rtfm
+
+defaults:
+  - _self_
+  - data: ucf
+  - data/frgb: i3drocng # cliptsa vadclip
+  - data/faud: ~
+  - datatrnsfrm: mil_intrplt
+  - dataloader: low
+  - model: mir
+  - vldt: dflt
+  - path:   ion # slarch #
+  - xtra: dflt
+  - hydra: dflt
+  
+  #- fext: null
+  - exp: null
+  - debug: null
+
+
+name: ${dyn_name:${model.net.id},${model.net.vrs}}  ## -> {}_{}
+#task_name: ${dyn_taskname:${data.id},${data.frgb.id},${data.faud.id}}
+task_name: ${dyn_taskname:${data.id},${data.frgb.id},'',${datatrnsfrm.train.crops2use}}
+
+tags: [""]
+
+dvc: ${dyn_dvc:-1}
+seed: 0
+deterministic: 0
+
+tmp: 0
+test: 0  
+train: 1   
+
+
+load:
+  strict_load: false
+  ckpt_path: ~
+  

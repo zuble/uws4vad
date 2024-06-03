@@ -9,9 +9,9 @@ sweep:
   dir: ${path.log_dir}/${name}/${task_name}/multiruns/${now:%d-%m}_${now:%H-%M-%S}
   subdir: ${hydra.job.num}
 
-
+#log_key: ${name}/${task_name}
 job_logging: #disabled
   formatters:
     colorlog:
-      format: '[%(blue)s%(name)s%(reset)s:%(blue)s%(lineno)s%(reset)s][%(log_color)s%(levelname)s%(reset)s] - %(message)s'
-
+      format: '[%(black)s${name}%(reset)s:%(blue)s%(name)s%(reset)s:%(cyan)s%(lineno)s%(reset)s][%(log_color)s%(levelname)s%(reset)s] - %(message)s'
+      ## [src.vldt.vldt:316][INFO] - $$$$ VALIDATE @ 00:00:06

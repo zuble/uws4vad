@@ -1,5 +1,5 @@
 defaults:
-  #- _self_ 
+  - _.yaml
   - net: mir
   - optima: adam
   - lrs: null
@@ -17,7 +17,7 @@ loss:
     _target_: src.model.loss.rnkg.Loss
     _cfg:
       bs: ${dataloader.train.bs}
-      seglen: ${data.trnsfrm.train.len}
+      seglen: ${datatrnsfrm.train.len}
       lambda12: [8e-5,8e-5]
 
 

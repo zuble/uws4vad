@@ -12,22 +12,24 @@ log = logger.get_log(__name__)
 #############################
 ## TEST
 def get_testloader(cfg):
-    from ._data import FeaturePathListFinder, debug_cfg_data
-    debug_cfg_data(cfg.data)
+    from ._data import FeaturePathListFinder, debug_cfg_data, run_dl
+    debug_cfg_data(cfg)
     
-    cfg_ds = cfg.data.ds
+    cfg_ds = cfg.data
     cfg_loader = cfg.dataloader.test
-    cfg_trnsfrm = cfg.data.trnsfrm.test
+    cfg_trnsfrm = cfg.datatrnsfrm.test
     
+    
+    rgbfplf = FeaturePathListFinder(cfg, 'test', 'rgb')
+    rgbfl = rgbfplf.get('ANOM') + rgbfplf.get('NORM')
+    log.info(f'TEST: RGB {len(rgbfl)} feats')
+
     if cfg_ds.get('faud'):
-        audfplf = FeaturePathListFinder(cfg.data, 'test', 'aud')
+        audfplf = FeaturePathListFinder(cfg, 'test', 'aud', auxrgbflist=rgbfl)
         audfl = audfplf.get('ANOM') + audfplf.get('NORM')
         log.info(f'TEST: AUD ON {len(audfl)} feats')
     else: audfl = []
         
-    rgbfplf = FeaturePathListFinder(cfg.data, 'test', 'rgb')
-    rgbfl = rgbfplf.get('ANOM') + rgbfplf.get('NORM')
-    log.info(f'TEST: RGB {len(rgbfl)} feats')
 
     ##################################
     ## FRAME COUNTER COMPARE BETWEN THE VIDEOS AND FEATURES
@@ -54,10 +56,15 @@ def get_testloader(cfg):
                         batch_size=cfg_loader.bs , 
                         shuffle=cfg_loader.shuffle, 
                         num_workers=cfg_loader.nworkers, 
-                        prefetch_factor=cfg_loader.pftch_fctr,
+                        #prefetch_factor=cfg_loader.pftch_fctr if cfg_loader.pftch_fctr != 0 else None,
                         pin_memory=cfg_loader.pinmem, 
                         persistent_workers=cfg_loader.prstwrk 
                         )
+    
+    if cfg_loader.dryrun:
+        log.warning(f"DBG DRY TEST DL")            
+        run_dl(loader)
+    
     return loader
 
 
@@ -66,11 +73,25 @@ class TestDS(Dataset):
 
         self.rgbflst = rgbflst
         self.audflst = audflst
-        self.lbl_mng = LBL(cfg_ds.info)
+        self.lbl_mng = LBL(ds=cfg_ds.id, cfg_lbls=cfg_ds.lbls)
         self.crops2use = cfg_trnsfrm.crops2use
+        
+        self.dfeat = cfg_ds.frgb.dfeat
+        if audflst: self.peakboo_aud(cfg_ds.faud.dfeat)
 
         if cfg_loader.in2mem: self.loadin2mem(cfg_loader.nworkers)
         else: self.in2mem = 0
+    
+    
+    def peakboo_aud(self, dfeat):
+        ## pekaboo AUD features
+        assert len(self.rgbflst) == len(self.audflst)
+        peakboo2 = f"{self.audflst[-1]}.npy"
+        tojo2 = np.load(peakboo2)    
+        assert dfeat == tojo2.shape[-1]
+        self.dfeat += dfeat
+        log.debug(f'TRAIN: AUD {osp.basename(peakboo2)} {np.shape(tojo2)}')    
+    
         
     def load_data(self,idx):
         return self.get_feat(idx), self.get_label(idx)
@@ -91,15 +112,16 @@ class TestDS(Dataset):
     
     def get_feat(self,idx):
         ## RGB 
-        if self.crops2use:
+        if self.crops2use: ## expects only 1 crop atm per cfg_trnsfrm.dyn_crops2use
             rgb_feats = []
             for i in range(self.crops2use):
                 fp_crop = f"{self.rgbflst[int(idx)]}__{i}.npy"
                 feat_crop = np.load(fp_crop).astype(np.float32)  ## (timesteps, 1024)
-                #log.debug(f'crop[{i}] {osp.basename(fp_crop)}: {feat_crop.shape} {feat_crop.dtype}')                
+                log.debug(f'crop[{i}] {osp.basename(fp_crop)}: {feat_crop.shape} {feat_crop.dtype}')                
                 #features[i] = np.array(feat_crop)
                 rgb_feats.append(feat_crop)
-            rgb_feats = np.array(rgb_feats)
+            ## either account here, or in vldt.Validate.start
+            rgb_feats = np.array(rgb_feats)#.reshape(-1, self.dfeat)
             log.debug(f'f[{idx}]: {type(rgb_feats)} {rgb_feats.shape} {rgb_feats.dtype}') ## (5,32,1024)
         else: 
             rgb_fp = f"{self.rgbflst[int(idx)]}.npy"    
@@ -112,8 +134,9 @@ class TestDS(Dataset):
             aud_feats = np.load(aud_fp).astype(np.float32)
             log.debug(f'vid[{idx}] AUD {osp.basename(aud_fp)}: {aud_feats.shape} {aud_feats.dtype}')
             
+            ### !!!
             if aud_feats.shape[0] != rgb_feats.shape[0]:
-                log.debug(f'vid[{idx}]AUD rshp 2mtch rgbf')
+                log.warning(f'vid[{idx}]AUD rshp 2mtch rgbf')
                 t, f = rgb_feats.shape
                 new_feat = np.zeros((t, f)).astype(np.float32)
                 idxs = np.linspace(0, len(aud_feats), t+1, dtype=np.int32)
@@ -151,34 +174,32 @@ class LBL:
         Retrieves VL label for the specified vpath
         either for the XDV or UCF dataset
     '''
-    def __init__(self, cfg_ds):
-        #log.debug(f'GTFL:\n{cfg_ds}')
-        self.cfg_ds = cfg_ds
+    def __init__(self, ds, cfg_lbls):
+        self.cfg_lbls = cfg_lbls
         self.encod = {
             'ucf': self.ucf_encod,
             'xdv': self.xdv_encod
-        }.get(self.cfg_ds.id)
+        }.get(ds)
         
     def ucf_encod(self, fn):
-        ## ucf
         aux = [fn[:-3]]
         ##aux = [ osp.basename(fn) ]
         #aux = [fn[:fn.find("_x264")-3]]
         
-        idxs = [self.cfg_ds.lbls.index(a) for a in aux]
-        aux = [self.cfg_ds.lbls_info[i] for i in idxs]
+        idxs = [self.cfg_lbls.id.index(a) for a in aux]
+        aux = [self.cfg_lbls.info[i] for i in idxs]
             
         return aux
     
     def xdv_encod(self, fn):
-        assert 'label_' in fn ## xdv
+        assert 'label_' in fn 
         ## norm
-        if self.cfg_ds.lbls[0] in fn: aux = [self.cfg_ds.lbls_info[0]]
+        if self.cfg_lbls.id[0] in fn: aux = [self.cfg_lbls.info[0]]
         else:
             ## A = 0 , B1-B4-B6 = 146 , B1-B5-G = 157 , B4-0-0 = 400
             ## oldie aux = aux.replace('B', '').replace('-', '').replace('A', '0').replace('G', '7')   
-            aux = fn[fn.find('label_')+len('label_'):]
-            aux = [ a for a in aux.split('-') if a != '0']
-            idxs = [self.cfg_ds.lbls.index(a) for a in aux]
-            aux = [self.cfg_ds.lbls_info[i] for i in idxs]
+            aux = fn[fn.find('label_')+len('label_'):] ## B2-G-0
+            aux = [ a for a in aux.split('-') if a != '0'] ## ['B2', 'G']
+            idxs = [self.cfg_lbls.id.index(a) for a in aux] ## [2, 6]
+            aux = [self.cfg_lbls.info[i] for i in idxs] ## 'B2.SHOOT', 'G.EXPLOS']
         return aux

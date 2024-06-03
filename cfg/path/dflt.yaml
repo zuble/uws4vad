@@ -5,6 +5,10 @@ data_dir: ${path.work_dir}/data/
 ## where hydra creates stuff
 log_dir: ${path.work_dir}/log/
 
+fext:
+  models_dir: ${path.work_dir}/data/fext/
+  out_dir: ${path.work_dir}/data/ftmp/
+
 # path to output directory, created dynamically by hydra
 # path generation pattern is specified in `configs/hydra/default.yaml`
 # use it to store all files generated during the run, like ckpts and metrics
@@ -17,10 +21,10 @@ out_dir: ${hydra:runtime.output_dir}
 data_root: ???
 
 ucf_froot: '${path.data_root}/FEAT/UCF'
-ucf_vroot: '${path.data_root}/DS/UCF/test'
+ucf_vroot: '${path.data_root}/DS/UCF'
 
-xdv_froot: '${path.data_root}/FEAT/XDV/'
-xdv_vroot: '${path.data_root}/DS/XDV/test'
+xdv_froot: '${path.data_root}/FEAT/XDV'
+xdv_vroot: '${path.data_root}/DS/XDV'
 #/raid/DATASETS/anomaly/XD_Violence/testing_copy
 #/raid/DATASETS/anomaly/XD_Violence/features/
 #########

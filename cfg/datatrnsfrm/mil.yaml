@@ -4,19 +4,16 @@ defaults:
 train:
   mil: 1
   #crops2use:
-  #cropasvideo: False 
+  cropasvideo: False 
 
-  ## uni -> picks len idxs equally spaced trough linspace 
-  ## seq -> picks len idx sequential
-  ## rnd -> picks len idx rnd keeping their temporal order 
   sel: uni 
   len: 32
-  intplt: 1  
+  intplt: 0  
   rnd: 
     ## jit -> jitter selection of adjacent idxs when sel is != seq
     ## glob -> rnd whole idxs of feat
     ## each crop will have the same rnd
     - null
 
-test:
-  crops2use: 1
+#test:
+#  crops2use: 1

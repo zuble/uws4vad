@@ -19,7 +19,7 @@ root = pyrootutils.setup_root(
 _HYDRA_PARAMS = {
     "version_base": None,
     "config_path": str(root / "cfg"),
-    "config_name": "001.yaml",
+    "config_name": "ucf.yaml",
 }
 
 @utils.reg_custom_resolvers(**_HYDRA_PARAMS)
@@ -31,8 +31,15 @@ def main(cfg: DictConfig) -> None:
     #log.debug(f"Original dir : {hydra.utils.get_original_cwd()}")
 
     #log.debug(utils.collect_random_states())
-    
-    if cfg.get("tmp"):
+    utils.xtra(cfg)
+
+    if cfg.get("fext"):
+        from src.fext import FeatExtract
+        utils.xtra(cfg)
+        FeatExtract(cfg)
+
+
+    elif cfg.get("tmp"):
         from src import tmp
         utils.xtra(cfg)
         
@@ -44,7 +51,8 @@ def main(cfg: DictConfig) -> None:
         utils.init_seed(cfg, False)
         utils.xtra(cfg)
         test.test(cfg)
-            
+    
+    
     elif cfg.get("train"):
         from src import train
         utils.init_seed(cfg)

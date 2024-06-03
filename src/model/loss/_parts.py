@@ -9,12 +9,10 @@ class Bce(nn.Module):
     def __init__(self):
         super(Bce, self).__init__()
         self.crit = nn.BCELoss()
-        
     def forward(self, scores, label):
         #log.debug(f"Bce/{scores.shape} {scores.context} {label.shape} {label.context}")
-        l = self.crit(scores, label)
         return {
-            'loss_bce': l
+            'bce': self.crit(scores, label)
             }
 
 def smooth(arr, lambd = 8e-4):

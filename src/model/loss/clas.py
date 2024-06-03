@@ -15,25 +15,34 @@ class Loss(nn.Module):
             'topk': self.fwd_topk,
             'full': self.fwd_full
         }.get(_cfg.fx)
-        self.topk = _cfg.topk
-            
-    def fwd_topk(self, scores, label, seqlen):
+        
+        self.k = _cfg.k
+    
+    def get_k(self, x):
+        if self.k == -1: return int(x//16+1)
+        else: return min(x, self.k)
+                
+    def fwd_topk(self, scores, ldata):
+        label = ldata['label']
+        seqlen = ldata['seqlen']
+        
         #log.debug(f"BCE/{scores.shape} {scores.context} {label.shape} {label.context}")
         scores = scores.squeeze()
         instance_scores = torch.zeros(0).to(scores.device)  # tensor([])
         for i in range(scores.shape[0]):
-            tmp, _ = torch.topk(scores[i][:seq_len[i]], k=int(seq_len[i]//16+1), largest=True)
+            tmp, _ = torch.topk(scores[i][:seqlen[i]], k=self.get_k(seqlen[i]), largest=True)
             tmp = torch.mean(tmp).view(1)
             instance_scores = torch.cat((instance_scores, tmp))
 
         instance_scores = torch.sigmoid(instance_scores)
-
         l = self.crit(instance_scores, label)
         return {
-            'loss_clas': l
+            'clas': l
             }
             
-    def fwd_full(self, scores, seqlen):
+    def fwd_full(self, scores, ldata):
+        seqlen = ldata['seqlen']
+        
         vl_scores = torch.zeros(0).to(scores.device)
         for i in range(scores.shape[0]): #.self.bs
             sl = int(seqlen[i])

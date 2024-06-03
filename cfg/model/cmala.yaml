@@ -1,0 +1,20 @@
+defaults:
+  - _.yaml
+  - net: cmala
+  - optima: adam
+  - lrs: null
+  - loss: null
+  #- _self_
+
+epochs: 5
+
+optima:
+  lr: 1.0e-4
+  weight_decay: 1.0e-5
+
+loss: 
+  clas:
+    _target_: src.model.loss.clas.Loss
+    _cfg:
+      fx: 'topk' ## full
+      k: 3 ## if -1 set dynamic according seqlen

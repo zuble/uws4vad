@@ -12,6 +12,7 @@ defaults:
   - xtra: dflt
   - hydra: dflt
   
+  - fext: null
   - exp: null ## use the main train/test cfg
   - debug: null ## python main.py debug=dflt
 
@@ -38,6 +39,7 @@ deterministic: 0
 
 ## what file to run in src
 ## follows this order, without repeating
+fext: 0
 tmp: 0
 test: 0  
 train: 1  
@@ -50,6 +52,6 @@ load:
   ## train/test expect a _.state 
   ## thus the net/optima struct must match
   ## if train, loads net&optima w/ saved state
-  ## if test, loads net w/ saved state
+  ## if test and _.state loads saved state into provid arch 
   ## if test and _.pt loads directly full struct
   ckpt_path: ~ 

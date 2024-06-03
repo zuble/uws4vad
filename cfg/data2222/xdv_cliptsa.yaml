@@ -1,0 +1,10 @@
+#_target_: src.data.traindl.get_trainloader
+
+defaults:
+  - _self_ 
+  - ds/info: xdv.yaml 
+  - ds/frgb: cliptsa.yaml
+  - ds/faud: null
+
+id: xdv_cliptsa
+

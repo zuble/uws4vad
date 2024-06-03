@@ -48,7 +48,7 @@ class SConv(nn.Module):
         b, t, f = x.shape
         x = x.permute(0, 2, 1) ## (b, f, t)
         
-        ## add ks-1 yeros at start of last axis, so conv output sl scores
+        ## add ks-1 yeros at start of last axis
         x = F.pad(x, (self.ks-1, 0), "constant", 0) ## causal and no lookahead bias
         log.debug(f'ConvCLS/xpad {x.shape=}')
 

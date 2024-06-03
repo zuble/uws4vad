@@ -6,7 +6,7 @@ train:
 
   nworkers: ${dyn_nworkers:-1}  ## 0 -> cpu//4 ;; -1 -> all cores
   pinmem: True
-  pftch_fctr: 2
+  #pftch_fctr: 2
   prstwrk: True
 
 
@@ -15,6 +15,5 @@ test:
 
   nworkers: ${dyn_nworkers:-1}  ## 0 -> cpu//4 ;; -1 -> all cores  
   pinmem: True
-  droplast: False
-  pftch_fctr: 2
+  #pftch_fctr: 2
   prstwrk: True

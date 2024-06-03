@@ -1,22 +1,25 @@
 # @package _global_
 
-## specify here default configuration
-## order of defaults determines the order in which configs override each other
 defaults:
   - _self_
-  - data: ucf_i3drocng_mil #ucf_cliptsa_mil
+  #- data: xdv_cliptsa # xdv_vadclip
+  - data: xdv
+  - data/frgb: cliptsa # vadclip
+  - data/faud: vggish
+  - datatrnsfrm: seq
   - dataloader: low
   - model: mir
   - vldt: dflt
-  - path: slarch #  ion # 
+  - path:   ion # slarch #
   - xtra: dflt
   - hydra: dflt
   
+  #- fext: null
   - exp: null
   - debug: null
 
-name: 'mir'
-task_name: "001"
+name: ${dyn_name:${model.net.id},${model.net.vrs}}  ## -> {}_{}
+task_name: ${data.id}
 tags: [""]
 
 dvc: ${dyn_dvc:-1}

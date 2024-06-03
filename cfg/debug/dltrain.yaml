@@ -1,0 +1,14 @@
+# @package _global_
+
+
+defaults:
+  - dflt.yaml
+
+debug:
+  path: 
+    - "src.data.traindl"
+    - "src.data._data"
+
+dataloader:
+  train:
+    dryrun: True

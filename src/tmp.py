@@ -6,6 +6,7 @@ import numpy as np
 import glob , os, os.path as osp
 from hydra.utils import instantiate as instantiate
 
+from src.data import get_trainloader, run_dl
 from src.utils.logger import get_log
 log = get_log(__name__)
 
@@ -16,15 +17,16 @@ class Debug():
     
     def __init__(self, cfg):
         self.cfg = cfg
-        
-        import re
-        ckpt_path = "/mnt/t77/TH/zutc_vad_hydra/log/rtfm/000/runs/31-05_02-19-59/2000861580--1_1.state"
-        
-                
-        log.error(seed)
+        self.debug_data()
         
         
-    def debug_loss(self, cfg):
+    def debug_data(self):
+        traindl, trainfrmt = get_trainloader(self.cfg) 
+        run_dl(traindl)
+        
+        
+    
+    def debug_loss(self):
         ## set debug.model=1
         from src.model.loss.mgnt import Rtfm
         
@@ -65,10 +67,10 @@ class Debug():
             }
         }
         
-        dfeat = cfg.data.ds.frgb.dfeat + (cfg.data.ds.faud.dfeat if cfg.data.ds.get("faud") else 0)
+        dfeat = self.cfg.data.ds.frgb.dfeat + (self.cfg.data.ds.faud.dfeat if self.cfg.data.ds.get("faud") else 0)
         
-        if cfg.model.net.get("cls"): 
-            net = instantiate(cfg.model.net.main, dfeat=dfeat, _cls=cfg.model.net.cls, _recursive_=False)#.to(cfg.dvc)
+        if self.cfg.model.net.get("cls"): 
+            net = instantiate(cfg.model.net.main, dfeat=dfeat, _cls=self.cfg.model.net.cls, _recursive_=False)#.to(cfg.dvc)
         else:
             net = instantiate(cfg.model.net.main, dfeat=dfeat)#.to(cfg.dvc)
             

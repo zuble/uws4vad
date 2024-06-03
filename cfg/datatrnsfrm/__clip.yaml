@@ -1,0 +1,18 @@
+id: clip
+
+inpt_size: 224
+mean: [0.48145466, 0.4578275, 0.40821073]
+std: [0.26862954, 0.26130258, 0.27577711]
+
+ncrops: 1 ## 1 5 10
+
+## from a video, frames are sampled per step
+## then (clip_len) frames form a clip
+## which is the basic unit of data loading
+frame_step: 1 ## Temporal sampling rate, 1 is normal, 2 jumps 1 reads 1..
+clip_len: 16 
+clip_sel: mid ## rnd , how to pick 1 frame out of 1 clip
+
+#aug: v0  ## 'v0'- no size give to decord loader , 'v1'- new_width,new_height is used
+#new_width: 340
+#new_height: 256

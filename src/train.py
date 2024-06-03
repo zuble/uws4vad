@@ -3,7 +3,7 @@ import numpy as np
 import math 
 
 from hydra.utils import instantiate as instantiate, call as call
-import time , os, os.path as osp, gc, traceback
+import time , os, os.path as osp, gc, traceback, sys
 from collections import defaultdict, deque
 from tqdm import tqdm
 
@@ -25,11 +25,11 @@ def trainer(cfg):
     
     ## DATA
     traindl, trainfrmt = get_trainloader(cfg) 
-    #if cfg.get("debug") and cfg.get("debug").get("data") > 1: run_dl(traindl) #;return
+    if cfg.dataloader.train.dryrun: run_dl(traindl) #;return
     
     ## MODEL
     net, netpstfwd = build_net(cfg)
-    optima = instantiate(cfg.model.optima, params=net.parameters(), _convert_="partial" )
+    optima = instantiate(cfg.model.optima, params=net.parameters() ) #, _convert_="partial"
     
     ## LOAD
     MH = ModelHandler(cfg)
@@ -60,21 +60,22 @@ def trainer(cfg):
         log.debug({key: value})
     ldata = {}
     
-    
-    ## Monitor
-    vis = Visualizer(f'{cfg.name}/{cfg.task_name}', restart=True, del_all=False)
+    ## MONITOR
+    vis = Visualizer(f'{cfg.name} / {cfg.task_name}', restart=True, del_all=False)
     #vis.delete(f'{cfg.name}/{cfg.task_name}')
     
     cfg_vldt = cfg.vldt.train
-    vldt = Validate(cfg, cfg_vldt, cfg.data.ds.frgb, vis)
-    if cfg.get("debug") and cfg.get("debug").get("vldt") > 1: vldt.start(net, netpstfwd); vldt.reset() #;return
-    
+    vldt = Validate(cfg, cfg_vldt, cfg.data.frgb, vis)
+    if cfg.vldt.dryrun:
+        log.info("DBG DRY VLDT RUN")
+        vldt.start(net, netpstfwd); vldt.reset() #;return
+        
     tmeter = TrainMeter( cfg.dataloader.train, cfg_vldt, vis)
     
     try:
         trn_inf['ttic'] = time.time()
-        #for epo in tqdm(range(0,cfg.model.epochs), desc="Epoch", unit='epo'):
-        for epo in range(cfg.model.epochs):
+        for epo in tqdm(range(0,cfg.model.epochs), desc="Epoch", unit='epo', file=sys.stdout):
+        #for epo in range(cfg.model.epochs):
             trn_inf['epo'] = epo+1
             trn_inf['etic'] = time.time()
             
@@ -86,10 +87,10 @@ def trainer(cfg):
                 trn_inf['step'] =+ 1
                 btic = time.time()
 
-                feat = trainfrmt.fx(tdata, ldata, trn_inf)
+                feat = trainfrmt.fx(tdata, ldata, trn_inf) ## get feat + fill loss metadata
                 ndata = net(feat)
-                log.debug(f"{feat.shape} -> ")
-                for key in list(ndata.keys())[:]: log.debug(f"    {key} {ndata[key].shape}") if type(ndata[key]) == torch.Tensor else None
+                log.debug(f"{list(feat.shape)} -> ")
+                for key in list(ndata.keys())[:]: log.debug(f"\t\t\t{key} {list(ndata[key].shape)}") if type(ndata[key]) == torch.Tensor else None
                 ## if ndata['id'] == '...':
 
                 loss_indv = netpstfwd.train(ndata, ldata, lossfx) 
@@ -133,8 +134,8 @@ def trainer(cfg):
             
         log.info(f"$$$$ train done in {hh_mm_ss(time.time() - trn_inf['ttic'])}")
         
-        #if not cfg.get("debug"): 
-        MH.save_state(net, optima, trn_inf)
+        if not cfg.get("debug"): 
+            MH.save_state(net, optima, trn_inf)
 
     except Exception as e:
         log.error(traceback.format_exc())
@@ -164,14 +165,14 @@ class ScalarMeter(object):
 class TrainMeter:
     def __init__(self, cfg_loader, cfg_vldt, vis):
         
-        if cfg_vldt.get("loss_log") == 0:
+        if cfg_vldt.loss_log == 0:
             self.logfreq = cfg_loader.itersepo//2
         else:
             self.logfreq = cfg_vldt.loss_log
 
         self.vis = vis
         self.plot = cfg_vldt.loss_visplot
-        self.loss_meters = defaultdict(lambda: ScalarMeter(cfg_vldt.loss_log))
+        self.loss_meters = defaultdict(lambda: ScalarMeter(self.logfreq))
         self.spacer = 0
         
     def update(self, lbat_indv):

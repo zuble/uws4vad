@@ -3,7 +3,7 @@ no_warns: False
 # ask user for tags if none are provided in the config
 enforce_tags: True
 # pretty print config tree at the start of the run using Rich library
-cfg: 0
+cfg: 11
 # 0 -> no print
 # 1 -> prints dflts on utils.xtra
 # >1 -> print all blocks

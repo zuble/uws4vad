@@ -38,26 +38,61 @@ def dyn_vldtmtrc(ds, mtrc):
         if ds == 'ucf': return 'AUC_ROC'
         elif ds == 'xdv': return 'AUC_PR'
     return mtrc    
+
+def dyn_crops2use(rgbncrops, mode, crops2use):
+    if rgbncrops == 0: return 0
     
+    if mode == 'test': return 1 ## has crops but use center
+        
+    else:
+        if crops2use == -1: return rgbncrops
+        elif 0 < crops2use <= rgbncrops: return crops2use
+        else: return 1
+
+def dyn_mainet(idd,vrs):
+    if not vrs: return f"src.model.net.{idd}.Network"
+    else: return f"src.model.net.{idd}.{vrs}"    
+
+def dyn_vldtfwd(netid, chuksiz):
+    if netid == 'attnmil': return chuksiz
+    else: return None
+
+def dyn_name(x,y): 
+    if y: return f"{x}_{y}"
+    else: return x
+def dyn_taskname(ds,rgb,aud,crops2use):
+    tmp = f"{ds}_{rgb.lower()}"
+    if crops2use: tmp =+ f"-{crops2use}"
+    if aud: 
+        tmp =+ f"_{aud.lower()}"
+    return tmp
+
+def dyn_retatt(watch_frm, intest):
+    if not intest: return False
+    elif 'attws' not in watch_frm: return False
+    else: return True
+
 def reg_custom_resolvers(version_base: str, config_path: str, config_name: str) -> Callable:
     ## Initialize the Global Hydra if not already
     with initialize_config_dir(version_base=version_base, config_dir=config_path):
         cfg = compose(config_name=config_name, return_hydra_config=True, overrides=[])
     GlobalHydra.instance().clear()
 
-    ## Register the new resolvers
-    if not OmegaConf.has_resolver("dyn_nworkers"):
-        OmegaConf.register_new_resolver("dyn_nworkers", dyn_workers)
-        
-    if not OmegaConf.has_resolver("dyn_dvc"):
-        OmegaConf.register_new_resolver("dyn_dvc", dyn_dvc)
-
-    if not OmegaConf.has_resolver("dyn_vldt"):
-        OmegaConf.register_new_resolver("dyn_vldt", dyn_vldt)
-        
-    if not OmegaConf.has_resolver("dyn_vldtmtrc"):
-        OmegaConf.register_new_resolver("dyn_vldtmtrc", dyn_vldtmtrc)
-        
+    new_res = {
+        'dyn_nworkers': dyn_workers,
+        'dyn_dvc': dyn_dvc,
+        'dyn_vldt': dyn_vldt,
+        'dyn_vldtmtrc': dyn_vldtmtrc,
+        'dyn_crops2use': dyn_crops2use,
+        'dyn_mainet': dyn_mainet,
+        'dyn_name': dyn_name,
+        'dyn_vldtfwd': dyn_vldtfwd,
+        'dyn_retatt': dyn_retatt,
+        'dyn_taskname': dyn_taskname
+    }
+    for resolver, function in new_res.items():
+        OmegaConf.register_new_resolver(resolver, function)
+    
     def decorator(function: Callable) -> Callable:
         @wraps(function)
         def wrapper(*args: Any, **kwargs: Any) -> Any:

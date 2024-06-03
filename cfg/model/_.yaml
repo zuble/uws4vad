@@ -1,36 +1,9 @@
-defaults:
-  - _self_ ## if anything need to be overide from net
-  - net: mir
-  - optima: adam
-  - lrs: null
-  
+#defaults:
+#  - net: ???
+#  - optima: ???
+#  - lrs: null
+#  - loss: null
 
-epochs: 
+epochs: ???
 
-net:
-  arch:
-    _cfg:
-      neurons: 
-        - 1024
-
-
-#optima:
-#  lr: 3.0e-4
-#  weight_decay: 1.0e-5
-
-loss: 
-  rnkg: ## key in lossfx dict later in netpstfwd
-    _target_: src.model.loss..Loss
-    _cfg: 
-      lambda12: [8e-5,8e-5]
-  clas:
-    _target_: src.model.loss.clas.Loss
-    _cfg:
-      fx: topk  ## topk wink full
-      topk: 16
-      wink: 3
-      winkconv: false
-
-
-
-
+dryfwd: False

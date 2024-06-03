@@ -1,0 +1,44 @@
+# @package _global_
+
+defaults:
+  - override /data: xdv_cliptsa_waud
+  - override /datatrnsfrm: seq
+  - override /dataloader: low
+  - override /model: cmala
+  - override /vldt: dflt
+
+#name: 
+#task_name: 
+tags: ["original"]
+
+#load:
+#  ckpt_path: "/mnt/t77/TH/zutc_vad_hydra/log/rtfm/000/runs/31-05_02-19-59/2000861580--1_1.state"
+
+#datatrnsfrm:
+#  train:
+#    #mil: 0
+#    #crops2use: 1
+#    itrplt: 0
+#    len: 200
+#    rnd:
+#      - glob
+
+dataloader:
+  train:
+    bs: 16
+  test:
+    in2mem: False
+
+model:
+  epochs: 5
+
+  #net:
+  #  main:
+  #    _cfg:
+  #      do: 0.7
+
+  #optima:
+  #  lr: 0.001
+
+
+

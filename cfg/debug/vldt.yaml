@@ -1,6 +1,12 @@
+# @package _global_
+
 defaults:
   - dflt.yaml
 
-vldt: 
-  - "src.vldt.vldt.Validate"
-  - "src.vldt.metric.Metrics"
+debug:
+  path: 
+    - "src.vldt.vldt"
+    - "src.vldt.metric"
+
+vldt:
+  dryrun: True

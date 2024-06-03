@@ -1,7 +1,8 @@
+# @package _global_
+
 # overwrite task name so debugging logs are stored in separate folder
 task_name: "debug"
 
-# python main.py debug=dflt
 
 # sets level of all command line loggers to 'DEBUG'
 # https://hydra.cc/docs/tutorials/basic/running_your_app/logging/
@@ -12,29 +13,25 @@ hydra:
   verbose: False  ## sets hydra loggers to debug
 
 
-## header of each file call src.utils.logger.get_log 
-## this defined the src.___ 
-## if > 0: logger level is set 2 debug for all files within
-## e.g.: python main.py debug=dflt debug.data=1 
-data: 0 ## if > 1 : runs the dataloader twice
-vldt: 0 ## if > 1 : runs a validation fwd
-train: 0 ##
-model: 0
-full: 0 ## if > 1 : all the above , therefore all loggers set to debug
+## sets log lvl 2 dbg when each entrie in module __name__
+debug:
+  path:
+  - 'src'
 
-## put the debug simply by for loop over if cfg.debug.model[i] == module_name
-#model:
-#  - "src.model.net"
 
 dataloader:
   train:
-    #in2mem: False
+    in2mem: False
     nworkers: 0
     pinmem: False
+
   test:
-    #in2mem: False
+    in2mem: False
     nworkers: 0
     pinmem: False
+#
+#model:
+#  epochs: 1
 
 #trainer:
 #  max_epochs: 1

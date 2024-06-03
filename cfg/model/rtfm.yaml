@@ -1,5 +1,5 @@
 defaults:
-  #- _self_ 
+  - _.yaml
   - net: rtfm
   - optima: adam
   - lrs: null

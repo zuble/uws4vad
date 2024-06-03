@@ -1,4 +1,4 @@
 _target_: "src.model.net.${model.net.id}.NetPstFwd"
 _cfg: 
   bs: ${dataloader.train.bs}
-  ncrops: ${data.trnsfrm.train.crops2use}
+  ncrops: ${datatrnsfrm.train.crops2use}

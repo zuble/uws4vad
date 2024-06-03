@@ -1,0 +1,17 @@
+defaults:
+  - _.yaml
+  - net: attnmil
+  - optima: adam
+  - lrs: null
+  - loss: null
+  #- _self_
+
+epochs: 10
+
+#optima:
+#  lr: 1.0e-4
+#  weight_decay: 1.0e-5
+
+loss: 
+  bce:
+    _target_: src.model.loss._parts.Bce

@@ -13,17 +13,18 @@ log = get_log(__name__)
 class Network(nn.Module):
     def __init__(self, dfeat: int, _cfg: DictConfig, _cls: DictConfig = None):
         super(Network, self).__init__()
+        self.dfeat = sum(dfeat)
         
         if _cls is not None:
-            self.cls = instantiate(_cls, dfeat=dfeat)            
+            self.cls = instantiate(_cls, dfeat=self.dfeat)            
         else: 
-            self.cls = SMlp( dfeat, _cfg.rate, _cfg.do)
+            self.cls = SMlp( self.dfeat, _cfg.rate, _cfg.do)
 
     def forward(self, x):
         b, t, f = x.shape
         out = self.cls(x)
         return {
-            'slscores': out
+            'sls': out
         }
 
 
@@ -32,17 +33,12 @@ class NetPstFwd(BasePstFwd):
         super().__init__(_cfg)
         
     def train(self, ndata, ldata, lossfx):
-        super().rshp_out(ndata, 'slscores', 'mean') ## crop0
-        #log.info(f" pos_rshp: {ndata['slscores'].shape}")
+        super().rshp_out(ndata, 'sls', 'mean') ## crop0
+        #log.info(f" pos_rshp: {ndata['sls'].shape}")
         
-        L0 = lossfx['rnkg'](ndata['slscores'])
+        L0 = lossfx['rnkg'](ndata['sls'])
         
         return L0
         
-    def infer(self, ndata):
-        ## output is excepted to be segment level 
-        
-        #log.debug(f"")
-        #log.debug(f"slscores: {ndata['slscores']=}")
-        
-        return ndata['slscores']    
+    def infer(self, ndata):        
+        return ndata['sls']    

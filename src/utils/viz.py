@@ -105,7 +105,8 @@ class Visualizer(object):
     
     def close(self, wtitle=None):
         ''' either a window or all windows off self.env '''
-        if not wtitle:
+        #if not wtitle:
+        if wtitle is None:
             self.vis.close(win=wtitle, env=self.env)
             return
         

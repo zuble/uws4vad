@@ -1,0 +1,13 @@
+# @package _global_
+
+defaults:
+  - dflt.yaml
+
+debug:
+  path: 
+    - "src.data.testdl"
+    - "src.data._data"
+
+dataloader:
+  test:
+    dryrun: True

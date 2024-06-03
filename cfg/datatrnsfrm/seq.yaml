@@ -1,0 +1,15 @@
+defaults:
+  - _globo.yaml
+  
+train:
+  mil: 0
+  #crops2use: 
+  cropasvideo: False 
+  sel: seq 
+  len: 200
+  intplt: 0  
+  rnd: 
+    ## jit -> rnd choses adjcent snippets features
+    ## glob -> rnd whole idxs of feat
+    ## each crop will have the same rnd
+    - null

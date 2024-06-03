@@ -1,4 +1,5 @@
 defaults:
+  - _.yaml
   - main: dflt
   - cls: mlp
   - pstfwd: dflt

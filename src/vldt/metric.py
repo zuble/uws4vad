@@ -292,7 +292,9 @@ class Metrics(object):
     def plot_metrics(self):
         ## 1 plot per metric, xaxis is lbls
         metrics_data = { 'AP': [], 'AUC_PR': [], 'AUC_ROC': [] }
+        
         self.vis.close(f'AP');self.vis.close(f'AUC_PR');self.vis.close(f'AUC_ROC')
+        
         
         for label_str, metrics in self.mtrc_info.items():
             #log.debug(f"{label_str} {metrics = }")

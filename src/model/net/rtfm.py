@@ -13,15 +13,15 @@ log = get_log(__name__)
 
 
 class Network(nn.Module):
-    def __init__(self, dfeat: int, _cfg: DictConfig, _cls: DictConfig = None):
+    def __init__(self, dfeat, _cfg, _cls: DictConfig = None):
         super().__init__()
-        self.dfeat = dfeat
+        self.dfeat = sum(dfeat)
         
         self.aggregate = Aggregate(self.dfeat)
         self.do = nn.Dropout( _cfg.do )
         
         if _cls is not None:
-            self.slcls = instantiate(_cls, dfeat=dfeat)
+            self.slcls = instantiate(_cls, dfeat=self.dfeat)
         else: raise Exception
         self.sig = nn.Sigmoid()
 
@@ -36,12 +36,12 @@ class Network(nn.Module):
         x_new = self.do(x_new)
         log.debug(f'RTFM/aggregate {x_new.shape}')
         
-        slscores = self.sig( self.slcls(x_new) )
-        #log.debug(f'RTFM/slscores {slscores.shape} ')
-        #slscores = torch.nan_to_num(slscores, nan=0, posinf=0, neginf=0)
+        sls = self.sig( self.slcls(x_new) )
+        #log.debug(f'RTFM/sls {sls.shape} '{data.ds.{data.ds.{data.ds.{data.ds.{data.ds.)
+        #sls = torch.nan_to_num(sls, nan=0, posinf=0, neginf=0)
         
         return {
-            'slscores': slscores,
+            'sls': sls,
             'feats': x_new
         }
         
@@ -65,26 +65,19 @@ class NetPstFwd(BasePstFwd):
         abnr_fmagn = feat_magn[self.bs//2:]  ## (bs//2, t) 
         norm_fmagn = feat_magn[0:self.bs//2]  ## (bs//2, t) 
         
-        ### express feats ready to be gathered
-        abnr_feats = feats[self.bs//2*self.ncrops:] 
-        abnr_feats = abnr_feats.view(self.bs//2, self.ncrops, t, f)
-        abnr_feats = abnr_feats.permute(1, 0, 2, 3) ## (ncrops, bs/2, t, f)
-        log.debug(f"{abnr_feats.shape=}")
-        
-        norm_feats = feats[0:self.bs//2*self.ncrops]
-        norm_feats = norm_feats.view(self.bs//2, self.ncrops, t, f)
-        norm_feats = norm_feats.permute(1, 0, 2, 3) ## (ncrops, bs/2, t, f)
-        log.debug(f"{norm_feats.shape=}")
+        ## feats
+        abnr_feats, norm_feats = super().split_per_crop(feats,t,f)
+        log.debug(f"{abnr_feats.shape=} {norm_feats.shape=}")
         
         
-        ## SCORES 
-        super().rshp_out(ndata, 'slscores', 'mean')
+        ## scores 
+        super().rshp_out(ndata, 'sls', 'mean')
         #super().rshp_out(ndata, '', 'crop0')
-        log.debug(f" pos_rshp: {ndata['slscores'].shape}")
-        slscores = ndata['slscores'] ## (bs, t)
+        log.debug(f" pos_rshp: {ndata['sls'].shape}")
+        sls = ndata['sls'] ## (bs, t)
 
-        abnr_sls = slscores[self.bs//2:] ## (bs/2, t)
-        norm_sls = slscores[0:self.bs//2] ## (bs/2, t)        
+        abnr_sls = sls[self.bs//2:] ## (bs/2, t)
+        norm_sls = sls[0:self.bs//2] ## (bs/2, t)        
         
         ########
         ## LOSS 
@@ -101,9 +94,9 @@ class NetPstFwd(BasePstFwd):
     def infer(self, ndata):
         ## output is excepted to be segment level 
         log.debug(f"")
-        log.debug(f"slscores: {ndata['slscores']=}")
+        log.debug(f"sls: {ndata['sls']=}")
         
-        return ndata['slscores']    
+        return ndata['sls']    
 
     
     

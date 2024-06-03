@@ -1,0 +1,45 @@
+# @package _global_
+
+defaults:
+  #- override /data: ucf_cliptsa  ## ucf_vadclip  ucf_i3drocng
+  - override /datatrnsfrm: mil_intrplt
+  - override /dataloader: low
+  - override /model: rtfm
+  - override /vldt: dflt
+
+#name: 
+#task_name: 
+tags: ["orig"]
+
+#load:
+#  ckpt_path: "/mnt/t77/TH/zutc_vad_hydra/log/rtfm/000/runs/31-05_02-19-59/2000861580--1_1.state"
+
+
+#datatrnsfrm:
+#  train:
+#    #mil: 1
+#    #crops2use: 1
+#    #itrplt: 0
+#    #len: 32
+#    rnd: ## as per atmm its correct no improve diret
+#      - glob 
+
+
+dataloader:
+  train:
+    bs: 16
+  test:
+    in2mem: True
+
+
+#model:
+#  epochs: 1
+
+  #net:
+  #  main:
+  #    _cfg:
+  #      do: 0.7
+
+  #  cls: 
+  #optima:
+  #  lr: 0.001

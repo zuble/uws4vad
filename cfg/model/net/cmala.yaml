@@ -1,0 +1,19 @@
+defaults:
+  - _.yaml
+  - main: dflt
+  - cls: conv
+  - pstfwd: dflt
+
+id: cmala
+wght_init: xavier0 
+
+main:
+  _cfg:
+    hid_dim: 128
+    d_ff: 512
+    do: 0.1
+    sigma: 0.06
+    bias: 0.02
+    
+cls:
+  ks: 7
