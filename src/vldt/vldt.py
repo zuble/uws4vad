@@ -38,7 +38,7 @@ class WatchInfo:
         for lbl, metrics in self.DATA.items():
             for key, _ in metrics.items():
                 if self.DATA[lbl][key]:
-                    log.info(f'[{lbl}][{key}]: {len(self.DATA[lbl][key])} {type(self.DATA[lbl][key])} {type(self.DATA[lbl][key][0])}')
+                    log.debug(f'[{lbl}][{key}]: {len(self.DATA[lbl][key])} {type(self.DATA[lbl][key])} {type(self.DATA[lbl][key][0])}')
             log.info("")
     
     def reset(self):
@@ -58,69 +58,77 @@ class VldtInfo:
         self.all = cfg_ds.lbls.info[-1]
         
         ## "metrics per_what prespective?"
+        ## 000.NORM | B1.FIGHT | B2.SHOOT | B4.RIOT | B5.ABUSE | B6.CARACC | G.EXPLOS | 111.ANOM | ALL
         if per_what == 'glob':
             ## global: store normal and all abnormal
-            #self.DATA = { self.norm: {'GT': [], 'FL': []}, self.anom: {'GT': [], 'FL': []} , self.all: {'GT': [], 'FL': []} }  
-            self.DATA = { self.anom: {'GT': [], 'FL': []} , self.all: {'GT': [], 'FL': []} }  
+            ## 000.NORM | 111.ANOM | ALL
+            self.DATA = {   self.norm:  {'GT': [], 'FL': []}, ## far
+                            self.anom: {'GT': [], 'FL': []}, ## auc
+                            self.all: {'GT': [], 'FL': []} }  ## auc
             self.updt = self._updt_glob
         elif per_what == 'lbl':
             ## store previous plus specific labels of ds
-            #self.DATA = {lbl: {'GT': [], 'FL': []} for lbl in cfg_ds.lbls.info}
-            self.DATA = {lbl: {'GT': [], 'FL': []} for lbl in cfg_ds.lbls.info[1:]}
+            ## B1.FIGHT | B2.SHOOT | B4.RIOT | B5.ABUSE | B6.CARACC | G.EXPLOS | 111.ANOM | ALL
+            #self.DATA = {lbl: {'GT': [], 'FL': []} for lbl in cfg_ds.lbls.info[1:]}
+            ## 000.NORM | B1.FIGHT | B2.SHOOT | B4.RIOT | B5.ABUSE | B6.CARACC | G.EXPLOS | 111.ANOM | ALL
+            self.DATA = {lbl: {'GT': [], 'FL': []} for lbl in cfg_ds.lbls.info}
             self.updt = self._updt_lbl
         elif per_what == 'vid':
             ## store previous but keep a record for each video
-            #self.DATA = {lbl: {'FN': [], 'GT': [], 'FL': []} for lbl in cfg_ds.lbls.info}
-            self.DATA = {lbl: {'FN': [], 'GT': [], 'FL': []} for lbl in cfg_ds.lbls.info[1:]}
+            ## 000.NORM | B1.FIGHT | B2.SHOOT | B4.RIOT | B5.ABUSE | B6.CARACC | G.EXPLOS | 111.ANOM
+            self.DATA = {lbl: {'FN': [], 'GT': [], 'FL': []} for lbl in cfg_ds.lbls.info[:-1]}
             self.updt = self._updt_vid 
         else: raise NotImplementedError
     
     def _updt_glob(self, label, fn, gt, fl):
-        ## updates the global view of validation
-        ## keeps track of anom only + total dataset
+        ## standart view
+        ## keeps track of total video from anom only + total dataset
         if label[0] != self.norm:
             self.DATA[self.anom]['GT'].append(gt)
             self.DATA[self.anom]['FL'].append(fl)
-        #else:
-        #    self.DATA[self.norm]['GT'].append(gt)
-        #    self.DATA[self.norm]['FL'].append(fl)
-            
+        else:
+            self.DATA[self.norm]['GT'].append(gt)
+            self.DATA[self.norm]['FL'].append(fl)
+        ## all ds view
+        #if self.per_what != 'vid':
         self.DATA[self.all]['GT'].append(gt)
         self.DATA[self.all]['FL'].append(fl)
         
     def _updt_lbl(self, label, fn, gt, fl):
-        ## updates anomalies subclasses with GT/FL
-        ## keeps track of each anom sublabel
+        ## keeps track of total videos from each anom sublabel
         if label[0] != self.norm:
+            self.DATA[self.anom]['GT'].append(gt)
+            self.DATA[self.anom]['FL'].append(fl)
             for lbl in label:
                 self.DATA[lbl]['GT'].append(gt)
                 self.DATA[lbl]['FL'].append(fl)
-        self._updt_glob(label, fn, gt, fl)
+        else:
+            self.DATA[self.norm]['GT'].append(gt)
+            self.DATA[self.norm]['FL'].append(fl)
+        
+        if self.per_what != "vid":
+            ## discard this when view is per vid
+            self.DATA[self.all]['GT'].append(gt)
+            self.DATA[self.all]['FL'].append(fl)
         
     def _updt_vid(self, label, fn, gt, fl):
-        ## updates fn in global classes and anom subclasses
+        ## keeps each video clustered per lbl aswell total anom set
+        ## by addyng fn key in each lbl dict
+        ## call updt_lbl to updt gt,fl
         self._updt_lbl(label, fn, gt, fl)
         if label[0] != self.norm:
             self.DATA[self.anom]['FN'].append(fn)
             for lbl in label:
                 self.DATA[lbl]['FN'].append(fn)
-        #else: self.DATA[self.norm]['FN'].append(fn)       
-        self.DATA[self.all]['FN'].append(fn)
+        else: 
+            self.DATA[self.norm]['FN'].append(fn)
         
     def upgrade(self):
-        if self.per_what != 'vid': ## flattens the list into numpy array 
-            
+        if self.per_what != 'vid': 
+            ## flattens the list into numpy array 
             for lbl, metrics in self.DATA.items():
                 metrics['GT'] = np.concatenate((metrics['GT']), axis=0)
                 metrics['FL'] = np.concatenate((metrics['FL']), axis=0)
-                #metrics['FL'] = numpy.concatenate((metrics['FL']), axis=0)
-                
-        #else: ## assures every element in GT/FL is numpy
-        ## done inside metric/Metrics/get_fl
-        ## as prior to calculate metrics per vid 
-        #    for lbl, metrics in self.DATA.items():
-        #        metrics['GT'] = [ numpy.array(gt) for gt in metrics['GT'] ]
-        #        metrics['FL'] = [ fl.asnumpy() for fl in metrics['FL'] ]
 
     def log(self):
         log.debug("VldtInfo.DATA")
@@ -223,7 +231,6 @@ class Validate:
                 self.attws.append( ndata['attw'].repeat( self.cfg_frgb.fstep, dim=0 ) )
 
         self.sls = torch.cat((self.sls), dim=0)
-        log.debug(f'-> sls: {self.sls.shape}')
         
         if self.ret_att: 
             self.attws = torch.cat((self.attws), dim=0)
@@ -232,18 +239,8 @@ class Validate:
     #@torch.no_grad()    
     def _fwd_glob(self, net, netpstfwd, feat):
         ndata = net(feat)
-        
-        #if self.cfg_net.id == 'zzz':
-        #    if 'attw' in ndata:
-        #        log.debug(f'slcores {ndata["slscores"]=}')
-        #        log.debug(f'attw {ndata["attw"]=}')
-        #        #self.sls = ndata['attw'] * ndata['slscores']
-        #        self.sls = ndata['slscores']
-        #    else:
-        #        self.sls = ndata['slscores']
-                
         self.sls = netpstfwd.infer(ndata)
-        self.sls = self.sls.view(-1) ## !!!!! take care in infer with a super() on return
+        #self.sls = self.sls.view(-1) ## !!!!! take care in infer with a super() on return
         
     
     @torch.no_grad()    
@@ -253,10 +250,10 @@ class Validate:
         
         log.info(f'$$$$ Validate starting')
         for i, data in enumerate(self.DL):
-            log.debug(f'[{i}] ********************')
+            #log.debug(f'[{i}] ********************')
 
             feat=data[0][0].to(self.dvc); label=data[1][0]; fn=data[2][0]
-            log.debug(f'[{i}] {feat.shape} , {fn} , {label}')
+            #log.debug(f'[{i}] {feat.shape} , {fn} , {label}')
             if feat.ndim == 2: 
                 ## ??? dl shouldnt put extra bat dim 
                 feat = feat.unsqueeze(0) 
@@ -268,8 +265,14 @@ class Validate:
             #log.debug(f'[{i}] {feat.shape} , {fn} , {label}')
             
             self.fwd(net, netpstfwd, feat)
-            log.debug(f'-> sls: {self.sls.shape}')
+            #log.debug(f'-> sls: {self.sls.shape}')
             ## self.sls is at segment level 
+            
+            
+            #if '000' not in label[0]:
+            #log.warning(f'[{i}] {feat.shape} , {fn} ') #, {label}
+            #log.error(f'-> sls: {self.sls.shape} {self.sls.mean()} {self.sls.max()}')
+            
             
             ##############
             ## frame-level
@@ -279,10 +282,10 @@ class Validate:
             ##      -> truncate the generated GT (which has video nframes length) to match the FL 
             
             tmp_gt = self.gtfl.get(fn)
-            log.debug(f' tmp_gt: {len(tmp_gt)}')
+            #log.debug(f' tmp_gt: {len(tmp_gt)}')
                 
             ## 1 segmnt = self.cfg_frgb.fstep = (64 frames, slowfast mxnet) (32 frames, i3d mxnet) (16, i3dtorchdmil)
-            tmp_fl = self.sls.cpu().numpy()
+            tmp_fl = self.sls.cpu().detach().numpy()
             tmp_fl = np.repeat(tmp_fl, self.cfg_frgb.fstep)
             log.debug(f' tmp_fl: {len(tmp_fl)} {tmp_fl.shape} {type(tmp_fl)} {type(tmp_fl[0])}')
             
@@ -296,7 +299,7 @@ class Validate:
                 tmp_fl = tmp_fl[:min_len]
                 tmp_gt = tmp_gt[:min_len]
             ## clip feats can accomodate more snippets, or just dif sample strat ??
-            log.debug(f' tmp_fl_rshp: {len(tmp_fl)}')
+            #log.debug(f' tmp_fl_rshp: {len(tmp_fl)}')
             
             assert len(tmp_fl) == len(tmp_gt), f'{self.cfg_frgb.fstep} cfg_frgb.fstep * {self.sls.shape[0]} len  != {len(tmp_gt)} orign video frames'
             
@@ -307,9 +310,9 @@ class Validate:
         self.vldt_info.upgrade()
         self.vldt_info.log()
         
-        self.watch_info.log()        
+        #self.watch_info.log()        
         self.watch_info.upgrade()
-        self.watch_info.log()
+        #self.watch_info.log()
 
         mtrc_info = self.metrics.get_fl(self.vldt_info)
         log.info(f'$$$$ VALIDATE @ {hh_mm_ss(time.time() - tic)}')
@@ -341,7 +344,7 @@ class GTFL:
         vline = next((item for item in self.gtlines if str(item[0]) in vn), None)
         ## if in annotations -> abnormal
         if vline is not None:
-            log.debug(f'GTFL.get({vn}) found {vline}')
+            #log.debug(f'GTFL.get({vn}) found {vline}')
             
             ## ucf: Burglary005_x264 Burglary 4710 5040 -1 -1
             if len(vline) > 1 and vline[1].isalpha(): 
@@ -359,6 +362,6 @@ class GTFL:
         
         #else: full 0's     
             
-        log.debug(f'GTFL.get({vn}) gt {len(tmp_gt)}')
+        #log.debug(f'GTFL.get({vn}) gt {len(tmp_gt)}')
         return np.array(tmp_gt)
 

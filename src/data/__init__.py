@@ -1,6 +1,5 @@
 from src.data.traindl import get_trainloader
 from src.data.testdl import get_testloader
-from src.data.viddl import get_videoloader
 
 from src.data._data import (
     FeaturePathListFinder,

@@ -12,18 +12,16 @@ defaults:
   - dataloader: low
   - model: mir
   - vldt: dflt
-  - path:   ion # slarch #
+  - path: slarch # ion #
   - xtra: dflt
   - hydra: dflt
   
-  #- fext: null
-  - exp: null
+  - exp: null #model
   - debug: null
 
 
-name: ${dyn_name:${model.net.id},${model.net.vrs}}  ## -> {}_{}
-#task_name: ${dyn_taskname:${data.id},${data.frgb.id},${data.faud.id}}
-task_name: ${dyn_taskname:${data.id},${data.frgb.id},'',${datatrnsfrm.train.crops2use}}
+name: ${dyn_name:${model.net.id},${model.net.vrs}}
+task_name: ${dyn_vadtaskname:${data},${datatrnsfrm}} 
 
 tags: [""]
 

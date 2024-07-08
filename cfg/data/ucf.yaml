@@ -1,4 +1,5 @@
 id: ucf
+
 lbls:
   id:
     - 'Normal'
@@ -42,11 +43,21 @@ len:
     normal: 150
     abnormal: 140
 
-## id value in each dl/ds/(frgb or faud) represents folder name
-## frgb/cliptsa.yaml w/ id: CLIPTSA 
-## excpets 2 folders (train/test) as froot/CLIPTSA/train+test
-
+## data.frgb/faud.id represents folder name
+## froot
+## └── RGB
+##     ├── CLIPTSA
+##     │   ├── TEST
+##     │   └── TRAIN
+##     └── I3DROCNG
+##         ├── TEST
+##         └── TRAIN
 gt: '${hydra:runtime.cwd}/data/gt/ucf.txt' ## del normal lines
 tframes: '${hydra:runtime.cwd}/data/gt/ucf_tframes.txt'
 froot: ${path.ucf_froot}
 vroot: ${path.ucf_vroot}
+
+
+fps: 30
+w: 320
+h: 240

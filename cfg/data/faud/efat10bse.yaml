@@ -1,0 +1,36 @@
+defaults:
+  - _hear.yaml
+
+## EfficientAT
+## https://github.com/fschmid56/EfficientAT_HEAR
+## https://github.com/fschmid56/EfficientAT
+id: efat
+vrs: 10bse
+ds: 
+  - ucf
+feat_dim: 1032
+
+clip_len: 16  
+ncrops: 0
+
+
+model: 
+  _target_: src.fe.hear_mn.mn10_all_b_all_se.load_model
+  #model_name: mn10_as
+  #mode: ("b5", "b11", "b13", "b15","se5", "se11", "se13", "se15")
+  
+##############################################
+#FeatComb   #dim  General Music  Speech  All 
+#L          128   55.64   88.28  43.12   64.38 
+#M_B        472   93.01<  74.66  76.52   81.91 <
+#M_SE       560   87.07   70.77  74.14   77.66 
+#H_Clf1     960   89.10   67.62  69.95   76.15 
+#H_Clf2     1280  85.80   65.87  64.67   72.90 
+#H_Clf3     527   73.50   55.86  42.31   58.79 
+#---------------------------------------------
+#M_B+L      600   87.75   91.10  77.23   86.22 <
+#M_B+M_SE   1032  91.65<  73.07  77.32   81.03 
+#M_B+H_Clf1 1432  87.74   72.83  77.74   79.62 
+#M_B+H_Clf2 1752  89.75   72.20  73.61   79.04 
+#M_B+H_Clf3 999   76.88   61.92  53.90   65.32
+##############################################

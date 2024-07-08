@@ -1,17 +1,35 @@
 defaults:
-  - override job_logging: colorlog
+  - override job_logging: colorlog 
   - override hydra_logging: colorlog
+  #- override sweeper: list
 
-# output directory, generated dynamically on each run
+
 run:
   dir: ${path.log_dir}/${name}/${task_name}/runs/${now:%d-%m}_${now:%H-%M-%S}
+  #dir: ${hydra:runtime.cwd}/log/runs/${now:%d-%m}_${now:%H-%M-%S}
 sweep:
   dir: ${path.log_dir}/${name}/${task_name}/multiruns/${now:%d-%m}_${now:%H-%M-%S}
+  #dir: ${hydra:runtime.cwd}/log/multiruns/${now:%d-%m}_${now:%H-%M-%S}
   subdir: ${hydra.job.num}
 
-#log_key: ${name}/${task_name}
-job_logging: #disabled
+
+job_logging:
+
   formatters:
+    simple: 
+      format: '[%(asctime)s][${name}--${task_name}][%(levelname)s] - %(message)s'
+      datefmt: '%H:%M:%S'
+
     colorlog:
-      format: '[%(black)s${name}%(reset)s:%(blue)s%(name)s%(reset)s:%(cyan)s%(lineno)s%(reset)s][%(log_color)s%(levelname)s%(reset)s] - %(message)s'
-      ## [src.vldt.vldt:316][INFO] - $$$$ VALIDATE @ 00:00:06
+      format: '[%(black)s${name}--${task_name}%(reset)s:%(blue)s%(name)s%(reset)s:%(cyan)s%(lineno)s%(reset)s][%(log_color)s%(levelname)s%(reset)s] - %(message)s'
+
+#  handlers:
+#    file:
+#      class: logging.FileHandler
+#      formatter: simple
+#      filename: ${path.out_dir}/run.log  #${hydra.job.name}.log
+#      #mode: 'a'
+
+## https://github.com/facebookresearch/hydra/issues/1903
+## https://github.com/facebookresearch/hydra/discussions/2804
+## https://github.com/facebookresearch/hydra/issues/2735

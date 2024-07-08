@@ -106,33 +106,6 @@ class PositionwiseFeedForward(nn.Module):
 
 
 ###############
-class AVCE_Model(nn.Module):
-    def __init__(self):
-        super(AVCE_Model, self).__init__()
-        c = copy.deepcopy
-        dropout = 0.1 #args.dropout
-        nhead = 4 #args.nhead
-        hid_dim = 128 #args.hid_dim
-        ffn_dim = 128 #args.ffn_dim
-        num_classes = 1
-        self.multiheadattn = MultiHeadAttention(nhead, hid_dim)
-        self.feedforward = PositionwiseFeedForward(hid_dim, ffn_dim)
-        self.fc_v = nn.Linear(1024, hid_dim)
-        self.fc_a = nn.Linear(128, hid_dim)
-        self.cma = CrossAttentionBlock(
-            TransformerLayer(hid_dim, 
-                            MultiHeadAttention(nhead, hid_dim), 
-                            c(self.feedforward), 
-                            dropout))
-        self.att_mmil = Att_MMIL(hid_dim, num_classes)
-
-    def forward(self, f_a, f_v, seq_len):
-        f_v, f_a = self.fc_v(f_v), self.fc_a(f_a) ## b, t, 128
-        v_out, a_out = self.cma(f_v, f_a) ## b, t, 128
-        #mil_vls, a_sls, v_sls, av_sls = 
-        return self.att_mmil(a_out, v_out, seq_len), v_out, a_out
-
-
 class Att_MMIL(nn.Module):
     def __init__(self, input_dim, num_classes):
         super(Att_MMIL, self).__init__()
@@ -161,6 +134,34 @@ class Att_MMIL(nn.Module):
         av_sls = frame_prob.sum(dim=2) ## b, t, 1
         mil_vls = self.clas(av_sls, seq_len) ## b
         return mil_vls, a_sls, v_sls, av_sls
+
+
+class AVCE_Model(nn.Module):
+    def __init__(self):
+        super(AVCE_Model, self).__init__()
+        c = copy.deepcopy
+        dropout = 0.1 #args.dropout
+        nhead = 4 #args.nhead
+        hid_dim = 128 #args.hid_dim
+        ffn_dim = 128 #args.ffn_dim
+        num_classes = 1
+        self.multiheadattn = MultiHeadAttention(nhead, hid_dim)
+        self.feedforward = PositionwiseFeedForward(hid_dim, ffn_dim)
+        self.fc_v = nn.Linear(1024, hid_dim)
+        self.fc_a = nn.Linear(128, hid_dim)
+        self.cma = CrossAttentionBlock(
+            TransformerLayer(hid_dim, 
+                            MultiHeadAttention(nhead, hid_dim), 
+                            c(self.feedforward), 
+                            dropout))
+        self.att_mmil = Att_MMIL(hid_dim, num_classes)
+
+    def forward(self, f_a, f_v, seq_len):
+        f_v, f_a = self.fc_v(f_v), self.fc_a(f_a) ## b, t, 128
+        v_out, a_out = self.cma(f_v, f_a) ## b, t, 128
+        #mil_vls, a_sls, v_sls, av_sls = 
+        return self.att_mmil(a_out, v_out, seq_len), v_out, a_out
+
 
 
 class Single_Model(nn.Module):
@@ -192,10 +193,10 @@ class Single_Model(nn.Module):
     def forward(self, f, seq_len):
         f = self.fc_v(f)  ## b, t, 128
         sa = self.cma(f)  ## b, t, 128  
-        out = self.fc(sa) ## b, t, 128  
+        out = self.fc(sa) ## b, t, 1  
         if seq_len is not None:
             ## topkmean
-            out = self.clas(out, seq_len) ## VL
+            out = self.clas(out, seq_len) ## b VL
         return out
 
 net_av = AVCE_Model()

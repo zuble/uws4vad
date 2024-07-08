@@ -1,3 +1,8 @@
+# path to root directory
+# this requires PROJECT_ROOT environment variable to exist
+# PROJECT_ROOT is inferred and set by pyrootutils package in `train.py` and `eval.py`
+#root_dir: ${oc.env:PROJECT_ROOT}
+
 ## always start from main
 work_dir: ${hydra:runtime.cwd}
 ## where to store small data gt,..
@@ -5,16 +10,13 @@ data_dir: ${path.work_dir}/data/
 ## where hydra creates stuff
 log_dir: ${path.work_dir}/log/
 
+# path to output directory, created dynamically by hydra
+out_dir: ${hydra:runtime.output_dir}
+
+
 fext:
   models_dir: ${path.work_dir}/data/fext/
   out_dir: ${path.work_dir}/data/ftmp/
-
-# path to output directory, created dynamically by hydra
-# path generation pattern is specified in `configs/hydra/default.yaml`
-# use it to store all files generated during the run, like ckpts and metrics
-out_dir: ${hydra:runtime.output_dir}
-#out_dir: ${path.log_dir}/${name}/${task_name}/params
-
 
 ##########
 ## each dl/ds/info has both gt/vroot/froot point to these

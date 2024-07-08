@@ -6,6 +6,45 @@ from src.utils.logger import get_log
 log = get_log(__name__)
 
 
+class SegSel(nn.Module):
+    def __init__(self, _cfg):
+
+        self.k = _cfg.k
+        self.anometric = self.mgnt
+        self.do = nn.Dropout(0.7)
+
+    def gather_feats(self, feat_magn, feats):
+        nc, b, t, f = feats.shape
+        
+        feat_magn_drop = feat_magn * self.do( torch.ones_like(feat_magn) ) ## (b, t) drop some
+        idx = torch.topk(feat_magn_drop, self.k , dim=1)[1] ## (b, k)
+        idx_feat = idx.unsqueeze(2).expand([-1, -1, feats.shape[-1]]) ## (b, k, f)
+        #log.debug(f"{feat_magn.shape=} -topk-> {idx.shape=}->{idx_feat.shape=}")
+        
+        feats_sel = torch.zeros(0, device=feats.device)
+        for i, feat in enumerate(feats):
+            tmp = torch.gather(feat, 1, idx_feat) ## (b, k, f)
+            feats_sel = torch.cat((feats_sel, tmp))
+        ## (b*nc, k, f) 
+        #log.debug(f"{feats.shape=} gather {idx_feat.shape=} over nc dim -> {feats_sel.shape=} ")
+        return feats_sel, idx
+    
+    def mgnt(self, feats, labels):
+        ## (bs*ncrops, t, f)
+
+        feat_magn = torch.norm(feats, p=2, dim=2)  ## ((bs)*ncrops, t)
+        feat_magn = super().uncrop2(feat_magn, 'mean') ## (bs, t)
+        
+        abn_mask = ndata["attw"][ ldata['label'] != 0 ] ## bag, t
+        nor_mask = ndata["attw"][ ldata['label'] == 0 ]
+        
+        abn_fmagn = feat_magn[abn_mask] 
+        nor_fmagn = feat_magn[nor_mask]
+
+        #norm_fmagn = feat_magn[0:self.bs//2]  ## (bs//2, t) 
+        #abnr_fmagn = feat_magn[self.bs//2:]  ## (bs//2, t) 
+
+
 class Rtfm(nn.Module):
     def __init__(self, _cfg):
         super(Rtfm, self).__init__()
@@ -21,40 +60,34 @@ class Rtfm(nn.Module):
         
         feat_magn_drop = feat_magn * self.do( torch.ones_like(feat_magn) ) ## (b, t) drop some
         idx = torch.topk(feat_magn_drop, self.k , dim=1)[1] ## (b, 3)
-        idx_feat = idx.unsqueeze(2).expand([-1, -1, feats.shape[2]]) ## (b, 3, f)
+        idx_feat = idx.unsqueeze(2).expand([-1, -1, feats.shape[-1]]) ## (b, 3, f)
         #log.debug(f"{feat_magn.shape=} -topk-> {idx.shape=}->{idx_feat.shape=}")
         
         feats_sel = torch.zeros(0, device=feats.device)
         for i, feat in enumerate(feats):
-            feats_sel = torch.gather(feat, 1, idx_feat)   # top 3 features magnitude in abnormal bag
-            ## feats_sel = feat[torch.arange(bs)[:, None, None], idx_abn[:, :, None], :]
-            ## (bs/2, 3, f)
-            feats_sel = torch.cat((feats_sel, feats_sel))
-        # (bs/2*nc, 3, f) 
+            tmp = torch.gather(feat, 1, idx_feat) ## (b, k, f)
+            feats_sel = torch.cat((feats_sel, tmp))
+        ## (b*nc, 3, f) 
         #log.debug(f"{feats.shape=} gather {idx_feat.shape=} over nc dim -> {feats_sel.shape=} ")
-        
         return feats_sel, idx
     
-    
-    def forward(self, abnr_fmagn, norm_fmagn, abnr_feats, norm_feats, abnr_sls, norm_sls, ldata):
-        
-        ########
-        ## FEATS
+    def forward(self, abnr_fmagn, norm_fmagn, abnr_feats, norm_feats, abnr_sls, norm_sls, ldata):    
         ## abnormal
-        feat_sel_abn, idx_abn = self.gather_feats(abnr_fmagn, abnr_feats) ## (bag*nc, k, f)
-        afeat = feat_sel_abn.mean(dim=1) ## (bag*nc, f)
-        l2norm_abn = torch.norm(afeat, p=2, dim=1) ## (bag*nc)
-        loss_abn = torch.abs(self.margin - l2norm_abn)
-
+        ## (nc, bag, t, f) -> (bag*nc, k, f)
+        feat_sel_abn, idx_abn = self.gather_feats(abnr_fmagn, abnr_feats)
+        afeat = feat_sel_abn.mean(dim=1) ## (bag*nc, f) <- key point ? 
+        
         ## normal
         feat_sel_norm, idx_norm = self.gather_feats(norm_fmagn, norm_feats) ## (bag*nc, k, f)
         nfeat = torch.mean(feat_sel_norm, dim=1) ## topk mean
-        loss_norm = torch.norm(nfeat, p=2, dim=1)
         
-        loss_rtfm = torch.mean((loss_abn + loss_norm) ** 2)
+        ## fl
+        l2n_abn = torch.norm(afeat, p=2, dim=1) ## (bag*nc)
+        loss_fabn = torch.abs(self.margin - l2n_abn)
+        loss_fnor = torch.norm(nfeat, p=2, dim=1)
+        loss_rtfm = torch.mean((loss_fabn + loss_fnor) ** 2)
         
         
-        #################
         ## SCORES        
         #idx_abn_sls = idx_abn.unsqueeze(2).expand([-1, -1, abnr_sls.shape[2]]) ## (bag, 3, 1)
         sls_sel_abn = torch.gather(abnr_sls, dim=1, index=idx_abn) ## bag, k

@@ -1,4 +1,5 @@
 id: xdv
+
 lbls:
   id:
     - 'label_A'
@@ -33,3 +34,7 @@ gt: ${hydra:runtime.cwd}/data/gt/xdv.txt
 tframes: '${hydra:runtime.cwd}/data/gt/xdv_tframes.txt'
 froot: ${path.xdv_froot}
 vroot: ${path.xdv_vroot}
+
+fps: 24
+w: ~
+h: ~

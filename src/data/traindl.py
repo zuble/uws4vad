@@ -492,7 +492,6 @@ class TrainFrmter():
     def milfrmter(self, tdata, ldata, trn_inf):
         (nfeat, nlabel), (afeat, alabel) = tdata
         
-        
         ## simply know that bs/2 *0 , bs/2 *1 ?
         ## or add no mather what ?
         ldata["label"] = torch.cat((nlabel, alabel), 0).to(trn_inf['dvc']) 

@@ -1,0 +1,35 @@
+defaults:
+  - _.yaml
+  - main: dflt
+  - cls: ~
+  - pstfwd: dflt
+
+id: bnwvad
+
+
+main:
+  _cfg:
+    emb_dim: 512
+
+    ## transf
+    depth: 2
+    heads: 4
+    head_dim: 128
+    mlp_dim: 512
+    do: 0.
+
+    ## normal head
+    nh_dimratios: [16, 32] ## mlp_dim/[] control conv dim
+    nh_ks: [1, 1, 1]
+    #ncrops: ${datatrnsfrm.train.crops2use}
+
+pstfwd:
+  _cfg:
+    ## sbs sel strat train
+    
+    ## xdv
+    #sls_ratio: 0.2
+    #bls_ratio: 0.4
+    ## ucf
+    sls_ratio: 0.1
+    bls_ratio: 0.2

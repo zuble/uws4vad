@@ -5,7 +5,9 @@ import math
 from hydra.utils import instantiate as instantiate, call as call
 import time , os, os.path as osp, gc, traceback, sys
 from collections import defaultdict, deque
-from tqdm import tqdm
+#from tqdm import tqdm
+from rich.live import Live
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn
 
 from src.data import get_trainloader, get_testloader, run_dl
 from src.model import ModelHandler, build_net
@@ -14,7 +16,7 @@ from src.utils import hh_mm_ss, get_log, Visualizer
 log = get_log(__name__)
 
 
-def trainer(cfg):
+def trainer(cfg, vis):
     trn_inf = {
         'epo': 0,
         'bat': 0,
@@ -29,15 +31,17 @@ def trainer(cfg):
     
     ## MODEL
     net, netpstfwd = build_net(cfg)
-    optima = instantiate(cfg.model.optima, params=net.parameters() ) #, _convert_="partial"
+    optima = instantiate(cfg.model.optima, params=net.parameters() , _convert_="partial") #,
     
     ## LOAD
-    MH = ModelHandler(cfg)
+    MH = ModelHandler(cfg, True)
     if cfg.load.get("chkpt_path"): 
         ## net_arch/optima need to match struct of ones in mstate
-        net, optima = MH.load_train_state(trn_inf, net_arch=net, optima=optima)
-    else: log.info("Starting fresh train")
-        
+        mstate = MH.get_train_state(trn_inf)
+        net.load_state_dict(mstate["net"]) #, strict=True
+        optima.load_state_dict(mstate["optima"])
+    net.to(cfg.dvc)
+    
     ## LRS
     lrs = None
     if cfg.model.get("lrs"):
@@ -49,33 +53,45 @@ def trainer(cfg):
     #log.info(cfg.model.loss)
     #lossfx = {lid: instantiate(cfg.model.loss[lid], _convert_="partial") for lid in cfg.model.loss}
     lossfx = {}
-    ## if lossfx is a function, set partial
-    ## if class do normal
     for lid, lcfg in cfg.model.loss.items():
         if '_target_' in lcfg:
             target = lcfg._target_
-            if target.split('.')[-1][0].isupper(): lossfx[lid] = instantiate(lcfg)
-            else: lossfx[lid] =  instantiate(lcfg, _convert_="partial", _partial_=True)
+            if target.split('.')[-1][0].isupper(): ## class do normal
+                lossfx[lid] = instantiate(lcfg)
+            else: ## lossfx is a function, set partial
+                lossfx[lid] =  instantiate(lcfg, _convert_="partial", _partial_=True)
     for key, value in lossfx.items():
         log.debug({key: value})
     ldata = {}
     
-    ## MONITOR
-    vis = Visualizer(f'{cfg.name} / {cfg.task_name}', restart=True, del_all=False)
-    #vis.delete(f'{cfg.name}/{cfg.task_name}')
-    
+    ## VALIDATE
     cfg_vldt = cfg.vldt.train
     vldt = Validate(cfg, cfg_vldt, cfg.data.frgb, vis)
     if cfg.vldt.dryrun:
         log.info("DBG DRY VLDT RUN")
-        vldt.start(net, netpstfwd); vldt.reset() #;return
+        vldt.start(net, netpstfwd); vldt.reset() ;return
         
     tmeter = TrainMeter( cfg.dataloader.train, cfg_vldt, vis)
     
+    
+    
+    #progress = Progress(
+    #    SpinnerColumn(),
+    #    TextColumn("[progress.description]{task.description}"),
+    #    BarColumn(),
+    #    TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+    #    TimeRemainingColumn(),
+    #    expand=True
+    #)
+
     try:
+        ## Live display context manager
+        #with Live(progress, refresh_per_second=10):
+        #    task1 = progress.add_task("[cyan]Training...", total=cfg.model.epochs)
+            
         trn_inf['ttic'] = time.time()
-        for epo in tqdm(range(0,cfg.model.epochs), desc="Epoch", unit='epo', file=sys.stdout):
-        #for epo in range(cfg.model.epochs):
+        #for epo in tqdm(range(0,cfg.model.epochs), desc="Epoch", unit='epo', file=sys.stdout):
+        for epo in range(cfg.model.epochs):
             trn_inf['epo'] = epo+1
             trn_inf['etic'] = time.time()
             
@@ -99,6 +115,8 @@ def trainer(cfg):
                 #######
                 optima.zero_grad()
                 loss_glob.backward()
+                if cfg.model.get("clipnorm"): ## bndfm
+                    torch.nn.utils.clip_grad_norm_(net.parameters(), 1.)
                 optima.step() 
                 #######
                 
@@ -130,7 +148,8 @@ def trainer(cfg):
                 vldt.reset()
                 #torch.backends.cudnn.benchmark = True
                 MH.record( mtrc_info, net, optima, trn_inf)
-                
+            
+            #progress.update(task1, advance=1)
             
         log.info(f"$$$$ train done in {hh_mm_ss(time.time() - trn_inf['ttic'])}")
         

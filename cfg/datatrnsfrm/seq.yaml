@@ -13,3 +13,6 @@ train:
     ## glob -> rnd whole idxs of feat
     ## each crop will have the same rnd
     - null
+
+#test:
+#  crops2use: 1

@@ -22,6 +22,7 @@ _HYDRA_PARAMS = {
     "config_name": "ucf.yaml",
 }
 
+
 @utils.reg_custom_resolvers(**_HYDRA_PARAMS)
 @hydra.main(**_HYDRA_PARAMS)
 def main(cfg: DictConfig) -> None:
@@ -31,33 +32,51 @@ def main(cfg: DictConfig) -> None:
     #log.debug(f"Original dir : {hydra.utils.get_original_cwd()}")
 
     #log.debug(utils.collect_random_states())
-    utils.xtra(cfg)
+    #utils.xtra(cfg)
 
-    if cfg.get("fext"):
-        from src.fext import FeatExtract
-        utils.xtra(cfg)
-        FeatExtract(cfg)
-
-
-    elif cfg.get("tmp"):
+    if cfg.get("tmp"):
         from src import tmp
         utils.xtra(cfg)
         
-        tmp.Debug(cfg)
+        #tmp.Debug(cfg)
+        tmp.aud_emb(cfg)
+
+
+    elif cfg.get("fext"):
+        if cfg.modal == 'rgb':
+            from src.fext import VisFeatExtract
+            utils.xtra(cfg)
+            VisFeatExtract(cfg)
+            
+        elif cfg.modal == 'aud':
+            from src.fext import AudFeatExtract
+            utils.xtra(cfg)
+            AudFeatExtract(cfg)
+            
+    else:
+        vis = utils.Visualizer(f'{cfg.name} / {cfg.task_name}', restart=True, del_all=False)
+        #vis.delete(f'{cfg.name}/{cfg.task_name}')
+        
+        if cfg.get("train"):
+            from src.train import trainer
+            utils.init_seed(cfg)
+            utils.xtra(cfg)
+            
+            trainer(cfg, vis)
+            
+            ## 4 detailed inspection
+            if cfg.get("test"):
+                from src.test import tester
+                tester(cfg, vis)
         
         
-    elif cfg.get("test"):
-        from src import test
-        utils.init_seed(cfg, False)
-        utils.xtra(cfg)
-        test.test(cfg)
-    
-    
-    elif cfg.get("train"):
-        from src import train
-        utils.init_seed(cfg)
-        utils.xtra(cfg)
-        loader = train.trainer(cfg)
+        elif cfg.get("test"):
+                from src.test import tester
+                utils.init_seed(cfg, False)
+                utils.xtra(cfg)
+                tester(cfg, vis)
+        
+        else: log.error("任选其一 fext / tmp / train / test")
 
 
 if __name__ == "__main__":

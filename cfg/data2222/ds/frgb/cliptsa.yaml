@@ -1,8 +1,0 @@
-## https://github.com/joos2010kj/CLIP-TSA
-id: CLIPTSA
-ds: 
-  - ucf
-  - xdv
-fstep: 16  ## midle frame from 16 frame snippets
-dfeat: 512
-ncrops: 0

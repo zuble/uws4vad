@@ -1,5 +1,6 @@
 ## runs a fwd validation pass on start of either train/test
 ## set to true when debug=vldt
+## curious results of how predetermined feats are or pure rndmes
 dryrun: False 
 
 ## VALIDATE
@@ -7,6 +8,8 @@ dryrun: False
 ## >1 -> controls chunck size to divid input feats
 ##  atm only network depended of this is attnmil, although it might be a good exp
 fwd_siz: ${dyn_vldtfwd:${model.net.id},9}
+
+
 
 
 train:
@@ -46,11 +49,18 @@ test:
   ## jumps Validate and uses vldt_info.pkl if already generated
   frompkl: ""
 
+
   ## per_what perspectives to show validation results
-  per_what: lbl ## lbl , vid
+  per_what: vid ## lbl , vid
+  
+  ## METRICS ( atm only working in "vid" )
+  ## makes this variables global per vldt, to serve high_state and this
+  ## sorted results in descending order according to this
+  record_mtrc: ${dyn_vldtmtrc:${data.id},''}
+
   ## send barplot per metric to visdom server (xaxis is labels)
   ## useful for compare same metrics per multiples experiments in visdom
-  mtrc_visplot: 1
+  mtrc_visplot: 0
   ## sends metrics table as png to visdom server
   mtrc_vistabe: 0
   ## saves metrics table as png
@@ -83,22 +93,21 @@ test:
     ## vizualitation frontend
     ## how are the seleted formats watched
     ## wnshow:  uses opencv.imshow for asp | matplt.show for gtfl/attws
-    ## visdom: sends everything to visdom utils/misc.py/Visualizer
+    ## visdom: sends everything to visdom utils/viz.py/Visualizer
     frtend: visdom
-    ## 1 or multiples numbers of selected dataset LBLS_INFO
-    ## eg: UCF abuse and vandalism ['1','13']
-    ## if None selected , it will be prompted after getting the results of validation
-    label: ['111']
     ## interactively selection of vpath to watch
     ## enables a terminal diving menu into vldt_info dict
-    ## if false cycles trough videos of seleted WATCH.LABEL
-    guividsel: true
+    ## if false cycles trough videos based on below var
+    guividsel: false
+    ## 1 or multiples numbers from data.lbls.info
+    ## eg: UCF abuse and vandalism ['1','13']
+    ## if None selected, a prompt enabling to dynamic select videos to watch
+    label: ['']
+    ## controls params when asp is enabled in watch.frmt
     asp:
-      ## frames 2 skip in hte overlayed video to save time :)
-      fs: 1
+      fs: 1   ## frames 2 skip in hte overlayed video to save time :)
       ## float: scores in text/numbers
       ## overlay: half machine other half gt , green-normal / red-abn
       cvputfx: float
-      ## anomaly score [0:1[ thrashold to trigger red/green colors when cvputfx is overlay
-      th: 0.5
+      th: 0.5  ## if overlay, sets score th [0:1[ thold to trigger red/green colors
       

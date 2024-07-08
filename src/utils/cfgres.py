@@ -57,15 +57,30 @@ def dyn_vldtfwd(netid, chuksiz):
     if netid == 'attnmil': return chuksiz
     else: return None
 
+
 def dyn_name(x,y): 
     if y: return f"{x}_{y}"
     else: return x
-def dyn_taskname(ds,rgb,aud,crops2use):
-    tmp = f"{ds}_{rgb.lower()}"
-    if crops2use: tmp =+ f"-{crops2use}"
-    if aud: 
-        tmp =+ f"_{aud.lower()}"
+    
+def dyn_vadtaskname(ds,dt):
+    tmp = f"{ds.id}_{ds.frgb.id.lower()}"
+    if dt.train.crops2use: 
+        tmp += f"-{str(dt.train.crops2use)}"
+    if ds.get("aud"): 
+        tmp += f"_{ds.aud.id.lower()}"
     return tmp
+
+
+#def dyn_fetaskname(cfg_faud,cfg_frgb):
+#    if cfg_frb is None:
+#        
+#    tmp = f"{ds.id}_{ds.frgb.id.lower()}"
+#    if dt.train.crops2use: 
+#        tmp += f"-{str(dt.train.crops2use)}"
+#    if ds.get("aud"): 
+#        tmp += f"_{ds.aud.id.lower()}"
+#    return tmp
+
 
 def dyn_retatt(watch_frm, intest):
     if not intest: return False
@@ -88,7 +103,7 @@ def reg_custom_resolvers(version_base: str, config_path: str, config_name: str) 
         'dyn_name': dyn_name,
         'dyn_vldtfwd': dyn_vldtfwd,
         'dyn_retatt': dyn_retatt,
-        'dyn_taskname': dyn_taskname
+        'dyn_vadtaskname': dyn_vadtaskname
     }
     for resolver, function in new_res.items():
         OmegaConf.register_new_resolver(resolver, function)

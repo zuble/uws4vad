@@ -1,0 +1,27 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - data: xdv
+  - data/faud: efat10bse
+  - dataloader: low
+  - path: ion #slarch #   
+  - xtra: dflt
+  - hydra: dflt
+  
+  - exp: null
+  - debug: null
+
+fext: 1
+name: 'fe_aud-${dyn_name:${data.faud.id},${data.faud.vrs}}'
+task_name: ${data.id}
+tags: [""]
+
+dvc: ${dyn_dvc:-1}
+
+
+modal: aud
+dr: False ## dry-run
+## folder path with .mp4's
+## if ~ , all folders in data.vroot are extracted
+ext_dir: ~ 

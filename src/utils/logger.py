@@ -1,9 +1,11 @@
 import logging, os
-
+from rich.logging import RichHandler
+import hydra
 
 def get_log(module_name, cfg=None):
-    log = logging.getLogger(module_name)
 
+    log = logging.getLogger(module_name)
+    
     if cfg is not None: 
         if cfg.get("debug"):
             # Convert list of debug paths into a comma-separated string
@@ -16,6 +18,10 @@ def get_log(module_name, cfg=None):
             os.environ['UWS4VAD_DBG'] = ""
             lvl = logging.INFO
         #else: lvl
+        
+        os.environ['UWS4VAD_LOGP'] = cfg.path.out_dir
+        log.error(cfg.path.out_dir)
+            
     else:
         lvl = logging.INFO
     
@@ -27,6 +33,7 @@ def get_log(module_name, cfg=None):
                 lvl = logging.DEBUG
                 log.warning(f"dbg[{dbgp}] set {module_name}")
                 break
-            
+    
+                
     log.setLevel( lvl )
     return log

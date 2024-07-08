@@ -1,0 +1,22 @@
+#######
+## timm
+# https://github.com/huggingface/pytorch-image-models
+id: timm
+vrs: vitamin_base_224.datacomp1b_clip
+#vrs: vitamin_small_224.datacomp1b_clip
+#vrs: vitamin_base_224.datacomp1b_clip
+#vrs: vitamin_large_224.datacomp1b_clip
+#vrs: vit_large_patch14_clip_224.openai_ft_in12k_in1k
+#vrs: eva02_large_patch14_clip_224.merged2b
+#vrs: fastvit_mci2.apple_mclip
+
+
+## VIDEO SAMPLING 
+## from a video, frames are sampled per step
+## then (clip_len) frames form a clip
+## which is the basic unit of data loading
+frame_step: 1 ## Temporal sampling rate, 1 is normal, 2 jumps 1 reads 1..
+clip_len: 16 
+## CLIP models
+## how to pick 1 frame out of 1 clip
+frame_sel: mid ## rnd

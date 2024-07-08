@@ -1,5 +1,9 @@
 ###################
 ## NETWORKS
+from src.model.net.bnwvad import (
+    Network,
+    NetPstFwd
+)
 from src.model.net.rtfm import (
     Network,
     NetPstFwd

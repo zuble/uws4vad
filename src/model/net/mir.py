@@ -19,10 +19,11 @@ class Network(nn.Module):
             self.cls = instantiate(_cls, dfeat=self.dfeat)            
         else: 
             self.cls = SMlp( self.dfeat, _cfg.rate, _cfg.do)
-
+        self.sig = nn.Sigmoid()
+        
     def forward(self, x):
         b, t, f = x.shape
-        out = self.cls(x)
+        out = self.sig( self.cls(x) )
         return {
             'sls': out
         }

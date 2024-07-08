@@ -1,0 +1,23 @@
+defaults:
+  - _.yaml
+  - net: bndfm
+  - optima: adam
+  - lrs: null
+  - loss: null
+  #- _self_
+
+epochs: 50
+
+clipnorm: True
+
+optima:
+  lr: 0.0001
+  weight_decay: 0.00005
+
+loss:
+  mpp: ## feat lvl
+    _target_: src.model.loss.mpp.MPPLoss
+  
+  norm:
+    _target_: src.model.loss.mpp.NormalLoss
+

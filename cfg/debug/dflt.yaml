@@ -10,7 +10,7 @@ hydra:
   job_logging:
     root:
       level: DEBUG
-  verbose: False  ## sets hydra loggers to debug
+  verbose: True  ## sets hydra loggers to debug
 
 
 ## sets log lvl 2 dbg when each entrie in module __name__

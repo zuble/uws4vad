@@ -1,17 +1,23 @@
 import torch
+import numpy as np
 from sklearn.metrics import confusion_matrix, accuracy_score, f1_score, precision_score, average_precision_score, roc_auc_score, recall_score, roc_curve, precision_recall_curve, auc
 
-import os.path as osp , logging, matplotlib, time
+import os.path as osp , logging, time
+
+import matplotlib
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
 logging.getLogger('PIL').setLevel(logging.WARNING)
-import numpy, cv2, matplotlib.pyplot as plt
-matplotlib.use('Agg')
+#from PIL import Image
+
+
 #from prettytable import PrettyTable
+from tabulate import tabulate, SEPARATING_LINE
 import plotly.graph_objs as go, plotly.express as px
 from plotly.subplots import make_subplots
 
-from tabulate import tabulate
-from PIL import Image
+
 
 from src.utils import get_log
 log = get_log(__name__)
@@ -21,7 +27,8 @@ class Metrics(object):
     def __init__(self, cfg_vldt, vis=None):
 
         self.vis = vis
-
+        self.sort_mtrc = cfg_vldt.record_mtrc
+        
         # Visualization and table flags
         self.xtra_mtrcs = cfg_vldt.get('extra_metrics', False)
         self.mtrc_vis_plot = cfg_vldt.get('mtrc_visplot', False)
@@ -32,16 +39,17 @@ class Metrics(object):
         
         #self.net_name = cfg.model.net.id
         
-    def calc_mtrc(self, gt, predictions, key):
-        assert len(gt) == len(predictions), f'len GT {len(gt)} != len FL {len(predictions)}'
+    def calc_mtrc(self, gt, preds, key):
+        assert len(gt) == len(preds), f'len GT {len(gt)} != len FL {len(preds)}'
         
-        fpr, tpr, thresholds = roc_curve(gt, predictions)
+        fpr, tpr, thresholds = roc_curve(gt, preds)
         auc_roc = auc(fpr, tpr)
-        #auc_roc2 = roc_auc_score(gt, predictions)
+        #auc_roc2 = roc_auc_score(gt, preds)
         
-        ap = average_precision_score(gt, predictions)
+        ap = average_precision_score(gt, preds)
+        #log.error(f"{ap} \n\n {gt} \n {preds}\n\n")
         
-        precision, recall, thresholds = precision_recall_curve(gt, predictions)
+        precision, recall, thresholds = precision_recall_curve(gt, preds)
         au_prc = auc(recall, precision)
         
         #self.mtrc_info[key] = { 'AP': [ap], 'AUC_PR': [au_prc], 'AUC_ROC': [auc_roc] }
@@ -62,18 +70,18 @@ class Metrics(object):
             ## https://scikit-learn.org/stable/modules/generated/sklearn.metrics.f1_score.html#sklearn.metrics.f1_score
             log.info(f"F1 pre")
             
-            #thresholds = numpy.array(thresholds)
-            #bin_preds = (predictions[:, numpy.newaxis] >= thresholds).astype(int)
+            #thresholds = np.array(thresholds)
+            #bin_preds = (preds[:, np.newaxis] >= thresholds).astype(int)
             #f1_scores = [f1_score(gt, bin_preds[:, i], pos_label=1) for i in range(bin_preds.shape[1])]
             
-            #f1_scores = [f1_score(gt, (predictions >= thresh).astype(int), pos_label=1) for thresh in thresholds]
+            #f1_scores = [f1_score(gt, (preds >= thresh).astype(int), pos_label=1) for thresh in thresholds]
             
             log.info(f"F1 pos")
             
             optimal_f1 = max(f1_scores)
             optimal_threshold = thresholds[f1_scores.index(optimal_f1)]
-            optimal_precision = precision[numpy.argmax(f1_scores)]
-            optimal_recall = recall[numpy.argmax(f1_scores)]
+            optimal_precision = precision[np.argmax(f1_scores)]
+            optimal_recall = recall[np.argmax(f1_scores)]
 
             ## need to be correted because the dict is rewrited this way
             self.mtrc_info[key] = {
@@ -86,7 +94,15 @@ class Metrics(object):
             
             if self.curv_vis_plot:  self.curv_info[key] = {'f1':[f1], 'ths':[ths]}
 
-
+    def calc_far(self, gt, preds, key, th=0.5):
+        ## from pel4vad
+        preds[preds < th] = 0
+        preds[preds >= th] = 1
+        tn, fp, fn, tp = confusion_matrix(gt, preds, labels=[0, 1]).ravel()
+        far = fp / (fp + tn)
+        self.mtrc_info[key]['FAR'].append(far)
+        #log.error(f"FAR {key} {far}")
+        
     def get_fl(self, vldt_info):
         """
         Entry point for calculating metrics. Determines whether to calculate
@@ -94,39 +110,25 @@ class Metrics(object):
         """
         self.lbls4plot = list(vldt_info.DATA.keys())
         
-        if vldt_info.per_what == 'vid':
-            ## rearranges temporaly vldt dict in order to get metrics per lbl
-            #self.mtrc_info = {lbl: {} for lbl in self.lbls4plot}
-            #self.curv_info = {lbl: {} for lbl in self.lbls4plot}
-            #tmp=vldt_info.DATA
-            #for lbl, metrics in tmp.items():
-            #    metrics['GT'] = numpy.concatenate((metrics['GT']), axis=0)
-            #    metrics['FL'] = np.concatenate((metrics['FL']), axis=0).asnumpy()
-            #self.get_fl_lbl(tmp)
-            #self.proc_mtrc_lbl()
+        if vldt_info.per_what == 'vid': ## get metrics per vid
             
-            ## get metrics per vid
-            ## reset dicts
-            self.mtrc_info = {lbl: {'FN': [], 'AP': [], 'AUC_PR': [], 'AUC_ROC': []} for lbl in self.lbls4plot}
-            #self.curv_info = {lbl: {} for lbl in self.lbls4plot}
-            self.curv_info = {lbl: {'precision': [], 'recall': [], 'fpr': [], 'tpr': []} for lbl in self.lbls4plot}
+            ## lbl: 000.NORM | B1.FIGHT | B2.SHOOT | B4.RIOT | B5.ABUSE | B6.CARACC | G.EXPLOS | 111.ANOM | ALL
+            self.mtrc_info = { self.lbls4plot[0]: {'FN': [], 'FAR': []} }
+            self.mtrc_info.update( {lbl: {'FN': [], 'AP': [], 'AUC_PR': [], 'AUC_ROC': []} for lbl in self.lbls4plot[1:]} )
             
-            ## upgrade vldt_info , assures every element in GT/FL is numpy
-            ## if check is for ccases when vldt_info is loaded from .pkl
-            for lbl, metrics in vldt_info.DATA.items():
-                if type(metrics['GT'][0]) != numpy.ndarray:
-                    metrics['GT'] = [ numpy.array(gt) for gt in metrics['GT'] ]
-                if type(metrics['FL'][0]) != numpy.ndarray:
-                    metrics['FL'] = [ fl.asnumpy() for fl in metrics['FL'] ]
-                    
+            self.curv_info = {lbl: {'precision': [], 'recall': [], 'fpr': [], 'tpr': []} for lbl in self.lbls4plot[1:]}
+            
             self.get_fl_vid(vldt_info.DATA)
             self.proc_mtrc_vid()
             
         else: ## glob && lbl
-            self.mtrc_info = {lbl: {'AP': [], 'AUC_PR': [], 'AUC_ROC': []} for lbl in self.lbls4plot}
-            self.curv_info = {lbl: {'precision': [], 'recall': [], 'fpr': [], 'tpr': []} for lbl in self.lbls4plot}
-            #self.mtrc_info = {lbl: {} for lbl in self.lbls4plot}
-            #self.curv_info = {lbl: {} for lbl in self.lbls4plot}
+            ## glob: 000.NORM | 111.ANOM | ALL
+            ## lbl: 000.NORM | B1.FIGHT | B2.SHOOT | B4.RIOT | B5.ABUSE | B6.CARACC | G.EXPLOS | 111.ANOM | ALL
+            self.mtrc_info = { self.lbls4plot[0]: {'FAR': []} }
+            self.mtrc_info.update( {lbl: {'AP': [], 'AUC_PR': [], 'AUC_ROC': []} for lbl in self.lbls4plot[1:]} )    
+                
+            self.curv_info = {lbl: {'precision': [], 'recall': [], 'fpr': [], 'tpr': []} for lbl in self.lbls4plot[1:]}
+            
             self.get_fl_lbl(vldt_info.DATA)
             self.proc_mtrc_lbl()
         
@@ -136,11 +138,14 @@ class Metrics(object):
     ### FRAME LEVEL PER LABEL
     def get_fl_lbl(self, dict_data):
         ## https://scikit-learn.org/stable/modules/classes.html#module-sklearn.metrics
-        for lbl, data in dict_data.items():
-            log.debug(f"get_fl_lbl/{lbl}")
-            log.debug(f"get_fl_lbl/data['GT']: {len(data['GT'])} {type(data['GT'])} {type(data['GT'][0])}")
-            log.debug(f"get_fl_lbl/data['FL']: {len(data['FL'])} {type(data['FL'])} {type(data['FL'][0])}")
-            self.calc_mtrc( data['GT'], data['FL'], lbl )
+        for i, (lbl, data) in enumerate(dict_data.items()):
+            #log.debug(f"get_fl_lbl/{lbl}: 'GT': {len(data['GT'])}") # {type(data['GT'])} {type(data['GT'][0])}
+            #log.debug(f"get_fl_lbl/{lbl}: 'FL': {len(data['FL'])}") # {type(data['FL'])} {type(data['FL'][0])}
+            
+            if not i: ## 000.NORM
+                self.calc_far( data['GT'], data['FL'], lbl )
+            else:
+                self.calc_mtrc( data['GT'], data['FL'], lbl )
             
             #if lbl != 'ALL' and self.gtfl_vis_plot:
             #    self.plot_allflgt(data['GT'], data['FL'])
@@ -156,12 +161,21 @@ class Metrics(object):
         ############
         ## AU ROC/PR
         ## table-it (single table lbls/metrics) and sends always 2 log , nd in test can send 2 visdom depending on cfg.TEST.VLDT
-        first_metrics = next(iter(self.mtrc_info.values()))
-        headers = ["FL"] + list(first_metrics.keys()) ; rows=[]
-        for label_str, metrics in self.mtrc_info.items():
-            fmetrics = {k: f"{v[0]:.4f}" for k, v in metrics.items()}
-            row = [f'{label_str}'] + list(fmetrics.values()) 
-            rows.append(row) 
+        mtrc_names = list(next(iter( list(self.mtrc_info.values())[1:] )).keys()) ## AP AUC_PR AUC_ROC
+        headers = ["FL"] + mtrc_names ; rows=[]
+        ## FL AP AUC_PR AUC_ROC
+        for i, (lbl_name, metrics) in enumerate(self.mtrc_info.items()):
+            if lbl_name != "000.NORM": 
+                fmetrics = {k: f"{v[0]:.4f}" for k, v in metrics.items()}
+                row = [f'{lbl_name}'] + list(fmetrics.values()) 
+                rows.append(row) 
+            else:
+                tmp_row = [f'{lbl_name}~FAR', f"{metrics['FAR'][0]:.4f}"]
+                tmp_row += ['-'] * (len(mtrc_names) - 1)
+                
+        rows.append([' '] * (len(mtrc_names) + 1))        
+        rows.append(tmp_row)
+        
         table = tabulate(rows, headers, tablefmt="pretty")
         log.info(f'\n{table}')
         #self.tabler(table, 'FL')
@@ -171,35 +185,70 @@ class Metrics(object):
         ############ 
         ## ROC/PR curves
         if self.curv_vis_plot: self.plot_curves()
-    
+    #########################
     
     #########################     
     ### FRAME LEVEL PER VIDEO    
     def get_fl_vid(self, dict_data):
         
-        for lbl, data in dict_data.items():
+        for i, (lbl, data) in enumerate(dict_data.items()):
             for fn, gt, fl in zip( data['FN'] , data['GT'] , data['FL']):
-                log.debug(f"get_fl_vid/{lbl} {fn}")
-                log.debug(f"get_fl_vid/data['GT']: {len(gt)} {type(gt)} {type(gt[0])}")
-                log.debug(f"get_fl_vid/data['FL']: {len(fl)} {type(fl)} {type(fl[0])}")
+                #log.warning(f"*****")
+                #log.warning(f"get_fl_vid/vldt_info.DATA/{lbl} {fn}")
+                ##log.debug(f"get_fl_vid/vldt_info.DATA/GT: {len(gt)} ") #{type(gt)} {type(gt[0])}
+                ##log.debug(f"get_fl_vid/vldt_info.DATA/FL: {len(fl)} ") #{type(fl)} {type(fl[0])}
                 self.mtrc_info[lbl]['FN'].append(fn) ## same indexs of keys arrays belong to metrics of same video
-                self.calc_mtrc(gt, fl, lbl)
-    
+                if not i: ## 000.NORM
+                    self.calc_far( gt, fl, lbl)
+                else:
+                    self.calc_mtrc(gt, fl, lbl) ## populate same idx with mtrc values
+        
+        for lbl_name, metrics in self.mtrc_info.items():
+            log.debug(f"*****")
+            for k in metrics.keys():
+                log.debug(f"self.mtrc_info/{lbl_name}/{k}: {len(metrics[k])} {type(metrics[k])}")
+        ## self.mtrc_info/000.NORM/FN: 150 <class 'list'>
+        ## self.mtrc_info/000.NORM/FAR: 150 <class 'list'>
+        ## self.mtrc_info/8.ROADACC/FN: 23 <class 'list'>
+        ## self.mtrc_info/8.ROADACC/AP: 23 <class 'list'>
+        ## self.mtrc_info/8.ROADACC/AUC_PR: 23 <class 'list'>
+        ## self.mtrc_info/8.ROADACC/AUC_ROC: 23 <class 'list'>
+
     def proc_mtrc_vid(self):  
         ## table-it, 1 per lbl with all videos metrics ordered by AP high to low
-        for class_name, metrics in self.mtrc_info.items():
-            tmp = list(zip(metrics['FN'], metrics['AP'], metrics['AUC_PR'], metrics['AUC_ROC']))
-            tmp = sorted(tmp, key=lambda x: x[1], reverse=True) ## 1-ap 2-au_prc
-            metrics['FN'], metrics['AP'], metrics['AUC_PR'], metrics['AUC_ROC'] = zip(*tmp) 
+        for i, (lbl_name, metrics) in enumerate(self.mtrc_info.items()):
+            if lbl_name != "000.NORM":
+                ## metrics: {'FN': ['Abuse028', 'Abuse030'], 'AP': [0.040333334281393796, 0.23268166089965397], 'AUC_PR': [0.03263809909950772, 0.19132147623132323], 'AUC_ROC': [0.2375417601595612, 0.8626980607184614]}
+                tmp = list(zip(metrics['FN'], metrics['AP'], metrics['AUC_PR'], metrics['AUC_ROC']))
+                
+                sort_index = list(metrics.keys()).index(self.sort_mtrc)
+                tmp = sorted(tmp, key=lambda x: x[sort_index], reverse=True)
+                metrics['FN'], metrics['AP'], metrics['AUC_PR'], metrics['AUC_ROC'] = zip(*tmp) 
+                
+                headers = [lbl_name] + list(metrics.keys())[1:] ; rows = []
+                for i in range(len(metrics['FN'])):
+                    row_metrics = {k: f"{metrics[k][i]:.4f}" for k in headers[1:]}  
+                    row = [metrics['FN'][i]] + list(row_metrics.values())  
+                    rows.append(row)
+                
+                table = tabulate(rows, headers, tablefmt="pretty")
+                log.info(f'\n{table}')
+                self.tabler(table, lbl_name)
             
-            headers = [class_name] + list(metrics.keys())[1:] ; rows = []
-            for i in range(len(metrics['FN'])):
-                row_metrics = {k: f"{metrics[k][i]:.4f}" for k in headers[1:]}  
-                row = [metrics['FN'][i]] + list(row_metrics.values())  
-                rows.append(row)
-            table = tabulate(rows, headers, tablefmt="pretty")
-            log.info(f'\n{table}')
-            self.tabler(table, class_name)
+            else:
+                headers = [lbl_name, 'FAR'] ; rows = []
+                # Sort by FAR in ascending order for "000.NORM"
+                tmp = list(zip(metrics['FN'], metrics['FAR']))
+                tmp.sort(key=lambda x: x[1])
+                metrics['FN'], metrics['FAR'] = zip(*tmp)
+                
+                for i in range(len(metrics['FN'])):
+                    row = [metrics['FN'][i], f"{metrics['FAR'][i]:.4f}"]
+                    rows.append(row)
+                
+                table = tabulate(rows, headers, tablefmt="pretty")
+                log.info(f'\n{table}')
+                self.tabler(table, lbl_name)
 
         #if self.mtrc_vis_plot: self.plot_metrics()
         
@@ -212,7 +261,7 @@ class Metrics(object):
         self.vis.close('ALLFLGT')
         log.info("plot_allflgt: generating allflgt vis plot...")
         
-        xticks = numpy.arange(len(fl))  
+        xticks = np.arange(len(fl))  
         
         colors = px.colors.qualitative.Plotly
         color = colors[0 % len(colors)]
@@ -296,15 +345,15 @@ class Metrics(object):
         self.vis.close(f'AP');self.vis.close(f'AUC_PR');self.vis.close(f'AUC_ROC')
         
         
-        for label_str, metrics in self.mtrc_info.items():
-            #log.debug(f"{label_str} {metrics = }")
+        for lbl_name, metrics in self.mtrc_info.items():
+            #log.debug(f"{lbl_name} {metrics = }")
             for metric_name in metrics_data.keys():
                 metrics_data[metric_name].extend(metrics[metric_name])
                 
         xtickvals = list(range(1, len(self.lbls4plot) + 1))
         xticklabels = self.lbls4plot
         for i, (metric_name, values) in enumerate(metrics_data.items()):
-            scatter_data = numpy.column_stack((xtickvals, values))
+            scatter_data = np.column_stack((xtickvals, values))
             opts = dict(title=f'{str(metric_name)}',
                         #legend=self.lbls4plot, #markersize=10, #markercolor=colors,
                         xtickvals=xtickvals, xticklabels=xticklabels)
@@ -323,7 +372,7 @@ class Metrics(object):
             if self.mtrc_vis_table: ## send table_img to vis
                 self.vis.close(name) ## starts fresh
                 fig.canvas.draw()
-                table_img = numpy.frombuffer(fig.canvas.tostring_rgb(), dtype=numpy.uint8)
+                table_img = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
                 table_img = table_img.reshape(fig.canvas.get_width_height()[::-1] + (3,))
                 #plt.imsave(osp.join(self.cfg.path.out_dir,'table_np.png'), table_img)
                 opts=dict(title=name, caption=name, store_history=False)
@@ -332,27 +381,65 @@ class Metrics(object):
             plt.close(fig)    
 
 
+
+## np shit get_fl entry point
+'''
+    def get_fl(self, vldt_info):
+        """
+        Entry point for calculating metrics. Determines whether to calculate
+        label-wise metrics or video-wise metrics and calls the appropriate method.
+        """
+        self.lbls4plot = list(vldt_info.DATA.keys())
+        
+        if vldt_info.per_what == 'vid':
+            ## rearranges temporaly vldt dict in order to get metrics per lbl
+            #self.mtrc_info = {lbl: {} for lbl in self.lbls4plot}
+            #self.curv_info = {lbl: {} for lbl in self.lbls4plot}
+            #tmp=vldt_info.DATA
+            #for lbl, metrics in tmp.items():
+            #    metrics['GT'] = np.concatenate((metrics['GT']), axis=0)
+            #    metrics['FL'] = np.concatenate((metrics['FL']), axis=0).asnumpy()
+            #self.get_fl_lbl(tmp)
+            #self.proc_mtrc_lbl()
+            
+            ## get metrics per vid
+            ## reset dicts
+            self.mtrc_info = {lbl: {'FN': [], 'AP': [], 'AUC_PR': [], 'AUC_ROC': []} for lbl in self.lbls4plot}
+            #self.curv_info = {lbl: {} for lbl in self.lbls4plot}
+            self.curv_info = {lbl: {'precision': [], 'recall': [], 'fpr': [], 'tpr': []} for lbl in self.lbls4plot}
+            
+            ## upgrade vldt_info , assures every element in GT/FL is np
+            ## if check is for ccases when vldt_info is loaded from .pkl
+            #for lbl, metrics in vldt_info.DATA.items():
+            #    if type(metrics['GT'][0]) != np.ndarray:
+            #        metrics['GT'] = [ np.array(gt) for gt in metrics['GT'] ]
+            #    if type(metrics['FL'][0]) != np.ndarray:
+            #        metrics['FL'] = [ fl.asnumpy() for fl in metrics['FL'] ]
+                    
+            self.get_fl_vid(vldt_info.DATA)
+            self.proc_mtrc_vid()
+'''
 #########
 ## OLDIES not in use 
 '''
-def plot_cm(self, name, labels, predictions, threshold=0.5, save=False):
+def plot_cm(self, name, labels, preds, th=0.5, save=False):
     """
     https://www.tensorflow.org/tutorials/structured_data/imbalanced_data#download_the_kaggle_credit_card_fraud_data_set
     """
-    #predictions = np.array(predictions)
-    #cm = confusion_matrix(labels, predictions > threshold)
+    #preds = np.array(preds)
+    #cm = confusion_matrix(labels, preds > th)
     #plt.clf()
     #plt.figure(figsize=(5,5))
     #sns.heatmap(cm, annot=True, fmt="d")
-    #plt.title('Confusion matrix @{:.2f}'.format(threshold))
+    #plt.title('Confusion matrix @{:.2f}'.format(th))
     #plt.ylabel('Actual label')
     #plt.xlabel('Predicted label')
     #if save: plt.savefig(name+'.png',facecolor='white', transparent=False)
     #plt.show()
     return
 
-def plot_roc(self, name, labels, predictions, **kwargs):
-    fp, tp, _ = sklearn.metrics.roc_curve(labels, predictions)
+def plot_roc(self, name, labels, preds, **kwargs):
+    fp, tp, _ = sklearn.metrics.roc_curve(labels, preds)
 
     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
     
@@ -367,8 +454,8 @@ def plot_roc(self, name, labels, predictions, **kwargs):
     plt.savefig(name+'.png',facecolor='white', transparent=False)
     plt.show()
 
-def plot_prc(self, name, labels, predictions, **kwargs):
-    precision, recall, _ = sklearn.metrics.precision_recall_curve(labels, predictions)
+def plot_prc(self, name, labels, preds, **kwargs):
+    precision, recall, _ = sklearn.metrics.precision_recall_curve(labels, preds)
     #plt.clf()
     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
     

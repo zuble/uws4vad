@@ -1,0 +1,5 @@
+## all HEAR models follow this settings
+hear: True
+sr: 32000
+win_len: 160
+hop: 50

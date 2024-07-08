@@ -2,7 +2,6 @@
 
 defaults:
   - _self_
-  #- data: xdv_cliptsa # xdv_vadclip
   - data: xdv
   - data/frgb: cliptsa # vadclip
   - data/faud: vggish
@@ -13,13 +12,12 @@ defaults:
   - path:   ion # slarch #
   - xtra: dflt
   - hydra: dflt
-  
-  #- fext: null
+
   - exp: null
   - debug: null
 
 name: ${dyn_name:${model.net.id},${model.net.vrs}}  ## -> {}_{}
-task_name: ${data.id}
+task_name: ${data.id} #${dyn_vadtaskname:${data},${datatrnsfrm}}
 tags: [""]
 
 dvc: ${dyn_dvc:-1}

@@ -51,40 +51,33 @@ class NetPstFwd(BasePstFwd):
         super().__init__(_cfg)
 
     def train(self, ndata, ldata, lossfx):
-        
-        ## FEATS
-        #super().rshp_out(ndata, 'feats', 'mean')
-        ##super().rshp_out(ndata, '', 'crop0')
-        #log.debug(f" pos_rshp: {ndata['feats'].shape}")
-        t, f = ndata['feats'].shape[1:3]
-        feats = ndata['feats'] ## (bs*ncrops, t, f)
+        ## FEAT
+        feats = ndata['feats'] ## (bs*nc, t, f)
 
         ## magnitudes
         feat_magn = torch.norm(feats, p=2, dim=2)  ## ((bs)*ncrops, t)
-        feat_magn = super().rshp_out2(feat_magn, 'mean') ## (bs, t)
-        abnr_fmagn = feat_magn[self.bs//2:]  ## (bs//2, t) 
-        norm_fmagn = feat_magn[0:self.bs//2]  ## (bs//2, t) 
+        feat_magn = super().uncrop2(feat_magn, 'mean') ## (bs, t)
+        abn_fmgnt, nor_fmgnt = super().unbag2(feat_magn, ldata["label"] )
+        log.error(f"{abn_fmgnt.shape=} {nor_fmgnt.shape=}")
         
-        ## feats
-        abnr_feats, norm_feats = super().split_per_crop(feats,t,f)
-        log.debug(f"{abnr_feats.shape=} {norm_feats.shape=}")
+        ## prep 4 segsel
+        feats = super().uncrop2(feats, 'orig', True) ## b,nc,t,f
+        abn_feats, nor_feats = super().unbag2(feats, ldata["label"], True)
+        log.error(f"{abn_feats.shape=} {nor_feats.shape=}")
         
-        
-        ## scores 
-        super().rshp_out(ndata, 'sls', 'mean')
-        #super().rshp_out(ndata, '', 'crop0')
-        log.debug(f" pos_rshp: {ndata['sls'].shape}")
-        sls = ndata['sls'] ## (bs, t)
 
-        abnr_sls = sls[self.bs//2:] ## (bs/2, t)
-        norm_sls = sls[0:self.bs//2] ## (bs/2, t)        
-        
-        ########
+        ## SCORE
+        #super().uncrop(ndata, 'sls', 'mean') ## crop0
+        sls = super().uncrop2( ndata['sls'], 'mean')
+        abn_sls, nor_sls = super().unbag2(sls, ldata["label"])
+        log.debug(f"{abn_sls.shape} {nor_sls.shape}")
+
+
         ## LOSS 
         ## levarage frist returned dict and update only
-        L0 = lossfx['mgnt'](abnr_fmagn, norm_fmagn, abnr_feats, norm_feats, abnr_sls, norm_sls, ldata)
+        L0 = lossfx['mgnt'](abn_fmgnt, nor_fmgnt, abn_feats, nor_feats, abn_sls, nor_sls, ldata)
 
-        tmp_abnr_sls = abnr_sls.view(-1) ## (bs/2*t)
+        tmp_abnr_sls = abn_sls.view(-1) ## (bs/2*t)
         L1 = lossfx['smooth'](tmp_abnr_sls)
         L2 = lossfx['spars'](tmp_abnr_sls, rtfm=True)
         
