@@ -24,20 +24,22 @@ class Network(nn.Module):
     def forward(self, x):
         b, t, f = x.shape
         out = self.sig( self.cls(x) )
+        log.warning(f"{x.shape} -> {out.shape}")
         return {
             'sls': out
         }
-
 
 class NetPstFwd(BasePstFwd):
     def __init__(self, _cfg):
         super().__init__(_cfg)
         
     def train(self, ndata, ldata, lossfx):
-        super().rshp_out(ndata, 'sls', 'mean') ## crop0
+        super().logdat(ndata)
+        
+        scores = super().uncrop(ndata['sls'], 'mean')
         #log.info(f" pos_rshp: {ndata['sls'].shape}")
         
-        L0 = lossfx['rnkg'](ndata['sls'])
+        L0 = lossfx['rnkg'](scores, ldata["label"])
         
         return L0
         

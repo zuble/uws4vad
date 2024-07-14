@@ -1,0 +1,42 @@
+## pass to dataload
+sampler:
+  ## the distribution of each batch can be set differently by taking a sampler in BatchSampler
+  ## 0: uses RandomSampler, similiar shuffle
+  ## 0.5: each batch has bs//2 samples abn/nor using MPerClassSampler
+  ## 0<_<1 != 0.5: indicates the abn distribution in WeightedRandomSampler (to note that the balance its obtained per epoch)
+  ## run with dataloader.train.dryrun=True to inspect (adjust vis in dataloader/_data)
+  balance: ???
+  ## controls the num_samples as int(sampler_len * len(ds))
+  len: 1
+  droplast: true ## not in use
+
+## CROPS
+## set here 
+## set ncrops acording to data.frgb.ncrops and ds in use
+## if -1: crops2use set to maximum
+## 0 : feats in use must have no crops whatsoever, so fn are in format 'fn.npy'  
+## 1 : feats in use have crop augm and only center crop is used, eg. 'fn__0.npy'
+## 2 : feats in use have crop augm and center + topright (or wtv) eg. 'fn__0.npy' && 'fn__1.npy'
+## ...
+## if data has no crops , aut0set to 0
+## 1 as pc burns
+crops2use: 
+  train: ${dyn_crops2use:${data.frgb.ncrops}, -1}
+  test: ${dyn_crops2use:${data.frgb.ncrops}, 1}
+  
+## disabled for now
+cropasvideo: False ## each crop with be treated as a video it self
+#rgbl2n: 0 ## if 1 l2norm apllied right after load
+#audl2n: 0
+#l2n: 0
+
+seg: ## SEGMENTATION
+  ## itp -> avg adj sel snippet feats ;; if on sel has no effect
+  ## uni -> picks len idxs equally spaced trough linspace 
+  ## seq -> picks len idx sequential
+  sel: ??? 
+  len: ??? 
+  rnd: 
+    ## jit -> jitter selection of adjacent idxs when sel is uni
+    ## glob -> rnd whole idxs of feat (ach crop will have same indexing)
+    - null

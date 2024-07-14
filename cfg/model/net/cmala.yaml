@@ -9,8 +9,8 @@ wght_init: xavier0
 
 main:
   _cfg:
-    hid_dim: 128
-    d_ff: 512
+    xat_hdim: 128 # match faud ? 
+    ffn_hdim: 512 # half of frgb ?
     do: 0.1
     sigma: 0.06
     bias: 0.02

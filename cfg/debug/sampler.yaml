@@ -1,15 +1,12 @@
-# @package _global_
-
-
 defaults:
   - dflt.yaml
 
-tag: dltrain
-
 debug:
   path: 
-    - "src.data.traindl"
+    - "src.data.samplers"
     - "src.data._data"
+
+tag: smplr
 
 dataloader:
   train:

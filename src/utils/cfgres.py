@@ -1,12 +1,11 @@
 import torch
 from multiprocessing import cpu_count
-
+import os.path as osp
 from typing import Any, Dict, Callable
 from functools import wraps
 from omegaconf import OmegaConf
 from hydra.core.global_hydra import GlobalHydra
 from hydra import initialize_config_dir, compose
-
 
 
 ## hydra cfg resolvers
@@ -29,6 +28,7 @@ def dyn_workers(nwkrs):
     elif nwkrs == 0: return int(cpu_count() / 4)
     elif nwkrs == -1: return cpu_count()
 
+
 def dyn_vldt(epochs,x):
     if x == 0 or x > epochs: return 1
     else: return epochs // x
@@ -39,53 +39,59 @@ def dyn_vldtmtrc(ds, mtrc):
         elif ds == 'xdv': return 'AUC_PR'
     return mtrc    
 
-def dyn_crops2use(rgbncrops, mode, crops2use):
-    if rgbncrops == 0: return 0
-    
-    if mode == 'test': return 1 ## has crops but use center
-        
-    else:
-        if crops2use == -1: return rgbncrops
-        elif 0 < crops2use <= rgbncrops: return crops2use
-        else: return 1
-
-def dyn_mainet(idd,vrs):
-    if not vrs: return f"src.model.net.{idd}.Network"
-    else: return f"src.model.net.{idd}.{vrs}"    
-
 def dyn_vldtfwd(netid, chuksiz):
     if netid == 'attnmil': return chuksiz
     else: return None
 
 
+def dyn_fencrops(ds_id, nc_ucf, nc_xdv):
+    return nc_ucf if ds_id == 'ucf' else nc_xdv
+    
+def dyn_crops2use(frgb_ncrops, crops2use_stg):
+    if frgb_ncrops == 0: crops2use = 0
+    elif crops2use_stg == -1:
+        crops2use = frgb_ncrops  # Use the maximum number of crops
+    elif 1 <= crops2use_stg <= frgb_ncrops:
+        crops2use = crops2use_stg  # Use the specified number of crops
+    else: raise ValueError(f"Invalid crops2use setting: {crops2use_stg}. Must be between 1 and {frgb_ncrops} (or -1 for maximum).")
+    return crops2use
+
+
+def dyn_mainet(idd,vrs):
+    if not vrs: return f"src.model.net.{idd}.Network"
+    else: return f"src.model.net.{idd}.{vrs}"    
+    
+def dyn_retatt(watch_frm, intest):
+    if not intest: return False
+    elif 'attws' not in watch_frm: return False
+    else: return True
+    
+    
 def dyn_name(x,y): 
     if y: return f"{x}_{y}"
     else: return x
     
-def dyn_vadtaskname(ds,dt):
+def dyn_vadtaskname(ds,dtproc):
     tmp = f"{ds.id}_{ds.frgb.id.lower()}"
-    if dt.train.crops2use: 
-        tmp += f"-{str(dt.train.crops2use)}"
+    if dtproc.crops2use.train: 
+        tmp += f"-{str(dtproc.crops2use.train)}"
     if ds.get("aud"): 
         tmp += f"_{ds.aud.id.lower()}"
     return tmp
-
 
 #def dyn_fetaskname(cfg_faud,cfg_frgb):
 #    if cfg_frb is None:
 #        
 #    tmp = f"{ds.id}_{ds.frgb.id.lower()}"
-#    if dt.train.crops2use: 
-#        tmp += f"-{str(dt.train.crops2use)}"
+#    if dtproc.train.crops2use: 
+#        tmp += f"-{str(dtproc.train.crops2use)}"
 #    if ds.get("aud"): 
 #        tmp += f"_{ds.aud.id.lower()}"
 #    return tmp
+def dyn_dataroot(p1, p2):
+    if osp.isdir(p1): return p1
+    elif osp.isdir(p2): return p2
 
-
-def dyn_retatt(watch_frm, intest):
-    if not intest: return False
-    elif 'attws' not in watch_frm: return False
-    else: return True
 
 def reg_custom_resolvers(version_base: str, config_path: str, config_name: str) -> Callable:
     ## Initialize the Global Hydra if not already
@@ -103,7 +109,9 @@ def reg_custom_resolvers(version_base: str, config_path: str, config_name: str) 
         'dyn_name': dyn_name,
         'dyn_vldtfwd': dyn_vldtfwd,
         'dyn_retatt': dyn_retatt,
-        'dyn_vadtaskname': dyn_vadtaskname
+        'dyn_vadtaskname': dyn_vadtaskname,
+        'dyn_fencrops': dyn_fencrops,
+        'dyn_dataroot': dyn_dataroot
     }
     for resolver, function in new_res.items():
         OmegaConf.register_new_resolver(resolver, function)

@@ -1,3 +1,4 @@
+## OLD IDEA !
 ## every netowrk has a NetPstFwd class
 ## which contains the pst processing depending if train / infer
 ## they inherit BasePstFwd so rsp_out is acessible w/o import or repeats
@@ -14,99 +15,379 @@
 ## both enabling the principal loop to stay static nd focus on architect
 ## if really needed realy on id key in ndata to post process both cases
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
 from src.utils.logger import get_log
 log = get_log(__name__)
 
 class BasePstFwd:
     def __init__(self, _cfg):
+        self.dvc = _cfg.dvc
+        self.ncrops = _cfg.ncrops.train
+        self.ncrops_tst = _cfg.ncrops.test
+        
+        ## 4train
         self.bs = _cfg.bs
-        self.ncrops = _cfg.ncrops
-        self._cfg = _cfg
+        self.mil = 1 if _cfg.smp_bal == 0.5 else 0 ## bs:2*(1/2bag)
+        self.seq_len = _cfg.seg_len
+        self.seg_sel = _cfg.seg_sel
         
-    ## mod data['key']: reduce a 3d tensor to a 2d by crop mean / crop0 sel / or orig
-    def uncrop(self, data, key, meth=""):
-        if self.ncrops > 1:
+        ## static sel
+        self.k = _cfg.k
+        self.do = nn.Dropout(_cfg.do)
+        ## dyn sel
+        self.slsr = _cfg.sls_ratio
+        self.blsr = _cfg.bls_ratio
             
-            if data[key].ndim == 2: ## sl
-                data[key] = data[key].view(self.bs, self.ncrops, -1)
-                
-                if meth == 'mean':
-                    data[key] = torch.mean(data[key], dim=1)
-                elif meth == 'crop0':
-                    data[key] = data[key][:, 0, :]
-                
-            elif data[key].ndim == 3: ## fl
-                _,t,f = data[key].shape
-                data[key] = data[key].view(self.bs, self.ncrops, t, f)
-                
-                if meth == 'mean':
-                    data[key] = torch.mean(data[key], dim=1)
-                elif meth == 'crop0':
-                    data[key] = data[key][:, 0, :, :]
+        ## additional
+        self._cfg = _cfg     
 
-    ## returns: reduce arr 3d tensor to a 2d b mean or crop0 sel
-    ## additional 
-    def uncrop2(self, arr, meth, force=False):
+
+    #################    
+    def uncrop(self, arr, meth='', force=False):
+        """
+        Uncrops an array, combining values from multiple crops if applicable.
+
+        Args:
+            arr (torch.Tensor): The array to uncrop.
+            meth (str, optional): The method to use for uncropping. 
+                Options: 'mean' (average across crops), 'crop0' (select the first crop), 
+                '' (no uncropping). Defaults to ''.
+            force (bool, optional): If True, forces the crop dimension to be exposed 
+                even if ncrops is 1. Defaults to False.
+
+        Returns:
+            torch.Tensor: The uncropped array.
+        """
+        ## !!! experiment w einops ? 
         if self.ncrops > 1:
-            
-            if arr.ndim == 2: ## sl
+            if arr.ndim == 2:  ## scores: b*nc,_
                 arr = arr.view(self.bs, self.ncrops, -1)
-                
-                if meth == 'orig': pass
-                if meth == 'mean':
-                    arr = torch.mean(arr, dim=1)
-                elif meth == 'crop0':
-                    arr = arr[:, 0, :]
-                        
-            elif arr.ndim == 3: ## fl
-                _,t,f = arr.shape
-                arr = arr.view(self.bs, self.ncrops, t, f)
-                
-                if meth == 'orig': pass
-                if meth == 'mean':
-                    arr = torch.mean(arr, dim=1)
-                elif meth == 'crop0':
-                    arr = arr[:, 0, :, :]
-                    
-        elif force: ## nocrops
+            elif arr.ndim == 3:  ## features: b*nc*_*_
+                arr = arr.view(self.bs, self.ncrops, arr.shape[-2], arr.shape[-1])
+
+            if meth == 'mean':
+                arr = torch.mean(arr, dim=1)
+            elif meth == 'crop0':
+                arr = arr[:, 0, ...]  # Select the first crop
+            elif meth != '':
+                raise ValueError(f"Invalid uncrop method: {meth}")
+            
+        elif force: ## expose crop dim
             if arr.ndim == 2: ## sl
                 raise NotImplementedError
-            
             elif arr.ndim == 3: ## fl
-                _,t,f = arr.shape
-                arr = arr.view(self.bs, 1, t, f)   
-    
-        return arr            
-        
-
-    def unbag2(self, arr, labels=None, view_crop=False):
-        ## bs
-        if labels == None: # assumes MIL
-            abn = arr[self.bs//2:] 
-            nor = arr[0:self.bs//2]
+                arr = arr.view(self.bs, 1, arr.shape[-2], arr.shape[-1]) 
+            log.debug(f"uncrop into {arr.shape}") 
+            
+        return arr
+            
+    def unbag(self, arr, labels=None, permute=''):
+        """
+        Separates data into abnormal and normal samples based on labels.
+        Args:
+            arr (torch.Tensor): The data to unbag.
+            labels (torch.Tensor, optional): The labels for the data. 
+                If None, MIL is assumed, and the data is split in half.
+        Returns:
+            tuple: A tuple containing the abnormal and normal data.
+        """
+        if labels is None:
+            assert self.mil, "Labels are needed for non-MIL scenarios."
+            abn = arr[self.bs // 2:]
+            nor = arr[:self.bs // 2]
         else:
-            abn = arr[ labels != 0]
-            nor = arr[ labels == 0]
-            
-        if view_crop:
-            if arr.ndim != 4: ## sl
-                raise NotImplementedError
-            
-            abn = abn.permute(1, 0, 2, 3)# # (nc, bag, t, f)
-            nor = nor.permute(1, 0, 2, 3) ## (nc, bag, t, f)                   
-                
-        return abn, nor 
+            #mask = labels != 0
+            #log.error(f"\n{arr.shape}\n {labels}\n {mask}")
+            abn = arr[labels != 0]
+            nor = arr[labels == 0]
         
-    #def get_fmgnt(self, feats, labels):
-    #    ## (bs*ncrops, t, f)
-    #    feat_magn = torch.norm(feats, p=2, dim=2)  ## ((bs)*ncrops, t)
-    #    feat_magn = self.uncrop2(feat_magn, 'mean') ## (bs, t)
-    #    
-    #    return feat_magn[labels != 0], feat_magn[labels == 0]
+        ## permute here so indexing operates on right dim
+        if permute == '1023':
+            assert arr.ndim == 4
+            abn, nor = abn.permute(1, 0, 2, 3), nor.permute(1, 0, 2, 3)
+        elif permute == '021':
+            assert arr.ndim == 3
+            abn, nor = abn.permute(0, 2, 1), nor.permute(0, 2, 1)
+        elif permute != '': 
+            raise NotImplementedError
         
+        log.debug(f"unbag into abn {abn.shape} & nor {nor.shape}")    
+        return abn, nor
+    #################
 
+
+    ####################################
+    ## METRICS
+    ## dfm
+    def calc_mahalanobis_dist(self, features, anchor, variance):
+        assert features.ndim == anchor.ndim == variance.ndim == 3
+        return torch.sqrt(torch.sum((features - anchor) ** 2 / variance, dim=1))
+    
+    def _get_mtrcs_dfm(self, feats, anchors, variances, infer=False):
+        dists, abn_dists, nor_dists = [], [], []
+        for feat, anchor, var in zip(feats, anchors, variances):
+            assert feat.ndim == 3
+            assert anchor.ndim == var.ndim == 1
+            
+            #log.debug(f"{feats.shape}&{anchor.shape}&{var.shape} -> {dist.shape}")
+            ## bs*nc,f,t -> bs*nc,t
+            dist = self.calc_mahalanobis_dist(feat, anchor[None, :, None], var[None, :, None])
+            dist = self.uncrop(dist, 'mean') ## bs,t
+            dists.append(dist)
+            
+            tmp_abn, tmp_nor = self.unbag(dist) ## bag , t
+            abn_dists.append(tmp_abn)
+            nor_dists.append(tmp_nor)
+            
+            log.debug(f"dist {dist.shape}")# max {dist.max()}  mean {dist.mean()}")#{dist}
+            log.debug(f"dist abn {tmp_abn.shape} mean {tmp_abn.mean()}")# max {tmp_abn.max()}  {tmp_abn}
+            log.debug(f"dist nor {tmp_nor.shape} mean {tmp_nor.mean()}")# max {tmp_nor.max()}  {tmp_nor}
         
-    ## agg
+        if infer: return dists
+        return abn_dists, nor_dists
+    ############
+    ## magnitude
+    def calc_l2_norm(self, tensor, dim):
+        return torch.linalg.norm(tensor, ord=2, dim=dim)
+    
+    def _get_mtrcs_magn(self, feats, labels=None, apply_do=False):
+        assert feats.ndim == 3
+        if self.ncrops: assert feats.shape[0] == self.bs*self.ncrops
+        fmagn = self.calc_l2_norm(feats, 2) ## bs*nc, t
+        fmagn_uncp = self.uncrop(fmagn, 'mean') ## bs,t
+        abn_fmagn, nor_fmagn = self.unbag(fmagn_uncp, labels)
+        log.debug(f"fmagn {list(fmagn.shape)}->{list(fmagn_uncp.shape)}->({list(abn_fmagn.shape)}, {list(nor_fmagn.shape)})")
+        
+        if apply_do:
+            #log.debug(f"fmagn do {abn_fmagn} {nor_fmagn}")
+            abn_fmagn = abn_fmagn * self.do(torch.ones_like(abn_fmagn))
+            nor_fmagn = nor_fmagn * self.do(torch.ones_like(nor_fmagn))
+            #log.debug(f"fmagn do {abn_fmagn} {nor_fmagn}")
+        ## bag,t ; bag,t
+        return abn_fmagn, nor_fmagn
+    ####################################
+    
+    
+    ###########
+    ## GENERAL 
+    ## selections is done per batch according to ratios
+    def _sel_feats_by_batx(self, feats, metric, slsr=None, blsr=None):
+        if slsr is None:
+            slsr = self.slsr
+        if blsr is None:
+            blsr = self.blsr
+
+        bag, t, f = feats.shape
+        assert self.tlen == t
+        assert feats.shape[:-1] == metric.shape
+        
+        ## dynamic batch selection
+        k_sample = int(t * slsr)
+        k_batch = int(bag * t * blsr)
+        log.debug(f"{k_sample=} {k_batch=}")
+        
+        mtrc_smpl = metric
+        mtrc_batx = metric.reshape(-1)
+        log.debug(f"{mtrc_smpl.shape=} {mtrc_batx.shape=}")
+        
+        ## SLS: sample -level/wise sel/mask
+        topk_smpl = torch.topk(mtrc_smpl, k_sample, dim=-1)[1]
+        mask_sel_smpl = torch.zeros_like(mtrc_smpl, dtype=torch.bool)
+        mask_sel_smpl.scatter_(1, topk_smpl, True)
+        
+        ## BLS: batch -level/wise sel/mask
+        topk_batx = torch.topk(mtrc_batx, k_batch, dim=-1)[1]
+        mask_sel_batx = torch.zeros_like(mtrc_batx, dtype=torch.bool)
+        mask_sel_batx.scatter_(0, topk_batx, True)
+        
+        mask_sel = mask_sel_batx | mask_sel_smpl.reshape(-1)
+        sel_feats = feats.reshape(-1, f)[mask_sel] 
+        
+        assert torch.sum(mask_sel) == sel_feats.shape[0]
+        num_sel = torch.sum(mask_sel) 
+        
+        #log.debug(f"1 mask:{mask_sel.shape} {mask_sel} ")
+        log.debug(f"FEAT BATX SEL: from {list(feats.shape)} w/ {bag*t} segs -> sel {num_sel} -> {list(sel_feats.shape)}")
+        return sel_feats
+    
+    def _sel_feats_by_smpl(self, feats, metric, k):
+        assert feats.shape[:-1] == metric.shape
+        assert metric.ndim == 2, f"metric.ndim {metric.ndim} != 2"
+        bag, t, f = feats.shape
+        idx_smpl = torch.topk(metric, k, dim=1)[1]  ## (bag, k)
+        sel_feats = torch.gather(feats, dim=1, index=idx_smpl.unsqueeze(-1).expand(-1, -1, f)) ## bag,k,f
+        
+        log.debug(f"FEAT SMPL SEL: from {list(feats.shape)} w/ {bag*t} segs -> sel {k=} -> {list(sel_feats.shape)}")
+        return sel_feats
+    
+    
+    ## Sample-Batch Strategie
+    def sel_feats_sbs(self, abn_feats, nor_feats, abn_mtrc, nor_mtrc, slsr=None, blsr=None):
+    
+        sel_abn_feats = self._sel_feats_by_batx(abn_feats, abn_mtrc, slsr, blsr)
+        num_sel_abn = sel_abn_feats.shape[0] ## 2 balanc
+        
+        k_nor_sample = self._get_k_sample(num_sel=num_sel_abn)
+        sel_nor_feats = self._sel_feats_by_smpl(nor_feats, nor_mtrc, k_nor_sample) 
+            
+        # Ensure both selections have the same number of samples
+        sel_nor_feats = sel_nor_feats.permute(1, 0, 2).reshape(-1, f) ## k*bag,f 
+        sel_nor_feats = sel_nor_feats[:num_sel_abn]  
+        
+        return sel_abn_feats, sel_nor_feats     
+    
+    
+    def _get_k_sample(self, sel_lvl='dyn', num_sel=None, slsr=None, k=None):
+        if sel_lvl == 'dyn':
+            if num_sel:
+                k_sample = int(num_sel / bag) + 1
+            else:
+                if slsr is None: slsr = self.slsr
+                k_sample = int(t * slsr)
+                
+        elif sel_lvl == 'static':
+            ## selection idoes not take in account any ratio, and uses a static k
+            if k is None: k_sample = self.k
+            else: k_sample = k
+            
+        return k_sample
+    
+    ##################
+    def gather_feats_per_crop(self, feats, metric, avg=False):
+        assert feats.ndim == 4
+        assert metric.ndim == 2
+        nc, bag, t, f = feats.shape
+        idx = torch.topk(metric, self.k , dim=1)[1] ## bag,k
+        idx_feat = idx.unsqueeze(2).expand([-1, -1, feats.shape[-1]]) ## bag,k,f
+        #log.debug(f"{metric.shape=} -top_{k}-> {idx.shape=}->{idx_feat.shape=}")
+        
+        feats_sel = torch.zeros(0, device=feats.device) ## bag*nc,k,f
+        for i, feat in enumerate(feats):
+            tmp = torch.gather(feat, 1, idx_feat) ## bag,k,f
+            feats_sel = torch.cat((feats_sel, tmp))
+        
+        if avg: feats_sel = feats_sel.mean(dim=1) ## (bag, f)
+        
+        log.debug(f"gather_feats_per_crop: from {list(feats.shape)} w/ {bag*t} segs -> sel {self.k=} per {nc} crop -> {list(feats_sel.shape)}")
+        return feats_sel, idx
+
+    
+    ## Sample Strategie
+    def sel_feats_ss(self, abn_feats, nor_feats, abn_mtrc, nor_mtrc, 
+                        k=None, per_crop=True, avg=False, labels=None):
+        assert abn_feats.ndim in [3,4], f"abn_feats.ndim {abn_feats.ndim} != 3 or 4"
+        assert nor_feats.ndim in [3,4], f"nor_feats.ndim {nor_feats.ndim} != 3 or 4"
+        
+        k_sample = self._get_k_sample(sel_lvl='static',k=k)
+        idx_abn = torch.topk(abn_mtrc, k_sample, dim=1)[1] ## (bag, k_sample)
+        idx_nor = torch.topk(nor_mtrc, k_sample, dim=1)[1] ## (bag, k_sample)
+        
+        if per_crop:  ##  nc,bag,t,f -> nc*bag,k,f
+            assert abn_feats.ndim == nor_feats.ndim == 4
+            assert idx_abn.ndim == idx_nor.ndim == 2
+            ## abn
+            #nc, bag, t, f = abn_feats.shape
+            #sel_abn_feats2 = torch.zeros(0, device=abn_feats.device)
+            #for i, abn_feat in enumerate(abn_feats):
+            #    tmp = torch.gather(abn_feat, dim=1, index=idx_abn.unsqueeze(-1).expand(-1, -1, f)) ## bag,k,f 
+            #    sel_abn_feats2 = torch.cat((sel_abn_feats2, tmp))
+            #    
+            #    tmp2 = self._sel_feats_by_smpl(abn_feat, abn_mtrc, k_sample)
+            #    self.is_equal(tmp, tmp2)
+            sel_abn_feats, idx_abn = self._gather_feats_per_crop(abn_feats, abn_mtrc, avg)
+            #self.is_equal(sel_abn_feats2, sel_abn_feats)
+            
+            ## nor    
+            #nc, bag, t, f = nor_feats.shape
+            #sel_nor_feats2 = torch.zeros(0, device=nor_feats.device)
+            #for i, nor_feat in enumerate(nor_feats):
+            #    tmp = torch.gather(nor_feat, dim=1, index=idx_nor.unsqueeze(-1).expand(-1, -1, f)) ## bag,k,f
+            #    sel_nor_feats2 = torch.cat((sel_nor_feats2, tmp))
+            #    
+            #    tmp2 = self._sel_feats_by_smpl(nor_feat, nor_mtrc, k_sample)
+            #    self.is_equal(tmp, tmp2)
+            sel_nor_feats, idx_nor = self._gather_feats_per_crop(nor_feats, nor_mtrc, avg)
+            #self.is_equal(sel_nor_feats, sel_nor_feats2)
+            
+        else: ## bag,t,f -> bag,k,f
+            #feats = self.uncrop(feats, 'mean') ## bs,t,f
+            #abn_feats, nor_feats = self.unbag(feats, labels) ## bag,t,f
+            assert abn_feats.ndim == nor_feats.ndim == 3
+            
+            sel_abn_feats = torch.gather(abn_feats, dim=1, index=idx_abn.unsqueeze(-1).expand(-1, -1, f))  ## bag,k,f
+            sel_nor_feats = torch.gather(nor_feats, dim=1, index=idx_nor.unsqueeze(-1).expand(-1, -1, f))  ## bag,k,f
+            
+            sel_abn_feats2 = self._sel_feats_by_smpl(abn_feats, abn_mtrc, k_sample) ## bag,k,f
+            sel_nor_feats2 = self._sel_feats_by_smpl(nor_feats, nor_mtrc, k_sample) ## bag,k,f
+            
+            self.is_equal(sel_abn_feats, sel_abn_feats2)
+            self.is_equal(sel_nor_feats, sel_nor_feats2)
+            
+            
+        log.debug(f"{k_sample=}")
+        log.debug(f"{abn_mtrc.shape=} {nor_mtrc.shape=}")
+        #log.debug(f"{abn_mtrc}\n{nor_mtrc}")
+        log.debug(f"{idx_abn.shape=} {idx_nor.shape=}")
+        #log.debug(f"{idx_abn}\n{idx_nor}")
+        log.debug(f"{abn_feats.shape=} {nor_feats.shape=}")
+        log.debug(f"{sel_abn_feats.shape=} {sel_nor_feats.shape=}")
+        
+        if avg: ## (bag, f)
+            sel_abn_feats = sel_abn_feats.mean(dim=1)
+            sel_nor_feats = sel_nor_feats.mean(dim=1)
+            
+        log.debug(f"FEAT SEL SS: {abn_feats.shape=} {nor_mtrc.shape=}")
+        log.debug(f"sel_feats_ss: from {list(feats.shape)} w/ {bag*t} segs -> sel {self.k=} -> {list(feats_sel.shape)}")
+        
+        return sel_abn_feats, sel_nor_feats, idx_abn, idx_nor 
+
+
+    def sel_scors(self, abn_scors, nor_scors, idxs_abn, idxs_nor, avg=False):
+        assert abn_scors.ndim == idxs_abn.ndim == 2, f"{abn_scors.ndim=} {idxs_abn.ndim=}"
+        assert nor_scors.ndim == idxs_nor.ndim == 2, f"{nor_scors.ndim=} {idxs_nor.ndim=}"
+
+        sel_abn = torch.gather(abn_scors, dim=1, index=idxs_abn)
+        sel_nor = torch.gather(nor_scors, dim=1, index=idxs_nor)
+        
+        if avg: ## bag
+            sel_abn = sel_abn.mean(dim=1)
+            sel_nor = sel_nor.mean(dim=1) 
+            
+        log.debug(f"sel_scors: from {list(abn_scors.shape)} sel {list(idxs_abn.shape)} -> {list(sel_abn.shape)} ")
+        return sel_abn, sel_nor
+    
+    
+    
+    
+    #######
+    ## misc
+    def out(self, scors):
+        ## dev
+        if scors.shape == (1, 1): return scors.reshape(1)
+        else: 
+            return scors.squeeze()
+            #return scores.view(-1)
+        
+    def is_equal(self, dado1, dado2):
+        ## torch.testing.assert_close(dado1, dado2)
+        assert torch.all(dado1.eq(dado2)) == True, f"{dado1.shape} != {dado2.shape}"
+        
+    def logdat(self, ds):
+        for d in ds:
+            if isinstance(d,dict):
+                for key, value in d.items():
+                    if type(value) is list:
+                        for v in value:
+                            log.info(f"{key} {v.shape}")
+                    elif value.ndim == 1:
+                        log.info(f"{key} {value}")    
+                    else:
+                        log.info(f"{key} {value.shape}")    
+            #else: raise NotImplemented
+            
+    ## agg return
     def merge(self, *dicts):
         res = {}
         for d in dicts: res.update(d)
@@ -121,7 +402,8 @@ class NetPstFwdEx(BasePstFwd):
     def train(self, ndata, ldata, lossfx):
         log.debug(f"")
         
-        super().rshp_out(ndata, '', 'mean') ## crop0
+        _ = super().uncrop(ndata, '', 'mean', False) ## crop0
+        _, _ = super().unbag(ndata[''], ldata['labels'], '')
         log.debug(f" pos_rshp: {ndata[''].shape}")
         
         ## every lossfx returns a dict
@@ -139,3 +421,95 @@ class NetPstFwdEx(BasePstFwd):
         return ndata['slscores']    
     
     
+
+
+
+    '''
+    ## original sbs strategie that used distances, raw implementation - OK
+    def sel_feats_by_dist(self, abn_feats, nor_feats, abn_dists, nor_dists, slsr=None, blsr=None):
+        """
+        Selects features based on distance using sample-level and batch-level selection ratios.
+
+        Args:
+            features (torch.Tensor): The feature tensor (shape: bs, c, t or bs, t, f).
+            distances (torch.Tensor): The distance matrix (shape: bs, t).
+            slsr (float, optional): Sample-level selection ratio. If None, uses self.slsr.
+            blsr (float, optional): Batch-level selection ratio. If None, uses self.blsr.
+
+        Returns:
+            tuple: A tuple containing the selected normal and abnormal features.
+        """
+        if slsr is None:
+            slsr = self.slsr
+        if blsr is None:
+            blsr = self.blsr
+
+        bag, t, f = abn_feats.shape
+        assert self.tlen == t
+        assert abn_feats.shape[:-1] == abn_dists.shape
+        
+        ## as its using interpolate all idxs have content
+        ## how can i adapt to work with selorpad
+        ## so selection happens with non corrupted segments
+        ## make use of seqlen 
+        
+        mtrc_smpl = abn_dists
+        mtrc_batx = abn_dists.reshape(-1)
+        log.debug(f"DIST {mtrc_smpl.shape=} {mtrc_batx.shape=}")
+        
+        ## dynamic batch selection
+        k_sample = int(t * slsr)
+        #k_batch = int(bs // 2 * t * blsr)
+        k_batch = int(bag * t * blsr) ## set modular and batch may be unbalenc
+        log.debug(f"{k_sample=} {k_batch=}")
+        
+        
+        ## SLS: sample -level/wise sel/mask
+        topk_smpl = torch.topk(mtrc_smpl, k_sample, dim=-1)[1]
+        mask_sel_smpl = torch.zeros_like(mtrc_smpl, dtype=torch.bool)
+        mask_sel_smpl.scatter_(1, topk_smpl, True)
+        
+        ## BLS: batch -level/wise sel/mask
+        topk_batx = torch.topk(mtrc_batx, k_batch, dim=-1)[1]
+        mask_sel_batx = torch.zeros_like(mtrc_batx, dtype=torch.bool)
+        mask_sel_batx.scatter_(0, topk_batx, True)
+        
+        
+        ############################
+        ## Abnormal feature selection
+        ## bag*t,f -> num_sel_abn,f
+        mask_sel_abn = mask_sel_batx | mask_sel_smpl.reshape(-1)
+        num_sel_abn = torch.sum(mask_sel_abn)
+        sel_abn_feats = abn_feats.reshape(-1, f)[mask_sel_abn] 
+        
+        log.debug(f"DIST ABN: from {bag*t} sel {sel_abn_feats.shape[0]} {num_sel_abn=}")
+        log.debug(f"DIST ABN: mask{mask_sel_abn.shape} {mask_sel_abn} ")
+        
+        ## what to do with those that are abnormal
+        ## grab and orientate to a specif subspcae
+        ## as abnormals are all treated as 1 big class
+        
+        
+        bag,_,_ = nor_feats.shape
+        #num_sel_nor = int(num_sel_abn / (bs // 2)) + 1 ## why?
+        num_sel_nor = int(num_sel_abn / bag) + 1
+        log.debug(f"{nor_dists.shape}{num_sel_nor=} ")
+        
+        ##########################
+        # Normal feature selection (match number of abnormal selections)
+        ## bag,t,f -> bag,num_sel_nor,f 
+        idx_nor = torch.topk(nor_dists, num_sel_nor, dim=-1)[1] ## bag,nsn
+        idx_feat_nor = idx_nor[..., None].expand(-1, -1, f) ## bag,nsn,f
+        sel_nor_feats = torch.gather(nor_feats, dim=1, index=idx_feat_nor) 
+        log.debug(f"DIST NOR: from {bag*t} sel {num_sel_nor} -> {sel_nor_feats.shape[0]}")
+
+        #######
+        ### or
+        sel_nor_feats2 = self._sel_feats_by_smpl(nor_feats, nor_dists, num_sel=num_sel_abn)
+        self.is_equal(sel_nor_feats, sel_nor_feats2)
+        
+        ## -> num_sel_nor*bag,f -> num_sel_abn, f
+        sel_nor_feats = sel_nor_feats.permute(1, 0, 2).reshape(-1, f)
+        sel_nor_feats = sel_nor_feats[:num_sel_abn]
+        log.debug(f"DIST NOR: trunc2 {num_sel_abn=}")
+        return sel_abn_feats, sel_nor_feats'''

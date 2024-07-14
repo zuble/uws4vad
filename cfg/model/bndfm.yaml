@@ -16,8 +16,8 @@ optima:
 
 loss:
   mpp: ## feat lvl
-    _target_: src.model.loss.mpp.MPPLoss
+    _target_: src.model.loss.feat.MPP
   
   norm:
-    _target_: src.model.loss.mpp.NormalLoss
+    _target_: src.model.loss.score.Normal
 

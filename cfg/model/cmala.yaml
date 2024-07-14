@@ -6,7 +6,7 @@ defaults:
   - loss: null
   #- _self_
 
-epochs: 5
+epochs: 10
 
 optima:
   lr: 1.0e-4

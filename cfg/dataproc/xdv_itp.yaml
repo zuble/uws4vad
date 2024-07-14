@@ -1,0 +1,10 @@
+defaults:
+  - _globo.yaml
+  - xdv
+
+seg:
+  sel: itp 
+  #len: 200 
+  #rnd:
+    #- jit
+    #- glob

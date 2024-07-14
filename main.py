@@ -33,14 +33,13 @@ def main(cfg: DictConfig) -> None:
 
     #log.debug(utils.collect_random_states())
     #utils.xtra(cfg)
-
     if cfg.get("tmp"):
         from src import tmp
         utils.xtra(cfg)
         
         #tmp.Debug(cfg)
-        tmp.aud_emb(cfg)
-
+        #tmp.aud_emb(cfg)
+        tmp.aud_len_mat()
 
     elif cfg.get("fext"):
         if cfg.modal == 'rgb':

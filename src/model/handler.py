@@ -18,55 +18,6 @@ def count_parms(net):
     log.info(f'{t/1e6:.3f}M trainable parameters')
     
 
-def wght_init(m):
-    #classname = m.__class__.__name__
-    #if classname.find('Conv') != -1 or classname.find('Linear') != -1:
-    if isinstance(m, nn.Linear) or isinstance(m, nn.Conv1d):
-        tc_init.xavier_uniform_(m.weight)
-        #tc_init.constant_(m.bias, 0)
-        if m.bias is not None:
-            m.bias.data.fill_(0)
-
-def build_net(cfg):
-    ## ARCH
-    #log.info(cfg.model.net.arch)
-    ## in Network.innit sum or ..
-    dfeat = [ cfg.data.frgb.dfeat, (cfg.data.faud.dfeat if cfg.data.get("faud") else 0)]
-    log.debug(f"{dfeat}")
-    
-    ## if theres cls, instaneate it inside Network.innit
-    ## otherwise import from layers.classifier or construct
-    if cfg.model.net.get("cls"): 
-        net = instantiate(cfg.model.net.main, dfeat=dfeat, _cls=cfg.model.net.cls, _recursive_=False)
-    else:
-        net = instantiate(cfg.model.net.main, dfeat=dfeat)
-    
-    if cfg.model.dryfwd:
-        log.debug("DBG DRY FWD")
-        nc = 1 if cfg.datatrnsfrm.train.crops2use == 0 else cfg.datatrnsfrm.train.crops2use 
-        bs = cfg.dataloader.train.bs
-        t = cfg.datatrnsfrm.train.len
-        feat = torch.randn( (nc*bs, t, sum(dfeat) ))
-        _ = net(feat)
-    
-    ## PSTFWD   
-    netpstfwd = instantiate(cfg.model.net.pstfwd)
-    
-    ## INIT
-    if cfg.model.net.wght_init == 'xavier0':
-        net.apply(wght_init)
-    else: raise NotImplementedError
-    
-    ## LOG STRUCT
-    if cfg.xtra.get("net"):
-        log.info(f"\n{net}\n")
-        #for name, param in net.named_parameters():
-        #    log.info(f"Layer: {name} | Size: {param.size()} | Values : {param[:2]} \n")
-        log.info(netpstfwd)
-        
-    return net, netpstfwd
-
-
 '''
 ## https://github.com/facebookresearch/fvcore
 ## https://github.com/MzeroMiko/VMamba/blob/main/classification/models/vmamba.py

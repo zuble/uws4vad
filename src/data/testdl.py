@@ -16,8 +16,8 @@ def get_testloader(cfg):
     debug_cfg_data(cfg)
     
     cfg_ds = cfg.data
-    cfg_loader = cfg.dataloader.test
-    cfg_trnsfrm = cfg.datatrnsfrm.test
+    cfg_dloader = cfg.dataload.test
+    cfg_dproc = cfg.dataproc
     
     
     rgbfplf = FeaturePathListFinder(cfg, 'test', 'rgb')
@@ -51,17 +51,17 @@ def get_testloader(cfg):
     ## both gt.npy for xdv and ucf have same lenght as total number of segments in feats * window length of the feature extractor
     #######################################
     
-    ds = TestDS(cfg_loader, cfg_ds, cfg_trnsfrm, rgbfl, audfl)
+    ds = TestDS(cfg_dloader, cfg_ds, cfg_dproc, rgbfl, audfl)
     loader = DataLoader( ds , 
-                        batch_size=cfg_loader.bs , 
-                        shuffle=cfg_loader.shuffle, 
-                        num_workers=cfg_loader.nworkers, 
-                        #prefetch_factor=cfg_loader.pftch_fctr if cfg_loader.pftch_fctr != 0 else None,
-                        pin_memory=cfg_loader.pinmem, 
-                        persistent_workers=cfg_loader.prstwrk 
+                        batch_size=cfg_dloader.bs , 
+                        shuffle=cfg_dloader.shuffle, 
+                        num_workers=cfg_dloader.nworkers, 
+                        #prefetch_factor=cfg_dloader.pftch_fctr if cfg_dloader.pftch_fctr != 0 else None,
+                        pin_memory=cfg_dloader.pinmem, 
+                        persistent_workers=cfg_dloader.prstwrk 
                         )
     
-    if cfg_loader.dryrun:
+    if cfg_dloader.dryrun:
         log.warning(f"DBG DRY TEST DL")            
         run_dl(loader)
     
@@ -69,17 +69,17 @@ def get_testloader(cfg):
 
 
 class TestDS(Dataset):
-    def __init__(self, cfg_loader, cfg_ds, cfg_trnsfrm, rgbflst, audflst=[]):
+    def __init__(self, cfg_dloader, cfg_ds, cfg_dproc, rgbflst, audflst=[]):
 
         self.rgbflst = rgbflst
         self.audflst = audflst
         self.lbl_mng = LBL(ds=cfg_ds.id, cfg_lbls=cfg_ds.lbls)
-        self.crops2use = cfg_trnsfrm.crops2use
+        self.crops2use = cfg_dproc.crops2use.test
         
         self.dfeat = cfg_ds.frgb.dfeat
         if audflst: self.peakboo_aud(cfg_ds.faud.dfeat)
 
-        if cfg_loader.in2mem: self.loadin2mem(cfg_loader.nworkers)
+        if cfg_dloader.in2mem: self.loadin2mem(cfg_dloader.nworkers)
         else: self.in2mem = 0
     
     
@@ -110,50 +110,101 @@ class TestDS(Dataset):
         #log.debug(f'vid[{idx}] {label=} {type(label)} {fn}')
         return label , fn
     
-    def get_feat(self,idx):
+    
+    def get_feat(self, idx):
+        """
+        Gets RGB and audio features for a given index, handling crops and potential length mismatches.
+        Args:
+            idx (int): The index of the video/audio sample.
+        Returns:
+            np.ndarray: The concatenated features (RGB + audio) with shape (ncrops, t, dfeat) or (t, dfeat).
+        """
         ## RGB 
-        if self.crops2use: ## expects only 1 crop atm per cfg_trnsfrm.dyn_crops2use
+        if self.crops2use:
             rgb_feats = []
             for i in range(self.crops2use):
                 fp_crop = f"{self.rgbflst[int(idx)]}__{i}.npy"
-                feat_crop = np.load(fp_crop).astype(np.float32)  ## (timesteps, 1024)
+                feat_crop = np.load(fp_crop).astype(np.float32)  ## (t, dfrgb)
                 log.debug(f'crop[{i}] {osp.basename(fp_crop)}: {feat_crop.shape} {feat_crop.dtype}')                
-                #features[i] = np.array(feat_crop)
                 rgb_feats.append(feat_crop)
-            ## either account here, or in vldt.Validate.start
-            rgb_feats = np.array(rgb_feats)#.reshape(-1, self.dfeat)
-            log.debug(f'f[{idx}]: {type(rgb_feats)} {rgb_feats.shape} {rgb_feats.dtype}') ## (5,32,1024)
+
+            rgb_feats = np.array(rgb_feats)  ## (ncrops, t, dfrgb)
+            log.debug(f'f[{idx}]: {type(rgb_feats)} {rgb_feats.shape} {rgb_feats.dtype}') 
         else: 
             rgb_fp = f"{self.rgbflst[int(idx)]}.npy"    
-            rgb_feats = np.load(rgb_fp).astype(np.float32)
+            rgb_feats = np.load(rgb_fp).astype(np.float32) ## (t, dfrgb)
             log.debug(f'vid[{idx}][RGB] {rgb_feats.shape} {rgb_feats.dtype}  {osp.basename(rgb_fp)} ')
         
         ## AUD
         if self.audflst:
             aud_fp = f"{self.audflst[int(idx)]}.npy"
-            aud_feats = np.load(aud_fp).astype(np.float32)
+            aud_feats = np.load(aud_fp).astype(np.float32) ## (t_aud , dfaud)
             log.debug(f'vid[{idx}] AUD {osp.basename(aud_fp)}: {aud_feats.shape} {aud_feats.dtype}')
             
-            ### !!!
-            if aud_feats.shape[0] != rgb_feats.shape[0]:
-                log.warning(f'vid[{idx}]AUD rshp 2mtch rgbf')
-                t, f = rgb_feats.shape
-                new_feat = np.zeros((t, f)).astype(np.float32)
-                idxs = np.linspace(0, len(aud_feats), t+1, dtype=np.int32)
-                for i in range(t):
-                    #if idxs[i] != idxs[i+1]:
-                    #    new_feat[i, :] = np.mean(feat[idxs[i]:idxs[i+1], :], axis=0)
-                    #else:
-                    new_feat[i, :] = aud_feats[idxs[i], :]
-                aud_feats = new_feat
+            aud_feats = self._match_audio_length(aud_feats, rgb_feats.shape[-2])
+
             ## MIX
-            feats = np.concatenate((rgb_feats, aud_feats), axis=1)
-            log.debug(f'vid[{idx}] MIX {feats.shape} {feats.dtype}')
+            if self.crops2use:
+                aud_feats = np.repeat(aud_feats[np.newaxis, :, :], self.crops2use, axis=0)  # (ncrops, t, dfaud)
+                feats = np.concatenate((rgb_feats, aud_feats), axis=2) 
+                log.debug(f'vid[{idx}] MIX (w/nc): {feats.shape} {feats.dtype}')
+            else:
+                feats = np.concatenate((rgb_feats, aud_feats), axis=1)
+                log.debug(f'vid[{idx}] MIX: {feats.shape} {feats.dtype}')
             
-        else: feats = rgb_feats
+            return feats
         
-        return feats
-    
+        else: return rgb_feats
+
+    def _match_audio_length(self, aud_feats, t_rgb):
+        """
+        Matches the length of audio features to the RGB features using linear interpolation.
+        Args:
+            aud_feats (np.ndarray): Audio features with shape (t_aud, dfaud).
+            rgb_shape (tuple): Shape of the RGB features, either (ncrops, t, dfrgb) or (t, dfrgb).
+        Returns:
+            np.ndarray: Audio features with length matched to RGB, shape (t, dfaud).
+        """
+        t_aud = aud_feats.shape[-2]
+        df_aud = aud_feats.shape[-1]  
+
+        if t_rgb == t_aud: return aud_feats
+        elif 1 <= (t_rgb - t_aud) <= 2:  # Adjust only if RGB is 1 or 2 elements longer
+            new_aud_feats = np.zeros((t_rgb, df_aud)).astype(np.float32)
+            idxs = np.linspace(0, t_aud - 1, t_rgb, dtype=np.int32) 
+            
+            idxs2 = np.round(np.arange(t_rgb) * (t_aud) / (t_rgb)).astype(np.int32)
+            
+            repeat_counts = np.ones(t_aud, dtype=int)
+            # Distribute the required repetitions at the end of the array
+            for i in range(t_rgb - t_aud):
+                repeat_counts[-(i % t_aud) - 1] += 1
+            idxs3 = np.repeat(np.arange(t_aud), repeat_counts)
+            
+            ## eg t_aud 10 / t_rgb 12
+            log.debug(f'idxs {idxs.shape} \n {idxs}') ##    [0 0 1 2 3 4 4 5 6 7 8 9]
+            log.debug(f'idxs2 {idxs2.shape} \n {idxs2}') ## [0 1 2 2 3 4 5 6 7 8 8 9]
+            log.debug(f'idxs3 {idxs3.shape} \n {idxs3}') ## [0 1 2 3 4 5 6 7 8 8 9 9]
+
+            new_aud_feats = aud_feats[idxs, :]
+            
+            log.debug(f'Matched aud {aud_feats.shape[0]} w/ rgb {t_rgb} -> {new_aud_feats.shape}')
+            # (Optional) Comparison check (remove if not needed)
+            # ---------------------------------------------------
+            # new_aud_feats_interp = np.zeros((t_rgb, df_aud))
+            # x = np.linspace(0, aud_feats.shape[0] - 1, num=aud_feats.shape[0])
+            # xp = np.linspace(0, aud_feats.shape[0] - 1, num=t_rgb)
+            # for f in range(df_aud):
+            #     new_aud_feats_interp[:, f] = np.interp(xp, x, aud_feats[:, f])
+            # if np.allclose(new_aud_feats, new_aud_feats_interp):
+            #     log.debug(f'Segmentation check successful.')
+            # else:
+            #     log.error(f'Segmentation mismatch!')
+            # ---------------------------------------------------
+            return new_aud_feats
+
+        else: raise ValueError(f'MISMATCH: Incompatible lengths - RGB: {t_rgb}, Audio: {t_aud}')
+        
     def __getitem__(self, idx):
         
         if self.in2mem:

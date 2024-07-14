@@ -20,3 +20,4 @@ clip_len: 16
 ## CLIP models
 ## how to pick 1 frame out of 1 clip
 frame_sel: mid ## rnd
+

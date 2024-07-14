@@ -43,25 +43,25 @@ class DistanceAdj2(nn.Module):
         return dist
     
 class CrossAttention(nn.Module):
-    def __init__(self, dfaud, dfrgb, dim_k, n_heads=1):
+    def __init__(self, dfaud, dfrgb, xat_hdim, n_heads=1):
         super(CrossAttention, self).__init__()
         self.dfaud = dfaud
         self.dfrgb = dfrgb
-        self.dim_k = dim_k
+        self.xat_hdim = xat_hdim
         self.n_heads = n_heads
 
-        self.q = nn.Linear(dfaud, dim_k)
-        self.k = nn.Linear(dfrgb, dim_k)
-        self.v = nn.Linear(dfrgb, dim_k)
+        self.q = nn.Linear(dfaud, xat_hdim)
+        self.k = nn.Linear(dfrgb, xat_hdim)
+        self.v = nn.Linear(dfrgb, xat_hdim)
 
-        self.o = nn.Linear(dim_k, dfrgb)
-        self.norm_fact = 1 / math.sqrt(dim_k)
+        self.o = nn.Linear(xat_hdim, dfrgb)
+        self.norm_fact = 1 / math.sqrt(xat_hdim)
         self.act = nn.Softmax(dim=-1)
 
     def forward(self, x, y, adj):
-        Q = self.q(x).reshape(-1, x.shape[0], x.shape[1], self.dim_k // self.n_heads)
-        K = self.k(y).reshape(-1, y.shape[0], y.shape[1], self.dim_k // self.n_heads)
-        V = self.v(y).reshape(-1, y.shape[0], y.shape[1], self.dim_k // self.n_heads)
+        Q = self.q(x).reshape(-1, x.shape[0], x.shape[1], self.xat_hdim // self.n_heads)
+        K = self.k(y).reshape(-1, y.shape[0], y.shape[1], self.xat_hdim // self.n_heads)
+        V = self.v(y).reshape(-1, y.shape[0], y.shape[1], self.xat_hdim // self.n_heads)
 
         #print(adj)
         att_map = torch.matmul(Q, K.permute(0, 1, 3, 2)) * self.norm_fact
@@ -75,15 +75,15 @@ class CrossAttention(nn.Module):
         return output
 
 class CMA_LA(nn.Module):
-    def __init__(self, dfrgb, dfaud, hid_dim=128, d_ff=512, do=0.1):
+    def __init__(self, dfrgb, dfaud, xat_hdim=128, ffn_hdim=512, do=0.1):
         super(CMA_LA, self).__init__()
 
-        self.cross_attention = CrossAttention(dfaud, dfrgb, hid_dim)
+        self.cross_attention = CrossAttention(dfaud, dfrgb, xat_hdim)
         self.ffn = nn.Sequential(
-            nn.Conv1d(dfrgb, d_ff, kernel_size=1),
+            nn.Conv1d(dfrgb, ffn_hdim, kernel_size=1),
             nn.GELU(),
             nn.Dropout(do),
-            nn.Conv1d(d_ff, dfaud, kernel_size=1),
+            nn.Conv1d(ffn_hdim, dfaud, kernel_size=1),
             nn.Dropout(do),
         )
         self.norm = nn.LayerNorm(dfrgb)
@@ -100,16 +100,16 @@ class CMA_LA(nn.Module):
 class Network(nn.Module):
     def __init__(self, dfeat, _cfg, _cls = None):
         super(Network, self).__init__()
-        self.dfrgb, self.dfaud = dfeat[0], dfeat[1]
-        self.hid_dim = _cfg.hid_dim
-        self.d_ff = _cfg.d_ff
+        self.dfrgb, self.dfaud = dfeat[0], dfeat[1]        
+        self.xat_hdim = _cfg.xat_hdim
+        self.ffn_hdim = self.dfrgb//2 #_cfg.ffn_hdim
         self.do = _cfg.do
         
         self.dis_adj = DistanceAdj2(_cfg.sigma, _cfg.bias)
         self.cross_attention = CMA_LA(dfrgb=self.dfrgb, 
                                     dfaud=self.dfaud , 
-                                    hid_dim=self.hid_dim, 
-                                    d_ff=self.d_ff)
+                                    xat_hdim=self.xat_hdim, 
+                                    ffn_hdim=self.ffn_hdim)
         self.sig = nn.Sigmoid()
         
         if _cls is not None:
@@ -119,18 +119,18 @@ class Network(nn.Module):
     def forward(self, x):
         frgb = x[:, :, :self.dfrgb]
         faud = x[:, :, self.dfrgb:]
-        log.debug(f" rgb_aud/ {frgb.shape} {faud.shape}")
         
         bs, seqlen = frgb.shape[0:2]
         adj = self.dis_adj(bs, seqlen)
 
         ## rgbf enhanced by audf -> ffn to macth audnf
         new_v = self.cross_attention(frgb, faud, adj) ## b, f, t
-        log.debug(f"cross__att/ {new_v.shape}")
         
         sls = self.sig( self.slcls( new_v.permute(0, 2, 1) ) )
-        log.debug(f"sls/ {sls.shape}")
         
+        log.debug(f" rgb_aud/ {frgb.shape} {faud.shape}")
+        log.debug(f"cross_att/ {new_v.shape}")
+        log.debug(f"sls/ {sls.shape}")
         return {
             'sls': sls
         }
@@ -140,7 +140,7 @@ class NetPstFwd(BasePstFwd):
         super().__init__(_cfg)
         
     def train(self, ndata, ldata, lossfx):
-        super().rshp_out(ndata, 'sls', 'mean') ## crop0
+        super().uncrop(ndata, 'sls', 'mean') ## crop0
         #log.info(f" pos_rshp: {ndata['sls'].shape}")
         
         L0 = lossfx['clas'](ndata['sls'], ldata)
@@ -148,11 +148,7 @@ class NetPstFwd(BasePstFwd):
         return L0
         
     def infer(self, ndata):
-        ## output is excepted to be segment level 
-        
-        #log.debug(f"")
         #log.debug(f"sls: {ndata['sls']=}")
-        
         return ndata['sls']    
     
     

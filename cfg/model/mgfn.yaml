@@ -1,0 +1,23 @@
+defaults:
+  - _.yaml
+  - net: mgfn
+  - optima: adam
+  - lrs: null
+  - loss: null
+  #- _self_
+
+epochs: 5
+
+optima:
+  lr: 1.0e-4
+  weight_decay: 1.0e-5
+
+loss: 
+  mgnt:
+    _target_: src.model.loss.feat.MagnCont
+    _cfg:
+      alpha: 0.001
+      margin: 200.0
+
+  bce:
+    _target_: src.model.loss.score.Bce

@@ -1,8 +1,11 @@
 ## https://github.com/nwpu-zxr/VadCLIP
 id: VADCLIP
 ds: 
-  - ucf
   - xdv
+## in theory to match setup of 3d models
+## only full clips should be considered
+## although both cliptsa and vadclip just sampled 1 out of 8 frames
+## therefore feats mismatch when using aud/vggish
 fstep: 16  ## midle frame from 16 frame snippets
 dfeat: 512
 ncrops: 10

@@ -5,14 +5,14 @@ train:
   itersepo: ~ ## assigned in runtime @ get_trainloader 
 
   bs: 32 #???
-  #shuffle: True ## theres a rndsampler
+  #shuffle: ## theres a rndsampler for both mil&non-mil
   nworkers: ${dyn_nworkers:0}  ## 0 -> cpu//4 ;; -1 -> all cores
   pinmem: True
-  droplast: True ## many functions relly on bs, so if true irregular len of batch ...
+  droplast: True ## WRnd & Rnd
   #pftch_fctr: 2
   prstwrk: True
 
-  ## runs the dl twice after returns 
+  ## runs the dl twice and return 
   dryrun: False
 
 ## both validate and test reuse this values

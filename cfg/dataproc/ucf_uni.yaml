@@ -1,0 +1,10 @@
+defaults:
+  - _globo.yaml
+  - ucf
+  
+seg:
+  sel: uni
+  len: 32 
+  rnd:
+    #- jit
+    #- glob

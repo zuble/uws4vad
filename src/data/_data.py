@@ -1,8 +1,9 @@
 import torch
 import numpy as np, random
 
-import glob , os, os.path as osp, math, time
-from collections import OrderedDict
+import glob , os, os.path as osp, math, time, itertools
+from collections import OrderedDict, Counter, defaultdict
+import matplotlib.pyplot as plt
 
 from src.utils import mp4_rgb_info, logger
 log = logger.get_log(__name__)
@@ -10,35 +11,126 @@ log = logger.get_log(__name__)
 
 ###########
 ## DEBUGGER
-def run_dl(dl):
+def run_dl(dl, iters=2, vis=False):
     """
     """
+    import matplotlib.pyplot as plt
     try:
-        for ii in range(0,2):
+        for ii in range(iters):
             tic = time.time()
-            for b_idx, data in enumerate(dl):
-                if len(data) == 3:
-                    feat, label, vn = data[:]
-                    log.debug(f'B[{b_idx}] (test) {feat.shape=} {feat.dtype} | {label} | {vn}')
-                elif len(data[0]) == 2:
-                    (nfeat, nlabel), (afeat, alabel) = data
-                    log.debug(f'B[{b_idx}] (mil) NORM {nfeat.shape=} {nfeat.dtype} | {nlabel.shape=} {nlabel[0]} {nlabel.dtype}')
-                    log.debug(f'B[{b_idx}] (mil) ABNORM {afeat.shape=} {afeat.dtype} | {alabel.shape=} {alabel[0]} {alabel.dtype}')
-                else:
-                    cfeat, label = data
-                    log.debug(f'B[{b_idx}] (seq) {cfeat.shape=} {cfeat.dtype} | {label.shape=} {label.dtype}')
-            log.debug(f'[{ii}] time to load {b_idx} batches {time.time()-tic}')
-    except ValueError as e:
+            log.info(f"Iter {ii + 1} / {iters}")
+            log.info(f"cfeat | seqlen | label")
+            epo_counts = []  # Store counts for each class across batches
+            epo_class_counts = [] # Store all the counts in the epoch
+
+            for b_idx, (cfeat, seqlen, label) in enumerate(dl):  # Unpack seqlen here
+                log.debug(f'B[{b_idx}] (seq) {cfeat.shape=} {cfeat.dtype} | {label=} {label.shape=} {label.dtype} | {seqlen.shape=} {seqlen.dtype}')
+                
+                ################3
+                ## seqlen batch calculues
+                #og_sl = torch.sum(torch.max(torch.abs(cfeat[:,0,:,:]), dim=2)[0] > 0, 1)
+                #assert torch.all(og_sl.eq(seqlen)) == True, f"{og_sl.shape} != {seqlen.shape}"
+                #
+                #inputs = cfeat[:, :torch.max(seqlen), :]
+                #assert torch.all(inputs.eq(cfeat)) == True, f"{inputs.shape} != {cfeat.shape}"
+                #log.error(f"{inputs.shape=} {torch.max(seqlen)=}")
+                ##################
+                
+                bat_counts = label.tolist() if isinstance(label, torch.Tensor) else label
+                log.info(bat_counts)
+                # Calculate and log per-batch statistics
+                bat_dist = Counter(bat_counts)
+                batch_total = len(bat_counts)
+                log.info(f"B[{b_idx + 1}] {bat_dist}  "
+                        f"({', '.join([f'{class_id}:{count} ({(count / batch_total) * 100:.2f}%)' for class_id, count in sorted(bat_dist.items())])})")
+
+                # Append counts for each class to epo_counts 
+                for class_id in bat_dist:
+                    while len(epo_counts) <= int(class_id):
+                        epo_counts.append([])  # Add lists for new classes
+                    epo_counts[int(class_id)].append(bat_dist[class_id])
+                epo_class_counts.extend(bat_counts)
+
+                log.debug(f'[{ii}] time to load {b_idx} batches {time.time()-tic}')
+            
+            # --- Log Class Distribution Summary ---
+            total_samples = len(epo_class_counts)
+            class_distribution = Counter(epo_class_counts)
+            log.info("Epoch Class Distribution:")
+            for class_id, count in sorted(class_distribution.items()):
+                log.info(f"  Class {class_id}: {count} samples ({((count / total_samples) * 100):.2f}%)")
+                
+    except ValueError as e: 
         log.error(f'Error unpacking variables in batch {b_idx}: {e}')
+
+
+
+def analyze_sampler(bsampler, labels, dataset_name, iters=2, vis=True):
+    """Analyzes BatchSampler behavior over multiple iterations."""
+    import matplotlib.pyplot as plt
+    from collections import Counter, defaultdict
+    
+    for ii in range(iters):
+        all_indices = []
+        epo_counts = []  # Store counts for each class across batches
+        epo_class_counts = [] # Store all the counts in the epoch
+        
+        for batch_idx, batch_indices in enumerate(bsampler):
+            all_indices.extend(batch_indices)
+
+            bat_counts = [labels[idx] for idx in batch_indices]  # Get labels for the batch
+            bat_dist = Counter(bat_counts)
+            for class_id in bat_dist:
+                while len(epo_counts) <= int(class_id):
+                    epo_counts.append([])
+                epo_counts[int(class_id)].append(bat_dist[class_id])
+            epo_class_counts.extend(bat_counts)
+
+        print(f"\n\n\t  Dataset: {dataset_name}, Epoch: {ii + 1}")
+        print(f"\t    Samples per Epoch: {len(all_indices)}")
+
+        # --- Log Class Distribution Summary ---
+        class_distribution = Counter(labels[idx] for idx in all_indices)
+        total_samples = len(all_indices)
+        print(f"\t    Epoch Class Distribution")
+        for class_id, count in sorted(class_distribution.items()):
+            print(f"\t  Class {class_id}: {count} samples ({((count / total_samples) * 100):.2f}%)")
+
+        #####################################
+        #unique_indices = set(all_indices)
+        #repeated_indices = len(all_indices) - len(unique_indices)
+        #print(f"\t    Repeated Indices: {repeated_indices}")
+        ## Analyze repeated indices per class
+        index_counts = Counter(all_indices)
+        repeated_indices_per_class = defaultdict(list)
+        for idx, count in index_counts.items():
+            if count > 1:
+                label = labels[idx]
+                repeated_indices_per_class[label].append(idx)
+        print("\t    Repeated Indices per Class:")
+        for label, indices in sorted(repeated_indices_per_class.items()):
+            print(f"\t      Label {label}: {len(indices)} ") #indices ({indices})
+        #####################################
+
+        # --- Visualization ---
+        if vis:
+            num_batches = len(epo_counts[0])
+            for class_id, class_counts_per_batch in enumerate(epo_counts):
+                plt.plot(range(1, num_batches + 1), class_counts_per_batch, label=f'Class {class_id}')
+            plt.xlabel('Batch Number')
+            plt.ylabel('Number of Samples')
+            plt.title(f'Per-Batch Class Distribution (Epoch {ii + 1})')
+            plt.legend()
+            plt.show()
+
 
 
 def debug_cfg_data(cfg):
     """
     """
-    cfg_data = cfg.data
-    cfg_dsinf = cfg.data
-    ID_DL = cfg_data.id
-    cfg_trnsfrm = cfg.datatrnsfrm
+    #if 'dltrain' not in cfg.debug.tag: return
+    
+    ID_DL = cfg.data.id
     
     log.debug("DEBUG CFG DATA RGB")
     cfg_frgb = cfg.data.frgb
@@ -62,7 +154,7 @@ def debug_cfg_data(cfg):
     log.debug(f"[{ID_DL}] found {len(dbg_train_fns)} .npy files {dbg_train_fns[0]}")
     
     tmp = cfg.path.data_dir+"gt/"
-    with open(tmp+f"{cfg_dsinf.id}_flist_train.txt", 'r') as txt: data = txt.read()
+    with open(tmp+f"{cfg.data.id}_flist_train.txt", 'r') as txt: data = txt.read()
     train_fns = [line for line in data.split('\n') if line]
     train_fns.sort()
     log.debug(f"[ORIGINAL LEN {len(train_fns)} {train_fns[0]}")
@@ -85,22 +177,22 @@ def debug_cfg_data(cfg):
                     this = f"{train_fn}__{crop}.npy" 
                     assert osp.exists(f"{root_rgb}/{MODE}/{this}"), f"{this} does not exist"
                     
-        if cfg_trnsfrm.train.crops2use == 0: ## aslong as itsused the dyn_crops2use no error here (def in datatrnsfrm._globo)
-            log.error(f"[{ID_DL}] wrong {cfg_trnsfrm.train.crops2use=}  while {ID_RGB}.NCROPS {cfg_frgb.ncrops}")
+        if cfg.dataproc.crops2use.train == 0: ## aslong as itsused the dyn_crops2use no error here (def in datatrnsfrm._globo)
+            log.error(f"[{ID_DL}] wrong {cfg.dataproc.train.crops2use=}  while {ID_RGB}.NCROPS {cfg_frgb.ncrops}")
             raise Exception 
         
-        #assert len(dbg_train_fns) == (cfg_dsinf.train.normal + cfg_dsinf.train.abnormal) * cfg_frgb.ncrops
+        #assert len(dbg_train_fns) == (cfg.data.train.normal + cfg.data.train.abnormal) * cfg_frgb.ncrops
         #log.debug(f"[{ID_DL}] {ID_RGB}.NCROPS match number of files in {cfg.data.froot}/RGB/{MODE}/{ID_RGB}")
         
-        #if cfg_trnsfrm.test.crops2use == 0:
-        #    log.error(f"[{ID_DL}] wrong {cfg_trnsfrm.test.crops2use=}  while {ID_RGB}.NCROPS {cfg_frgb.ncrops}")
+        #if cfg.dataproc.crops2use.test == 0:
+        #    log.error(f"[{ID_DL}] wrong {cfg.dataproc.crops2use.test=}  while {ID_RGB}.NCROPS {cfg_frgb.ncrops}")
         #    raise Exception
-        #assert len(dbg_test_fns) == (cfg_dsinf.test.normal + cfg_dsinf.test.abnormal) * cfg_frgb.ncrops    
+        #assert len(dbg_test_fns) == (cfg.data.test.normal + cfg.data.test.abnormal) * cfg_frgb.ncrops    
         #log.debug(f"[{ID_DL}] {ID_RGB}.NCROPS match number of files in {cfg.data.froot}/RGB/TEST/{ID_RGB}")
         
     else:
         
-        #assert len(dbg_train_fns) == (cfg_dsinf.train.normal + cfg_dsinf.train.abnormal)
+        #assert len(dbg_train_fns) == (cfg.data.train.normal + cfg.data.train.abnormal)
         if len(dbg_train_fns) != len(train_fns):
             
             notin = [ f for f in train_fns if f not in dbg_train_fns]
@@ -110,16 +202,16 @@ def debug_cfg_data(cfg):
         else: 
             log.debug(f"[{ID_DL}] {ID_RGB} match number of files in {cfg.data.froot}/RGB/{MODE}/{ID_RGB}")
         
-        if cfg_trnsfrm.train.crops2use > 0: ## aslong as itsused the dyn_crops2use no error here (def in datatrnsfrm._globo)
-            log.error(f"[{ID_DL}] wrong {cfg_trnsfrm.train.crops2use=} while {ID_RGB}.NCROPS {cfg_frgb.ncrops}")
+        if cfg.dataproc.train.crops2use > 0: ## aslong as itsused the dyn_crops2use no error here (def in datatrnsfrm._globo)
+            log.error(f"[{ID_DL}] wrong {cfg.dataproc.train.crops2use=} while {ID_RGB}.NCROPS {cfg_frgb.ncrops}")
             raise Exception 
         
         ## always used one per now
-        #if cfg_trnsfrm.test.crops2use > 0:
-        #    log.error(f"[{ID_DL}] wrong {cfg_trnsfrm.test.crops2use=}  while {ID_RGB}.NCROPS {cfg_frgb.ncrops}")
+        #if cfg.dataproc.crops2use.test > 0:
+        #    log.error(f"[{ID_DL}] wrong {cfg.dataproc.crops2use.test=}  while {ID_RGB}.NCROPS {cfg_frgb.ncrops}")
         #    raise Exception
         
-        if cfg_trnsfrm.train.cropasvideo: 
+        if cfg.dataproc.cropasvideo: 
             log.error(f"[{ID_DL}] {cfg_frgb.ncrops=} while cropasvideo is True")
             raise Exception 
         
@@ -136,7 +228,7 @@ def debug_cfg_data(cfg):
     rgbfltrain = rgbfplf.get('ANOM') + rgbfplf.get('NORM')
     log.debug(f'{MODE}: RGB {len(rgbfltrain)} feats  {rgbfltrain[0]}')
     
-    if cfg_data.get("faud"):
+    if cfg.data.get("faud"):
         log.debug(f"\nAUD")
         audfplf = FeaturePathListFinder(cfg, 'train', 'aud', auxrgbflist=rgbfltrain)
         aaudfl, naudfl = audfplf.get('ANOM'),  audfplf.get('NORM')
@@ -153,13 +245,13 @@ def debug_cfg_data(cfg):
     dbg_test_fns.sort()
     log.debug(f"[{ID_DL}] found {len(dbg_test_fns)} .npy files")
     
-    with open(tmp+f"{cfg_dsinf.id}_flist_test.txt", 'r') as txt: data = txt.read()
+    with open(tmp+f"{cfg.data.id}_flist_test.txt", 'r') as txt: data = txt.read()
     test_fns = [ line for line in data.split('\n') if line ]
     test_fns.sort()
     log.debug(f"ORIGINAL LEN {len(test_fns)}")
     
     ## FEAT LEN ASSERT
-    #assert len(dbg_test_fns) == (cfg_dsinf.test.normal + cfg_dsinf.test.abnormal)
+    #assert len(dbg_test_fns) == (cfg.data.test.normal + cfg.data.test.abnormal)
     tmp = np.load(dbg_test_fps[random.randint(0,len(dbg_test_fps))])
     assert tmp.shape[1] == cfg_frgb.dfeat
     log.debug(f"[{ID_DL}] {cfg_frgb.dfeat=} match test .npy files")
@@ -184,7 +276,7 @@ class FeaturePathListFinder:
         self.listANOM , self.listNORM = [], []
         
         cfg_lbls = cfg.data.lbls
-        cfg_trnsfrm = cfg.datatrnsfrm.get(mode)
+        crops2use = cfg.dataproc.crops2use.get(mode)
         cfg_feat = cfg.data.get(f"f{modality}")
 
         mode = mode.upper()
@@ -213,15 +305,15 @@ class FeaturePathListFinder:
 
         if modality == 'RGB' and mode == 'TRAIN':
 
-            if cfg_trnsfrm.get("cropasvideo"):
+            if cfg.dataproc.get("cropasvideo"):
                 
-                if cfg_trnsfrm.crops2use == cfg_feat.ncrops: ## get full list w/o ".npy"
+                if crops2use == cfg_feat.ncrops: ## get full list w/o ".npy"
                     flist = [f[:-4] for f in flist] 
                 else: ## get only rigth crop idx
                     flist = list(OrderedDict.fromkeys([osp.splitext(f)[0][:-3] for f in flist]))
-                    flist = [f"{f}__{i}" for f in flist for i in range(cfg_trnsfrm.train.crops2use)]
+                    flist = [f"{f}__{i}" for f in flist for i in range(cfg.dataproc.crops2use.train)]
             
-            elif cfg_trnsfrm.crops2use: ## >= 1
+            elif crops2use: ## >= 1
                 ##feature fn from features crop folder without duplicates (__0, __1...) 
                 flist = list(OrderedDict.fromkeys([osp.splitext(f)[0][:-3] for f in flist]))
             else: ## goes without .npy
@@ -229,7 +321,7 @@ class FeaturePathListFinder:
                 
         elif modality == 'RGB' and mode == 'TEST': 
             
-            if cfg_trnsfrm.crops2use == 1: ## == 1
+            if crops2use == 1: ## == 1
                 ##feature fn from features crop folder without duplicates (__0, __1...) 
                 flist = list(OrderedDict.fromkeys([osp.splitext(f)[0][:-3] for f in flist]))
                 

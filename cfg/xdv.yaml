@@ -3,13 +3,13 @@
 defaults:
   - _self_
   - data: xdv
-  - data/frgb: cliptsa # vadclip
-  - data/faud: vggish
-  - datatrnsfrm: seq
-  - dataloader: low
+  - data/frgb: vadclip #cliptsa # 
+  - data/faud: ~ # vggish
+  - dataload: low
+  - dataproc: xdv
   - model: mir
   - vldt: dflt
-  - path:   ion # slarch #
+  - path: dflt
   - xtra: dflt
   - hydra: dflt
 
@@ -17,7 +17,7 @@ defaults:
   - debug: null
 
 name: ${dyn_name:${model.net.id},${model.net.vrs}}  ## -> {}_{}
-task_name: ${data.id} #${dyn_vadtaskname:${data},${datatrnsfrm}}
+task_name: ${dyn_vadtaskname:${data},${dataproc}}
 tags: [""]
 
 dvc: ${dyn_dvc:-1}

@@ -1,7 +1,8 @@
 # path to root directory
 # this requires PROJECT_ROOT environment variable to exist
-# PROJECT_ROOT is inferred and set by pyrootutils package in `train.py` and `eval.py`
+# PROJECT_ROOT is inferred and set by pyrootutils package in `main.py`
 #root_dir: ${oc.env:PROJECT_ROOT}
+
 
 ## always start from main
 work_dir: ${hydra:runtime.cwd}
@@ -19,9 +20,12 @@ fext:
   out_dir: ${path.work_dir}/data/ftmp/
 
 ##########
-## each dl/ds/info has both gt/vroot/froot point to these
-data_root: ???
+root_ion: /mnt/t77
+root_slarch: /run/media/zuble/T77
+## since run from usb and dif mach
+data_root: ${dyn_dataroot:${path.root_ion},${path.root_slarch}}
 
+## each dl/ds/info has both gt/vroot/froot point to these
 ucf_froot: '${path.data_root}/FEAT/UCF'
 ucf_vroot: '${path.data_root}/DS/UCF'
 

@@ -22,14 +22,3 @@ main:
     nh_dimratios: [16, 32] ## mlp_dim/[] control conv dim
     nh_ks: [1, 1, 1]
     #ncrops: ${datatrnsfrm.train.crops2use}
-
-pstfwd:
-  _cfg:
-    ## sbs sel strat train
-    
-    ## xdv
-    #sls_ratio: 0.2
-    #bls_ratio: 0.4
-    ## ucf
-    sls_ratio: 0.1
-    bls_ratio: 0.2

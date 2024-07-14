@@ -1,5 +1,4 @@
 _target_: src.model.loss.mgnt.Rtfm
 _cfg:
-  k: 3
   alpa: 0.0001
   margin: 100

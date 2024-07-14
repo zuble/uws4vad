@@ -1,5 +1,9 @@
 ###################
 ## NETWORKS
+from src.model.net._build import (
+    build_net
+)
+
 from src.model.net.bnwvad import (
     Network,
     NetPstFwd
@@ -28,18 +32,17 @@ from src.model.net.attnmil import (
 
 ###################
 ## LOSSFX
-from src.model.loss._parts import (
+from src.model.loss.score import (
     Bce,
+    Clas,
+    Ranking,
+    Normal,
+    MultiBranchSupervision,
     smooth,
     sparsity
 )
-from src.model.loss.rnkg import (
-    Loss
-    )
-from src.model.loss.clas import (
-    Loss
-    )
-from src.model.loss.mgnt import (
+from src.model.loss.feat import (
+    MPP,
     Rtfm
     )
 ###################
@@ -47,6 +50,5 @@ from src.model.loss.mgnt import (
 
 
 from src.model.handler import (
-    ModelHandler,
-    build_net
+    ModelHandler
 )

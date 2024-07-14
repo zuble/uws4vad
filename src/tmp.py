@@ -75,7 +75,26 @@ class Debug():
             net = instantiate(cfg.model.net.main, dfeat=dfeat)#.to(cfg.dvc)
             
 
-
+def aud_len_mat():
+    len_rgb = 12
+    len_aud = 11
+    
+    idxs = np.linspace(0, len_aud - 1, len_rgb, dtype=np.int32) 
+            
+    idxs2 = np.linspace(0, len_aud-1, len_rgb, endpoint=True, dtype=np.int32)
+    idxs3 = np.round(np.arange(len_rgb) * (len_aud) / (len_rgb)).astype(np.int32)
+    
+    
+    repeat_counts = np.ones(len_aud, dtype=int)
+    # Distribute the required repetitions at the end of the array
+    for i in range(len_rgb - len_aud):
+        repeat_counts[-(i % len_aud) - 1] += 1
+    idxs4 = np.repeat(np.arange(len_aud), repeat_counts)
+    
+    log.warning(f'idxs {idxs.shape} \n {idxs}')
+    log.warning(f'idxs2 {idxs2.shape} \n {idxs2}')
+    log.warning(f'idxs3 {idxs3.shape} \n {idxs3}')
+    log.warning(f'idxs4 {idxs4.shape} \n {idxs4}')
 def aud_emb(cfg):
     from src.fe.hear_mn import mn10_all_b as mn10_MB
     from src.fe.hear_mn import mn10_all_b_all_se as mn10_MB_MSE

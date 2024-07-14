@@ -1,0 +1,14 @@
+defaults:
+  - _globo.yaml
+
+sampler:
+  balance: 0.5
+  len: 1
+
+seg:
+  sel: itp
+  len: 32 
+  rnd:
+    #- jit
+    #- glob
+    - null

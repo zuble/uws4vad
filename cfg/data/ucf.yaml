@@ -34,8 +34,7 @@ lbls:
     - '111.ANOM'
     - 'ALL'
 
-len:
-  ## 950A 950N
+len: ## 950A 950N
   train: ## 1610
     normal: 800
     abnormal: 810

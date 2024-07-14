@@ -26,8 +26,8 @@ def trainer(cfg, vis):
     }
     
     ## DATA
-    traindl, trainfrmt = get_trainloader(cfg) 
-    if cfg.dataloader.train.dryrun: run_dl(traindl) #;return
+    dataloader, collator = get_trainloader(cfg) 
+    if cfg.dataload.train.dryrun: run_dl(dataloader,iters=2,vis=True) ;return
     
     ## MODEL
     net, netpstfwd = build_net(cfg)
@@ -58,11 +58,11 @@ def trainer(cfg, vis):
             target = lcfg._target_
             if target.split('.')[-1][0].isupper(): ## class do normal
                 lossfx[lid] = instantiate(lcfg)
-            else: ## lossfx is a function, set partial
-                lossfx[lid] =  instantiate(lcfg, _convert_="partial", _partial_=True)
+            else: ## lossfx is a function, set partial 
+                lossfx[lid] =  instantiate(lcfg, _convert_="partial", _partial_=True) 
     for key, value in lossfx.items():
         log.debug({key: value})
-    ldata = {}
+    
     
     ## VALIDATE
     cfg_vldt = cfg.vldt.train
@@ -71,7 +71,7 @@ def trainer(cfg, vis):
         log.info("DBG DRY VLDT RUN")
         vldt.start(net, netpstfwd); vldt.reset() ;return
         
-    tmeter = TrainMeter( cfg.dataloader.train, cfg_vldt, vis)
+    tmeter = TrainMeter( cfg.dataload.train, cfg_vldt, vis)
     
     
     
@@ -97,20 +97,21 @@ def trainer(cfg, vis):
             
             ##########
             net.train()    
-            #for tdata in tqdm(traindl, leave = False, desc="Batch:", unit='bat'):
-            for tdata in traindl:
+            #for tdata in tqdm(dataloader, leave = False, desc="Batch:", unit='bat'):
+            for tdata in dataloader:
                 trn_inf['bat'] =+ 1
                 trn_inf['step'] =+ 1
                 btic = time.time()
-
-                feat = trainfrmt.fx(tdata, ldata, trn_inf) ## get feat + fill loss metadata
+                
+                feat, ldata = collator(tdata, trn_inf) ## get feat + fill loss metadata
+                for key in list(ldata.keys())[:]: log.debug(f"\t\t\t{key} {list(ldata[key].shape)}") if type(ldata[key]) == torch.Tensor else None
                 ndata = net(feat)
                 log.debug(f"{list(feat.shape)} -> ")
                 for key in list(ndata.keys())[:]: log.debug(f"\t\t\t{key} {list(ndata[key].shape)}") if type(ndata[key]) == torch.Tensor else None
                 ## if ndata['id'] == '...':
 
                 loss_indv = netpstfwd.train(ndata, ldata, lossfx) 
-                loss_glob = torch.sum(torch.stack(list(loss_indv.values())))
+                loss_glob = torch.sum(torch.stack(list(loss_indv.values()))) ## !!!
                 
                 #######
                 optima.zero_grad()

@@ -20,8 +20,7 @@ lbls:
     - '111.ANOM'
     - 'ALL'
 
-len:
-  ## 2405 ANOM / 2349 NORM
+len: ## 2405 ANOM / 2349 NORM
   train: ## 3954
     normal: 2049
     abnormal: 1905

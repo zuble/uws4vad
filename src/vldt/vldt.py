@@ -153,7 +153,7 @@ class Validate:
         self.cfg_vldt = cfg_vldt
 
         self.DL = get_testloader(cfg) 
-        #if cfg.dataloader.test.dryrun:
+        #if cfg.dataload.test.dryrun:
         #    log.warning(f"DBG DRY TEST DL")            
         #    run_dl(self.DL)
         #    return
@@ -168,6 +168,10 @@ class Validate:
             self.fwd = self._fwd_attnomil
             self.chuk_size = cfg.vldt.fwd_siz
         else: self.fwd = self._fwd_glob
+        
+        if cfg.vldt.match_gtfl not in ['rshpndfill', 'truncate']:
+            raise ValueError(f"match_gtfl {cfg.vldt.match_gtfl} not implemented")
+        self.match_gtfl = cfg.vldt.match_gtfl
         
         ## 
         self.vldt_info = VldtInfo(cfg.data, cfg_vldt.per_what)
@@ -193,13 +197,6 @@ class Validate:
         self.vldt_info.reset()
         self.watch_info.reset()
         
-    @staticmethod
-    def reshp_nd_fill(arr1, new_len):
-        new_arr = np.full(new_len, arr1[-1], dtype=arr1.dtype)
-        new_arr[:arr1.shape[0]] = arr1
-        return new_arr
-    
-    
     #@torch.no_grad()
     def _fwd_attnomil(self, net, netpstfwd, feat):
         '''
@@ -208,6 +205,7 @@ class Validate:
         #elif self.cfg_frgb.fstep == 32: chuk_size = 16 
         #elif self.cfg_frgb.fstep == 16: chuk_size = 9 ## orignal
         '''
+        ## snippet-level scores
         self.sls, self.attws = [], []
         
         l = list(range(0,feat.shape[1]))
@@ -268,11 +266,9 @@ class Validate:
             #log.debug(f'-> sls: {self.sls.shape}')
             ## self.sls is at segment level 
             
-            
             #if '000' not in label[0]:
             #log.warning(f'[{i}] {feat.shape} , {fn} ') #, {label}
             #log.error(f'-> sls: {self.sls.shape} {self.sls.mean()} {self.sls.max()}')
-            
             
             ##############
             ## frame-level
@@ -280,27 +276,31 @@ class Validate:
             ##      -> reshp_nd_fill FL to match gt length
             ## base the length of GT/FL by length of scores (which are at segment level) * length of feat_ext wind
             ##      -> truncate the generated GT (which has video nframes length) to match the FL 
-            
             tmp_gt = self.gtfl.get(fn)
-            #log.debug(f' tmp_gt: {len(tmp_gt)}')
-                
+            log.debug(f'[{i}] gt: {len(tmp_gt)}')
             ## 1 segmnt = self.cfg_frgb.fstep = (64 frames, slowfast mxnet) (32 frames, i3d mxnet) (16, i3dtorchdmil)
             tmp_fl = self.sls.cpu().detach().numpy()
             tmp_fl = np.repeat(tmp_fl, self.cfg_frgb.fstep)
-            log.debug(f' tmp_fl: {len(tmp_fl)} {tmp_fl.shape} {type(tmp_fl)} {type(tmp_fl[0])}')
+            log.debug(f'[{i}] fl: {len(tmp_fl)} {tmp_fl.shape}') #{type(tmp_fl)} {type(tmp_fl[0])}
             
-            ########
+            #######
             ## as len of seqlen * self.cfg_frgb.fstep != number frames original video
-            ## fill tmp_fl w/ last value until len is the same as gt
-            if len(tmp_fl) < len(tmp_gt):  tmp_fl = self.reshp_nd_fill(tmp_fl, len(tmp_gt))
-            ## or truncate tmp_gt with len(tmp_fl), thhis is how RocNG/XDVioDet does
-            else:
-                min_len = min(len(tmp_fl), len(tmp_gt))
-                tmp_fl = tmp_fl[:min_len]
-                tmp_gt = tmp_gt[:min_len]
-            ## clip feats can accomodate more snippets, or just dif sample strat ??
-            #log.debug(f' tmp_fl_rshp: {len(tmp_fl)}')
-            
+            if len(tmp_fl) != len(tmp_gt):
+                if len(tmp_gt) > len(tmp_fl):
+                    ## fill tmp_fl w/ last value until len is the same as gt
+                    if self.match_gtfl == 'rshpndfill':
+                        new_fl = np.full(len(tmp_gt), tmp_fl[-1], dtype=tmp_fl.dtype)
+                        new_fl[:tmp_fl.shape[0]] = tmp_fl
+                        tmp_fl = new_fl
+                        log.debug(f'[{i}] new_fl: {len(tmp_fl)}')
+                    ## or truncate tmp_gt with len(tmp_fl), this is how RocNG does
+                    elif self.match_gtfl == 'truncate':
+                        tmp_gt = tmp_gt[:len(tmp_fl)]
+                        log.debug(f'[{i}]   new_gt: {len(tmp_fl)}')
+                else:
+                    tmp_fl = tmp_fl[:len(tmp_gt)]
+                    log.debug(f'[{i}]   new_fl: {len(tmp_gt)}')
+
             assert len(tmp_fl) == len(tmp_gt), f'{self.cfg_frgb.fstep} cfg_frgb.fstep * {self.sls.shape[0]} len  != {len(tmp_gt)} orign video frames'
             
             self.vldt_info.updt(label, fn, tmp_gt, tmp_fl)
@@ -324,7 +324,8 @@ class GTFL:
     '''
         Retrieves the Ground Truth Frame Level for the specified video
         either for the XDV or UCF dataset
-        based on total frames / annotations
+        based on total frames to generate initial sequence
+        and annotations put 1's
     '''
     def __init__(self, cfg_ds):
         #log.debug(f'GTFL:\n{cfg_ds}')

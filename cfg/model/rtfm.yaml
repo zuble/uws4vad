@@ -9,21 +9,23 @@ defaults:
 epochs: 5
 
 optima:
-  lr: 1.0e-4
-  weight_decay: 1.0e-5
+  lr: 0.0001
+  weight_decay: 0.0005
 
 loss: 
   mgnt:
-    _target_: src.model.loss.mgnt.Rtfm
+    _target_: src.model.loss.feat.Rtfm
     _cfg:
-      k: 3
       alpha: 0.0001
       margin: 100
 
+  bce:
+    _target_: src.model.loss.score.Bce
+
   smooth: 
-    _target_: src.model.loss._parts.smooth
+    _target_: src.model.loss.score.smooth
 
   spars:
-    _target_: src.model.loss._parts.sparsity
+    _target_: src.model.loss.score.sparsity
 
 

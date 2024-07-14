@@ -8,11 +8,11 @@ defaults:
   - data: ucf
   - data/frgb: i3drocng # cliptsa vadclip
   - data/faud: ~
-  - datatrnsfrm: mil_intrplt
-  - dataloader: low
-  - model: mir
+  - dataload: low
+  - dataproc: ucf
+  - model: rank
   - vldt: dflt
-  - path: slarch # ion #
+  - path: dflt
   - xtra: dflt
   - hydra: dflt
   
@@ -21,13 +21,14 @@ defaults:
 
 
 name: ${dyn_name:${model.net.id},${model.net.vrs}}
-task_name: ${dyn_vadtaskname:${data},${datatrnsfrm}} 
-
+task_name: ${dyn_vadtaskname:${data},${dataproc}} 
 tags: [""]
 
 dvc: ${dyn_dvc:-1}
 seed: 0
 deterministic: 0
+
+
 
 tmp: 0
 test: 0  

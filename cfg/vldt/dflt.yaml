@@ -9,7 +9,10 @@ dryrun: False
 ##  atm only network depended of this is attnmil, although it might be a good exp
 fwd_siz: ${dyn_vldtfwd:${model.net.id},9}
 
-
+## rshpndfill: fill fl w/ last value until len is the same as gt
+## truncate: truncate gt to len(fl)
+## this mismatch mainly happens on diff sampling from CLIP
+match_gtfl: rshpndfill
 
 
 train:
@@ -60,7 +63,7 @@ test:
 
   ## send barplot per metric to visdom server (xaxis is labels)
   ## useful for compare same metrics per multiples experiments in visdom
-  mtrc_visplot: 0
+  mtrc_visplot: 1
   ## sends metrics table as png to visdom server
   mtrc_vistabe: 0
   ## saves metrics table as png

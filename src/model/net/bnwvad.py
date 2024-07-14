@@ -122,7 +122,7 @@ class NormalHead(nn.Module):
         x = self.conv2(self.act(self.bn1(x))) ## b, reduction2 , t
         outputs.append(x)
         x = self.sigmoid(self.conv3(self.act(self.bn2(x)))) ## b, 1, t
-        outputs.append(x)
+        outputs.append( x.squeeze(1) )
         return outputs
 
 
@@ -152,11 +152,10 @@ class Network(nn.Module):
         self.normal_head = NormalHead(in_feats=_cfg.mlp_dim, ratios=_cfg.nh_dimratios, ks=_cfg.nh_ks)
 
     def forward(self, x):
-        #if len(x.size()) == 4: b, n, t, d = x.size(); x = x.reshape(b * n, t, d)
-        #else: b, t, d = x.size(); n = 1
+        log.debug(f"{x.shape=}")
             
-        x = self.embedding(x) ## b, t, 512
-        x = self.selfatt(x) ## b, t, 512
+        x_embd = self.embedding(x) ## b, t, 512
+        x = self.selfatt(x_embd) ## b, t, 512
         
         nh_res = self.normal_head( x.permute(0, 2, 1) )
         anchors = [bn.running_mean for bn in self.normal_head.bns] ## [red1 ;; red2]
@@ -165,7 +164,7 @@ class Network(nn.Module):
         return {
             'anchors': anchors, ## (red1, red2)
             'variances': variances, ## (red1, red2)
-            'norm_scors': nh_res[-1], ## b,1,t 
+            'norm_scors': nh_res[-1], ## b,t 
             'norm_feats': nh_res[:-1] ## [(b, red1, t) ;; (b, red2, t)]          
         }
 
@@ -173,128 +172,106 @@ class Network(nn.Module):
 class NetPstFwd(BasePstFwd):
     def __init__(self, _cfg):
         super().__init__(_cfg)
-        
-        self.slsr = self._cfg.sls_ratio
-        self.blsr = self._cfg.bls_ratio
-        
-    def logd(self, d):
-        for key, value in d.items():
-            if type(value) is list:
-                for v in value:
-                    log.debug(f"{key} {v.shape}")
-            else:
-                log.debug(f"{key} {value.shape}")
-                
-    def pos_neg_select(self, feats, distance):
-        bs, c, t = feats.shape
-        #bs, t = distance.shape
-        
-        ## assigns a dynamic k value for dists selection
-        select_num_sample = int(t * self.slsr) ## for dists
-        select_num_batch = int(bs // 2 * t * self.blsr)
-        #log.warning(f"sample_sel: {select_num_sample} / batch_sel: {select_num_batch}")
-        
-        feats = feats.view(bs, self.ncrops, c, t).mean(1) ## b, c, t
-        
-        ###########
-        ## ABNORMAL
-        ## SLS: video/sammple-wise mask
-        abn_distance = distance[bs // 2:] ## bag, t
-        topk_abnormal_sample = torch.topk(abn_distance, select_num_sample, dim=-1)[1]
-        mask_sel_abn_sample = torch.zeros_like(abn_distance, dtype=torch.bool)
-        mask_sel_abn_sample.scatter_(1, topk_abnormal_sample, True) ## bag, t
-        
-        ## BLS: bag-wise mask
-        abn_dist_flat = abn_distance.reshape(-1) ## bag * t
-        topk_abnormal_batch = torch.topk(abn_dist_flat, select_num_batch, dim=-1)[1]
-        mask_sel_abn_batch = torch.zeros_like(abn_dist_flat, dtype=torch.bool)
-        mask_sel_abn_batch.scatter_(0, topk_abnormal_batch, True) ## bag
-        
-        ## what to do with those that are abnormal
-        ## grab and orientate to a specif subspcae
-        
-        ## SBS
-        mask_sel_abn = mask_sel_abn_batch | mask_sel_abn_sample.reshape(-1)
-        
-        ## ABNORMAL
-        abn_feats = feats[bs // 2:].permute(0, 2, 1) ## bag, t, c
-        abn_feats_flatten = abn_feats.reshape(-1, c) ## bag*t, c
-        sel_abn_feats = abn_feats_flatten[mask_sel_abn]
-        
-        
-        ## NORMAL
-        nor_distance = distance[:bs // 2] ## bag , t
-        nor_feats = feats[:bs // 2].permute(0, 2, 1) ## bag, t, c
-        
-        num_sel_abn = torch.sum(mask_sel_abn)
-        
-        k_nor = int(num_sel_abn / (bs // 2)) + 1
-        topk_normal_sample = torch.topk(nor_distance, k_nor, dim=-1)[1]
-        sel_nor_feats = torch.gather(nor_feats, 1, topk_normal_sample[..., None].expand(-1, -1, c))
-        sel_nor_feats = sel_nor_feats.permute(1, 0, 2).reshape(-1, c)
-        sel_nor_feats = sel_nor_feats[:num_sel_abn] ## match with abn
-        
-        ## (num_sel_abn, c) 
-        return sel_nor_feats, sel_abn_feats
-    
-    def get_mahalanobis_dist(self, feats, anchor, var): 
-        d = torch.sqrt(torch.sum((feats - anchor[None, :, None]) ** 2 / var[None, :, None], dim=1))
-        return d #super().rshp_out2(d, 'mean')
     
     def train(self, ndata, ldata, lossfx):
-        self.logd(ndata)
+        #super().logdat([ndata])
+    
+        ## FEAT
+        abn_dists, nor_dists = super()._get_mtrcs_dfm(ndata["norm_feats"], ndata["anchors"], ndata["variances"])
         
-        ## DMF-based dist calculus, ret: [(b,t), (b,t)]
-        #dists = [self.get_mahalanobis_dist(norm_feat, anchor, var) for norm_feat, anchor, var in zip(ndata["norm_feats"], ndata["anchors"], ndata["variances"])]
-        dists = []
-        for norm_feat, anchor, var in zip(ndata["norm_feats"], ndata["anchors"], ndata["variances"]):
-            dist = self.get_mahalanobis_dist(norm_feat, anchor, var)
-            #log.debug(f"{dist.shape=} {dist=}")
-            dist = super().rshp_out2(dist, 'mean')
-            log.debug(f"{dist.shape} {dist.max()} {dist.mean()}")
-            dists.append(dist)
-        
-        ## segment select for each BN layer
-        fnor_sel, fabn_sel = [], []
-        for feat, distance in zip(ndata["norm_feats"], dists):
-            tmp_fnor_sel, tmp_fabn_sel = self.pos_neg_select(feat, distance)
-            fnor_sel.append(tmp_fnor_sel[..., None]); fabn_sel.append(tmp_fabn_sel[..., None])
-            ## _, red1, 1 ;; _, red1, 1
-            ## _, red2, 1 ;; _, red2, 1
-            log.debug(f"norm_sel {tmp_fnor_sel[..., None].shape} , abn_sel {tmp_fabn_sel[..., None].shape}")
+        #sel_abn_feats = torch.zeros(0, device=self.dvc)
+        #sel_nor_feats = torch.zeros(0, device=self.dvc)
+        sel_abn_feats, sel_nor_feats = [], []
+        for feats, abn_dist, nor_dist in zip(ndata["norm_feats"], abn_dists, nor_dists):
             
+            feats = feats.permute(0,2,1)
+            feats = super().uncrop(feats, 'mean') ## bs, t, f
+            abn_feats, nor_feats = super().unbag(feats) ## bag, t, f
+            
+            ## bag,k,f
+            tmp_abn, tmp_nor = super().sel_feats_by_dist(abn_feats, nor_feats, abn_dist, nor_dist)
+            tmp_abn2, tmp_nor2 = super().sel_feats_sbs(abn_feats, nor_feats, abn_dist, nor_dist)
+            super().is_equal(tmp_abn,tmp_abn2)
+            super().is_equal(tmp_nor,tmp_nor2)
+            
+            sel_abn_feats.append(tmp_abn[..., None]) ## _, red1, 1 ;; _, red2, 1
+            sel_nor_feats.append(tmp_nor[..., None]) ## _, red1, 1 ;; _, red2, 1
+            
+        L0 = lossfx['mpp'](ndata['anchors'], ndata["variances"], sel_abn_feats, sel_nor_feats)
         
-        L0 = lossfx['mpp'](ndata['anchors'], ndata["variances"], fnor_sel, fabn_sel)
         
-        super().uncrop(ndata,'norm_scors', 'mean')
-        L1 = lossfx["norm"]( ndata["norm_scors"][0:self.bs // 2] )
+        ## SCORE
+        norm_scores = super().uncrop(ndata['norm_scors'], 'mean')
+        norm_scores, _ = super().unbag(norm_scores)#ldata['labels']
+        log.debug(f"{norm_scores.shape=}")
+        L1 = lossfx["norm"]( norm_scores )
         
+        #super().logdat([L0,L1])
         return super().merge(L0, L1) 
 
 
     def infer(self, ndata):
         #dists = [self.get_mahalanobis_dist(norm_feat, anchor, var) for norm_feat, anchor, var in zip(ndata["norm_feats"], ndata["anchors"], ndata["variances"])]
-        dists = []
-        for norm_feat, anchor, var in zip(ndata["norm_feats"], ndata["anchors"], ndata["variances"]):
-            dist = self.get_mahalanobis_dist(norm_feat, anchor, var)
-            log.debug(f"dist pre {dist.shape}")
-            dist = super().rshp_out2(dist, 'mean')
-            log.debug(f"dist {dist.shape}")
-            dists.append(dist)
-        dists_sum = sum(dists)
-        log.error(f"DISTS {dists[0].max()} {dists[1].max()}")
-        log.error(f"DISTS SUM {dists_sum.max()}")
         
-        super().uncrop(ndata,'norm_scors', 'mean')
-        log.error(f"NORM {ndata['norm_scors'].max()}")
+        ## t    
+        dists = super()._get_mtrcs_dfm(ndata["norm_feats"], ndata["anchors"], ndata["variances"], infer=True)
+        log.debug(f"{dists[0].shape=}, {dists[1].shape=}")
+        ## t  
+        dists_sum = sum(dists).squeeze(0) 
+        log.debug(f"{dists_sum.shape=}")
+        #log.error(f"{dists[0].max()=} {dists[1].max()=}")
+
         
-        return ndata["norm_scors"] #* dists_sum 
-
-
-
-
-
-#x = torch.randn((4, 8, 1024)).cuda()
-#
-#net = WSAD(1024,'Train').cuda()
-#_ = net(x)
+        scores = super().uncrop(ndata['norm_scors'], 'mean')
+        log.error(f"scores {scores.shape} ") #{scores.max()}
+        
+        return super().out( scores * dists_sum ) #
+    
+    
+        ## DMF-based dist calculus, ret: [(b,t), (b,t)]
+        #dists = [self.calc_mahalanobis_dist(norm_feat, anchor, var) for norm_feat, anchor, var in zip(ndata["norm_feats"], ndata["anchors"], ndata["variances"])]
+        #dists = []
+        #for norm_feat, anchor, var in zip(ndata["norm_feats"], ndata["anchors"], ndata["variances"]):
+        #    #log.debug(f"{feats.shape}&{anchor.shape}&{var.shape} -> {dist.shape}")
+        #    ## bs*nc,f,t -> bs*nc,t
+        #    dist = super().calc_mahalanobis_dist(norm_feat, anchor[None, :, None], var[None, :, None])
+        #    dist = super().uncrop(dist, 'mean') ## bs,t
+        #    dists.append(dist)
+        #    #log.debug(f"dist {dist.shape} max {dist.max()}  mean {dist.mean()}")#{dist}
+        #    
+        ### segment select for each BN layer
+        #sel_abn_feats, sel_nor_feats = [], []
+        #for feats, dists in zip(ndata["norm_feats"], dists):
+        #    #bs*nc, f, t = feats.shape
+        #    #assert bs == self.bs*self.ncrops
+        #    feats = super().uncrop(feats, 'mean') ## bs, f, t
+        #    abn_feats, nor_feats = super().unbag(feats, permute='021') ## bag, t, f
+        #    
+        #    abn_dists, nor_dists = super().unbag(dists) ## bag , t
+        #    
+        #    sel_nor_feat, sel_abn_feat = super().sel_feats_by_dist(abn_feats, nor_feats, abn_dists, nor_dists)
+        #    sel_nor_feats.append(sel_nor_feat[..., None]) ## _, red1, 1 ;; _, red2, 1
+        #    sel_abn_feats.append(sel_abn_feat[..., None]) ## _, red1, 1 ;; _, red2, 1
+        
+        ##########
+        ## GENERAL 
+        #sel_abn_feats, sel_nor_feats = [], []
+        #for feats, anchor, var in zip(ndata["norm_feats"], ndata["anchors"], ndata["variances"]):
+        #    #log.debug(f"{feats.shape}&{anchor.shape}&{var.shape} -> {dist.shape}")
+        #    ## bs*nc,f,t -> bs*nc,t
+        #    dists = super().calc_mahalanobis_dist(norm_feat, anchor[None, :, None], var[None, :, None])
+        #    dists = super().uncrop(dists, 'mean') ## bs,t
+        #    abn_dists, nor_dists = super().unbag(dists) ## bag , t
+        #    
+        #    feats = super().uncrop(feats, 'mean') ## bs, f, t
+        #    abn_feats, nor_feats = super().unbag(feats, permute='021') ## bag, t, f
+        #    
+        #    sel_nor_feat, sel_abn_feat = super().sel_feats_by_dist(abn_feats, nor_feats, abn_dists, nor_dists)
+        #    sel_nor_feats.append(sel_nor_feat[..., None]) ## _, red1, 1 ;; _, red1, 1
+        #    sel_abn_feats.append(sel_abn_feat[..., None]) ## _, red2, 1 ;; _, red2, 1
+        #
+        #    log.debug(f"{abn_feats.shape=}, {nor_feats.shape=}")
+        #    log.debug(f"{abn_dists.shape=}, {nor_dists.shape=}")
+        #    log.debug(f"norm_sel {tmp_fnor_sel[..., None].shape} , abn_sel {tmp_fabn_sel[..., None].shape}")
+        
+        

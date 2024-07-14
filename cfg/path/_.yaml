@@ -1,4 +1,4 @@
 defaults:
   - dflt.yaml
 
-data_root: /mnt/t77
+data_root: ~

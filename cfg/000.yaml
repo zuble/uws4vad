@@ -1,14 +1,18 @@
 # @package _global_
 
+# https://github.com/idejie/PyTorch-Hydra-Template
 ## specify here default configuration
 ## order of defaults determines the order in which configs override each other
 defaults:
   - _self_
-  - data: ucf_i3drocng_mil #ucf_cliptsa_mil
-  - dataloader: low
-  - model: mir
+  - data: ucf/xdv
+  - data/frgb: ~
+  - data/faud: ~
+  - dataload: low
+  - dataproc: ucf
+  - model: rank ## others could be magn/clas/dfdm
   - vldt: dflt
-  - path: ion
+  - path: dflt
   - xtra: dflt
   - hydra: dflt
   
@@ -22,8 +26,8 @@ defaults:
 ###############
 ## determines path of log @ hydra/dflt.yaml
 ## ${path.log_dir}/${name}/${task_name}
-name: 'uws4vad'
-task_name: "000"
+name: uws4vad
+task_name: 
 ## saved as a seperate tags.log at dyn output
 ## use as experiment guides key points
 tags: ["dev"]
@@ -39,11 +43,11 @@ deterministic: 0
 
 ## what file to run in src
 ## follows this order, without repeating
-fext: 0
 tmp: 0
 test: 0  
 train: 1  
-
+## or 
+fext: 0
 
 ## affects both train/test 
 load:
