@@ -10,7 +10,7 @@ from rich.live import Live
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn
 
 from src.data import get_trainloader, get_testloader, run_dl
-from src.model import ModelHandler, build_net
+from src.model import ModelHandler, build_net, build_loss
 from src.vldt import Validate, Metrics
 from src.utils import hh_mm_ss, get_log, Visualizer
 log = get_log(__name__)
@@ -27,11 +27,12 @@ def trainer(cfg, vis):
     
     ## DATA
     dataloader, collator = get_trainloader(cfg) 
-    if cfg.dataload.train.dryrun: run_dl(dataloader,iters=2,vis=True) ;return
+    if cfg.dataload.dryrun: run_dl(dataloader,iters=2,vis=True) ;return
     
     ## MODEL
-    net, netpstfwd = build_net(cfg)
+    net, inferator = build_net(cfg)
     optima = instantiate(cfg.model.optima, params=net.parameters() , _convert_="partial") #,
+    _, loss_computer = build_loss(cfg)
     
     ## LOAD
     MH = ModelHandler(cfg, True)
@@ -49,31 +50,14 @@ def trainer(cfg, vis):
         lrs = instantiate( cfg.model.lrs, optimizer=optima, _convert_="partial")
         log.debug(lrs)
     
-    ## LOSSFX
-    #log.info(cfg.model.loss)
-    #lossfx = {lid: instantiate(cfg.model.loss[lid], _convert_="partial") for lid in cfg.model.loss}
-    lossfx = {}
-    for lid, lcfg in cfg.model.loss.items():
-        if '_target_' in lcfg:
-            target = lcfg._target_
-            if target.split('.')[-1][0].isupper(): ## class do normal
-                lossfx[lid] = instantiate(lcfg)
-            else: ## lossfx is a function, set partial 
-                lossfx[lid] =  instantiate(lcfg, _convert_="partial", _partial_=True) 
-    for key, value in lossfx.items():
-        log.debug({key: value})
-    
-    
     ## VALIDATE
     cfg_vldt = cfg.vldt.train
     vldt = Validate(cfg, cfg_vldt, cfg.data.frgb, vis)
     if cfg.vldt.dryrun:
         log.info("DBG DRY VLDT RUN")
-        vldt.start(net, netpstfwd); vldt.reset() ;return
+        vldt.start(net, inferator); vldt.reset() ;return
         
-    tmeter = TrainMeter( cfg.dataload.train, cfg_vldt, vis)
-    
-    
+    tmeter = TrainMeter( cfg.dataload, cfg_vldt, vis)
     
     #progress = Progress(
     #    SpinnerColumn(),
@@ -97,21 +81,23 @@ def trainer(cfg, vis):
             
             ##########
             net.train()    
-            #for tdata in tqdm(dataloader, leave = False, desc="Batch:", unit='bat'):
-            for tdata in dataloader:
+            #for batch in tqdm(dataloader, leave = False, desc="Batch:", unit='bat'):
+            for batch in dataloader:
                 trn_inf['bat'] =+ 1
                 trn_inf['step'] =+ 1
                 btic = time.time()
                 
-                feat, ldata = collator(tdata, trn_inf) ## get feat + fill loss metadata
+                ## data collate
+                feat, ldata = collator(batch, trn_inf) ## get feat + fill loss metadata
                 for key in list(ldata.keys())[:]: log.debug(f"\t\t\t{key} {list(ldata[key].shape)}") if type(ldata[key]) == torch.Tensor else None
+                
+                ## fwd
                 ndata = net(feat)
                 log.debug(f"{list(feat.shape)} -> ")
                 for key in list(ndata.keys())[:]: log.debug(f"\t\t\t{key} {list(ndata[key].shape)}") if type(ndata[key]) == torch.Tensor else None
                 ## if ndata['id'] == '...':
-
-                loss_indv = netpstfwd.train(ndata, ldata, lossfx) 
-                loss_glob = torch.sum(torch.stack(list(loss_indv.values()))) ## !!!
+                
+                loss_glob, loss_indv = loss_computer(ndata, ldata)
                 
                 #######
                 optima.zero_grad()
@@ -121,12 +107,11 @@ def trainer(cfg, vis):
                 optima.step() 
                 #######
                 
+                ## monitor
                 if loss_glob.item() > 1e8 or math.isnan(loss_glob.item()):
                     log.error(f"E[{trn_inf['epo']}] B[{trn_inf['bat']}] S[{(trn_inf['step'])}] Loss exploded {loss_glob.item()}")
                     log.error(loss_indv)
                     raise Exception("Loss exploded")
-                
-                ## monitor
                 tmeter.update({'bat': loss_glob.item()})
                 for key, value in loss_indv.items():
                     ## Update individual loss parts
@@ -134,7 +119,6 @@ def trainer(cfg, vis):
                 tmeter.log_bat(trn_inf)
             
             if lrs is not None: lrs.step()
-            ##########
                 
             ## monitor 
             tmeter.log_epo(trn_inf)
@@ -144,7 +128,7 @@ def trainer(cfg, vis):
             if (epo + 1) % cfg_vldt.freq == 0:
                 log.info(f'$$$ Validation at epo {epo+1}')
                 #torch.backends.cudnn.benchmark = False
-                _, _, mtrc_info = vldt.start(net, netpstfwd)
+                _, _, mtrc_info = vldt.start(net, inferator)
                 if cfg_vldt.mtrc_visplot: vis.plot_vldt_mtrc(mtrc_info,epo)
                 vldt.reset()
                 #torch.backends.cudnn.benchmark = True
@@ -186,7 +170,7 @@ class TrainMeter:
     def __init__(self, cfg_loader, cfg_vldt, vis):
         
         if cfg_vldt.loss_log == 0:
-            self.logfreq = cfg_loader.itersepo//2
+            self.logfreq = cfg_loader.itersepo//2 ## !!
         else:
             self.logfreq = cfg_vldt.loss_log
 

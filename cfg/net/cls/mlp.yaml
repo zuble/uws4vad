@@ -1,0 +1,3 @@
+_target_: src.model.net.layers.scorhead.SMlp
+hdim_ratio: 4
+do: 0.7

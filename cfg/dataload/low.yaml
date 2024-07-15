@@ -1,13 +1,14 @@
 defaults:
   - dflt.yaml
+  #- balance: dflt
   
-train:
-  in2mem: False
 
-  nworkers: ${dyn_nworkers:1}  ## 0 -> cpu//4 ;; -1 -> all cores
-  pinmem: False
-  #pftch_fctr: 1
-  prstwrk: False
+in2mem: False
+
+nworkers: ${dyn_nworkers:1}  ## 0 -> cpu//4 ;; -1 -> all cores
+pinmem: False
+#pftch_fctr: 1
+prstwrk: False
 
 
 test:

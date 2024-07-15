@@ -64,67 +64,6 @@ def run_dl(dl, iters=2, vis=False):
         log.error(f'Error unpacking variables in batch {b_idx}: {e}')
 
 
-
-def analyze_sampler(bsampler, labels, dataset_name, iters=2, vis=True):
-    """Analyzes BatchSampler behavior over multiple iterations."""
-    import matplotlib.pyplot as plt
-    from collections import Counter, defaultdict
-    
-    for ii in range(iters):
-        all_indices = []
-        epo_counts = []  # Store counts for each class across batches
-        epo_class_counts = [] # Store all the counts in the epoch
-        
-        for batch_idx, batch_indices in enumerate(bsampler):
-            all_indices.extend(batch_indices)
-
-            bat_counts = [labels[idx] for idx in batch_indices]  # Get labels for the batch
-            bat_dist = Counter(bat_counts)
-            for class_id in bat_dist:
-                while len(epo_counts) <= int(class_id):
-                    epo_counts.append([])
-                epo_counts[int(class_id)].append(bat_dist[class_id])
-            epo_class_counts.extend(bat_counts)
-
-        print(f"\n\n\t  Dataset: {dataset_name}, Epoch: {ii + 1}")
-        print(f"\t    Samples per Epoch: {len(all_indices)}")
-
-        # --- Log Class Distribution Summary ---
-        class_distribution = Counter(labels[idx] for idx in all_indices)
-        total_samples = len(all_indices)
-        print(f"\t    Epoch Class Distribution")
-        for class_id, count in sorted(class_distribution.items()):
-            print(f"\t  Class {class_id}: {count} samples ({((count / total_samples) * 100):.2f}%)")
-
-        #####################################
-        #unique_indices = set(all_indices)
-        #repeated_indices = len(all_indices) - len(unique_indices)
-        #print(f"\t    Repeated Indices: {repeated_indices}")
-        ## Analyze repeated indices per class
-        index_counts = Counter(all_indices)
-        repeated_indices_per_class = defaultdict(list)
-        for idx, count in index_counts.items():
-            if count > 1:
-                label = labels[idx]
-                repeated_indices_per_class[label].append(idx)
-        print("\t    Repeated Indices per Class:")
-        for label, indices in sorted(repeated_indices_per_class.items()):
-            print(f"\t      Label {label}: {len(indices)} ") #indices ({indices})
-        #####################################
-
-        # --- Visualization ---
-        if vis:
-            num_batches = len(epo_counts[0])
-            for class_id, class_counts_per_batch in enumerate(epo_counts):
-                plt.plot(range(1, num_batches + 1), class_counts_per_batch, label=f'Class {class_id}')
-            plt.xlabel('Batch Number')
-            plt.ylabel('Number of Samples')
-            plt.title(f'Per-Batch Class Distribution (Epoch {ii + 1})')
-            plt.legend()
-            plt.show()
-
-
-
 def debug_cfg_data(cfg):
     """
     """

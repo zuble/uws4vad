@@ -1,5 +1,0 @@
-_target_: src.model.loss.rnkg.RankingLoss
-_cfg:
-  bs: ${dataload.train.bs}
-  seglen: ${dataproc.seg.len}
-  lambda12: [8e-5,8e-5]

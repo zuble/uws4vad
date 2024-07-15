@@ -1,3 +1,0 @@
-_target_: "src.model.net.layers.classifier.SLstm"
-lstm_dim: 256
-lstm_bd: True

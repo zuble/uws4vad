@@ -1,0 +1,6 @@
+defaults:
+  - _dflt
+
+seg:
+  sel: itp
+  len: 32 

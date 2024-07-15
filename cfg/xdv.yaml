@@ -1,13 +1,15 @@
 # @package _global_
 
 defaults:
+  - 000.yaml
   - _self_
   - data: xdv
   - data/frgb: vadclip #cliptsa # 
   - data/faud: ~ # vggish
   - dataload: low
-  - dataproc: xdv
-  - model: mir
+  - dataproc: seq
+  - model: clas
+  - net: mir
   - vldt: dflt
   - path: dflt
   - xtra: dflt
@@ -16,18 +18,13 @@ defaults:
   - exp: null
   - debug: null
 
-name: ${dyn_name:${model.net.id},${model.net.vrs}}  ## -> {}_{}
-task_name: ${dyn_vadtaskname:${data},${dataproc}}
-tags: [""]
-
-dvc: ${dyn_dvc:-1}
-seed: 0
-deterministic: 0
+#name: ${dyn_underscore:${model.id},${net.id},${net.vrs}}  ## -> {}_{}
+#task_name: ${dyn_vadtaskname:${data},${dataproc}}
+#tags: [""]
 
 tmp: 0
 test: 0  
 train: 1   
-
 
 load:
   strict_load: false

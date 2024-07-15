@@ -1,9 +1,9 @@
 defaults:
-  - _.yaml
-  - net: mir  ## expose net in main
+  - _dflt
   - optima: adam
   - lrs: null
-  
+
+  #- loss: _dflt
   ###- loss: rnkg
   ##- loss@score: rnkg
   ##- loss@s1: rnkg
@@ -12,7 +12,7 @@ defaults:
 
   #- _self_
 
-
+id: rank
 
 epochs: 5
 
@@ -20,14 +20,11 @@ optima:
   lr: 1.0e-3
   weight_decay: 1.0e-5
 
-
-loss: 
+loss:
   rnkg: #${model.loss.rnkg}
     _target_: src.model.loss.score.Ranking
-    _cfg:
-      bs: ${dataload.train.bs}
-      seglen: ${dataproc.seg.len}
-      lambda12: [8e-5,8e-5]
+    lambda12: [8e-5,8e-5]
+
 
 
 

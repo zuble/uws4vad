@@ -1,19 +1,35 @@
-## https://pytorch.org/docs/1.8.1/data.html?highlight=dataloader#torch.utils.data.DataLoader
+#defaults:
+#  - balance: dflt
 
-train:
-  in2mem: False
-  itersepo: ~ ## assigned in runtime @ get_trainloader 
+## controls sampler underlyng BatchSampler
+balance:
+  ## the distribution of each batch can be set differently by taking a sampler in BatchSampler
+  ## 0: uses RandomSampler, similiar to shuffle (auto batch torch)
+  ## else ]0:1[: indicates the abn balance per bag in AbnormalBatchSammpler
+  ## if bs:32 (batch is (16A,16N)) and bag:0.55 -> ABS will yield (int(32*0.55),32-abn_bag)->(17A,15N)
+  ## if 0.5: both bags are equally balanced , standard MIR setup
+  ## run with debug=sampler to inspect (adjust vis in dataloader/_data)
+  ## ucf: 0.5 | xdv: 0
+  bag: ${dyn_per_ds:${data.id},0.5,0}
+  ## controls the num_samples as int(set_balance * len(abnormal_ds))
+  ## or as the number of additional batchs to yield per epoch
+  set: 1
 
-  bs: 32 #???
-  #shuffle: ## theres a rndsampler for both mil&non-mil
-  nworkers: ${dyn_nworkers:0}  ## 0 -> cpu//4 ;; -1 -> all cores
-  pinmem: True
-  droplast: True ## WRnd & Rnd
-  #pftch_fctr: 2
-  prstwrk: True
+in2mem: False
+itersepo: ~ ## assigned in runtime @ get_trainloader !!
 
-  ## runs the dl twice and return 
-  dryrun: False
+bs: 32 #???
+nworkers: ${dyn_nworkers:0}  ## 0 -> cpu//4 ;; -1 -> all cores
+pinmem: True
+droplast: True ## WRnd & Rnd
+#pftch_fctr: 2
+prstwrk: True
+
+## runs the dl twice and return 
+dryrun: False
+
+
+
 
 ## both validate and test reuse this values
 ## as the dataloader is created from same point

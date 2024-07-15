@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from src.model.net.layers import BasePstFwd
+
+from src.model.pstfwd.utils import PstFwdUtils
 
 from src.utils.logger import get_log
 log = get_log(__name__)
@@ -29,8 +30,8 @@ def sparsity(arr, lambd = 8e-3, rtfm=False):
     
     
 class Bce(nn.Module):
-    def __init__(self, ):
-        super(Bce, self).__init__()
+    def __init__(self, _cfg, pfu: PstFwdUtils = None): 
+        super().__init__()
         self.crit = nn.BCELoss()
         
     def forward(self, scores, label, tag=None):
@@ -41,8 +42,8 @@ class Bce(nn.Module):
             }
 
 class Clas(nn.Module):
-    def __init__(self, _cfg):
-        super(Loss, self).__init__()
+    def __init__(self, _cfg, pfu: PstFwdUtils = None): 
+        super().__init__()
 
         self.crit = nn.BCELoss()        
         self.forward = {
@@ -63,7 +64,7 @@ class Clas(nn.Module):
         #log.debug(f"BCE/{scores.shape} {scores.context} {label.shape} {label.context}")
         scores = scores.squeeze()
         instance_scores = torch.zeros(0).to(scores.device)  # tensor([])
-        for i in range(scores.shape[0]):
+        for i in range(scores.shape[0]): ## bs
             tmp, _ = torch.topk(scores[i][:seqlen[i]], k=self.get_k(seqlen[i]), largest=True)
             tmp = torch.mean(tmp).view(1)
             instance_scores = torch.cat((instance_scores, tmp))
@@ -78,7 +79,7 @@ class Clas(nn.Module):
         seqlen = ldata['seqlen']
         
         vl_scores = torch.zeros(0).to(scores.device)
-        for i in range(scores.shape[0]): #.self.bs
+        for i in range(scores.shape[0]): #.self.pfu.bs
             sl = int(seqlen[i])
             tmp3 = np.mean(scores[i, :sl])
             vl_scores.append( np.expand_dims(tmp3,axis=0) ) 
@@ -90,16 +91,16 @@ class Clas(nn.Module):
             }
         
         
-class Ranking(nn.Module, BasePstFwd):
-    def __init__(self, _cfg):
-        super(Ranking, self).__init__()
-        log.info(_cfg)
-        ## when instanteate partial cant do _cfg.bs
-        self.bs = _cfg.get("bs")
-        self.seglen = _cfg.get("seglen")
+class Ranking(nn.Module): 
+    def __init__(self, _cfg, pfu: PstFwdUtils = None): 
+        super().__init__()
+        if pfu is not None: self.pfu = pfu
+        log.info(f"Ranking {_cfg}")
+        
         self.lambda1 = _cfg.get("lambda12")[0]
         self.lambda2 = _cfg["lambda12"][1] 
-
+        self.use_tcn = False
+        
     ## MotionAware found it harmfull
     def smooth(self, arr):
         '''
@@ -117,22 +118,15 @@ class Ranking(nn.Module, BasePstFwd):
             loss =  torch.sum(arr)
         return self.lambda2 * loss
 
-    def forward(self, scores, labels, use_tcn=False):
-        log.debug(f" {scores.shape=} {labels.shape=}")
-
-        loss = torch.tensor(0., requires_grad=True, device=scores.device)
-        assert self.bs == scores.shape[0]
-
-
-        #if self.use_tcn:
+    def tcn_branch(self, scores, labels):
         L_tcn = loss.clone()
         #scores = super().uncrop(scores, 'mean')
         #log.info(f" {scores.shape=} ")
         #abn_scors, nor_scors = super().unbag(scores,labels)
         #log.info(f" {abn_scors.shape=} {nor_scors.shape=}")
         
-        #scores_abn = scores[labels == 1]#.view(-1, self.seglen) 
-        #scores_nor = scores[labels == 0]#.view(-1, self.seglen) 
+        #scores_abn = scores[labels == 1]#.view(-1, self.pfu.seg_len) 
+        #scores_nor = scores[labels == 0]#.view(-1, self.pfu.seg_len) 
         #log.info(f" {scores_abn.shape=} {scores_nor.shape=}")
         #super().is_equal(nor_scors, scores_nor)
         #super().is_equal(abn_scors, scores_abn)
@@ -159,20 +153,56 @@ class Ranking(nn.Module, BasePstFwd):
         #L_tcn /= mask.sum()
         #log.warning(f"L tcn final: {L_tcn.item()}")
             
+    
+    def forward(self, ndata, ldata):
+        labels = ldata['label']
+        scores = ndata['scores']
         
-        L_sult = loss.clone()
-        max_scores = torch.max(scores, dim=1)[1]
-        for i in range(self.bs):
-            if labels[i] == 1:
-                L_sult += self.smooth(scores[i])
-                L_sult += self.sparsity(scores[i])
-                mask = labels == 0
-                L_sult += torch.sum(F.relu(1 - max_scores[i] + max_scores[mask]))
-        L_sult /= self.bs
-        log.warning(f"L sult {L_sult.item()}")
-
+        scores = self.pfu.uncrop(scores, 'mean')
+        L = torch.tensor(0., requires_grad=True, device=scores.device)
+        
+        #if self.use_tcn:
+        #    self.tcn_branch(scores,labels)
+        
+        #max_scores = torch.max(scores, dim=1)[1]
+        #for i in range(self.pfu.bs):
+        #    if labels[i] == 1:
+        #        L = L + self.smooth(scores[i])
+        #        L = L + self.sparsity(scores[i])
+        #        mask = labels == 0
+        #        L = L + torch.sum(F.relu(1 - max_scores[i] + max_scores[mask]))
+        #L = L / self.pfu.bs
+        
+        #abn_scores, nor_scores = self.pfu.unbag(scores, labels)
+        scores = scores.view(-1)
+        for i in range(self.pfu.bs//2):
+            ## norm
+            startn = (i * self.pfu.seg_len + (self.pfu.bs//2) * self.pfu.seg_len)
+            endn = (i + 1) * self.pfu.seg_len + (self.pfu.bs//2) * self.pfu.seg_len
+            maxn = torch.max( scores[ startn : endn ] ) 
+            #maxn = torch.mean( torch.topk( scores[ startn : endn ], k=self.pfu.seg_len//4) )
+            
+            ## anom
+            starta = i * self.pfu.seg_len
+            enda = (i + 1) * self.pfu.seg_len
+            maxa = torch.max( scores[ starta : enda ] ) ##that
+            #maxa = torch.mean( torch.topk( scores[ starta : enda ], k=self.pfu.seg_len//4) )
+            
+            tmp = F.relu(1.0 - maxa + maxn)
+            loss = tmp + self.sparsity(scores[ starta : enda ]) ## + self.smooth(scores[ starta : enda ])
+            
+            ## TCN-IBL inner bag loss
+            #mina = np.min( scores[ starta : enda ] )
+            #minn = np.min( scores[ startn : endn ] )
+            #loss_ibl = npx.relu(1.0 - maxa + mina)
+            #loss_gap = np.abs(maxn - minn)
+            #loss = loss + loss_ibl + loss_gap
+            L = L + loss
+            #L = torch.cat((L, loss))
+        #L = torch.mean(L, dim=0)
+        
         return {
-            'rnkg_sult': L_sult,
+            'rnkg_sult': L,
             #'rnkg_tcn': L_tcn
             } 
 
@@ -185,18 +215,18 @@ class Ranking(nn.Module, BasePstFwd):
     #        log.debug(f"{scores.shape}")
     #        
     #    L = []
-    #    for i in range(self.bs//2):
+    #    for i in range(self.pfu.bs//2):
     #        ## norm
-    #        startn = i * self.seglen
-    #        endn = (i + 1) * self.seglen
+    #        startn = i * self.pfu.seg_len
+    #        endn = (i + 1) * self.pfu.seg_len
     #        maxn = torch.max( scores[ startn : endn ] ) 
-    #        #maxn = torch.mean( torch.topk( scores[ startn : endn ], k=self.seglen//4) )
+    #        #maxn = torch.mean( torch.topk( scores[ startn : endn ], k=self.pfu.seg_len//4) )
     #        
     #        ## anom
-    #        starta = (i * self.seglen + (self.bs//2) * self.seglen)
-    #        enda = (i + 1) * self.seglen + (self.bs//2) * self.seglen
+    #        starta = (i * self.pfu.seg_len + (self.pfu.bs//2) * self.pfu.seg_len)
+    #        enda = (i + 1) * self.pfu.seg_len + (self.pfu.bs//2) * self.pfu.seg_len
     #        maxa = torch.max( scores[ starta : enda ] ) ##that
-    #        #maxa = torch.mean( torch.topk( scores[ starta : enda ], k=self.seglen//4) )
+    #        #maxa = torch.mean( torch.topk( scores[ starta : enda ], k=self.pfu.seg_len//4) )
     #        
     #        tmp = F.relu(1.0 - maxa + maxn)
     #        loss = tmp + self.sparsity(scores[ starta : enda ]) ## + self.smooth(scores[ starta : enda ])
@@ -218,7 +248,7 @@ class Ranking(nn.Module, BasePstFwd):
     
             
 class Normal(nn.Module):
-    def __init__(self):
+    def __init__(self, _cfg, pfu: PstFwdUtils = None): 
         super().__init__()
         self.w_normal = 1.
         
@@ -232,8 +262,8 @@ class Normal(nn.Module):
 
 
 class MultiBranchSupervision(nn.Module):
-    def __init__(self, _cfg):
-        super(MultiBranchSupervision, self).__init__()
+    def __init__(self, _cfg, pfu: PstFwdUtils = None): 
+        super().__init__()
         self.device = devices
         self.eps = 0.2
         self.alpha = 0.8

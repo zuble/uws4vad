@@ -1,0 +1,9 @@
+defaults:
+  - _dflt
+  
+seg:
+  sel: uni
+  len: 200
+  rnd:
+    #- jit
+    #- glob

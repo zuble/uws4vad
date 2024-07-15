@@ -4,10 +4,10 @@ from src.data.testdl import get_testloader
 from src.data._data import (
     FeaturePathListFinder,
     run_dl,
-    debug_cfg_data,
-    analyze_sampler
+    debug_cfg_data
     )
 
 from src.data.samplers import (
-    MPerClassSampler,
+    AbnormalBatchSampler,
+    analyze_sampler
     )

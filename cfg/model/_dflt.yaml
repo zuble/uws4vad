@@ -1,0 +1,14 @@
+defaults:
+  - _self_
+  #- net: 
+  #- optima: 
+  #- lrs: 
+  - pstfwd: dflt
+  #- loss: ??? ## better to have expose in each model_cfg
+
+dryfwd: False
+
+id: ???
+epochs: ???
+optima: ???
+#loss: ???

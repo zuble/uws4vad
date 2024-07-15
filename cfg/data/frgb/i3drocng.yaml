@@ -7,4 +7,4 @@ ds:
 fstep: 16
 dfeat: 1024
 
-ncrops: ${dyn_fencrops:${data.id},10,5}
+ncrops: ${dyn_per_ds:${data.id},10,5}

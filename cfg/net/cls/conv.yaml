@@ -1,0 +1,2 @@
+_target_: src.model.net.layers.scorhead.SConv
+ks: 7

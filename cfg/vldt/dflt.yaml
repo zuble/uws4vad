@@ -7,7 +7,7 @@ dryrun: False
 ## 0 -> glob: means that full feat arr is input
 ## >1 -> controls chunck size to divid input feats
 ##  atm only network depended of this is attnmil, although it might be a good exp
-fwd_siz: ${dyn_vldtfwd:${model.net.id},9}
+fwd_siz: ${dyn_vldtfwd:${net.id},9}
 
 ## rshpndfill: fill fl w/ last value until len is the same as gt
 ## truncate: truncate gt to len(fl)

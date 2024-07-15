@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import DataLoader, Dataset, BatchSampler, RandomSampler, WeightedRandomSampler
 from pytorch_metric_learning.samplers import MPerClassSampler
-from src.data.samplers import MPerClassSampler as MPerClassSamplerZu
+from src.data.samplers import AbnormalBatchSampler, analyze_sampler
 import numpy as np
 
 import glob , os, os.path as osp , math , time
@@ -20,51 +20,14 @@ def get_rng(seed):
     ## https://pytorch.org/docs/1.8.1/generated/torch.Generator.html#torch.Generator
     TCRNG = torch.Generator().manual_seed(seed)
 
-
-def get_sampler(cfg_dproc, cfg_dload, len_abn, len_nor):
-    
-    max_len = max( len_abn , len_nor)
-    #min_len = min( len_abn , len_nor)
-    samples_per_epoch = int(cfg_dproc.sampler.len * max_len ) #len(ds)
-    bal_wgh = cfg_dproc.sampler.balance
-    if bal_wgh == 0.5: ## sultani        
-        sampler = MPerClassSampler(labels, 
-                                m=cfg_dload.bs//2, 
-                                batch_size=cfg_dload.bs, 
-                                length_before_new_iter=len(rgbfl)
-                                ) 
-        #sampler = MPerClassSamplerZu(labels, 
-        #                        m=cfg_dload.bs//2, 
-        #                        batch_size=cfg_dload.bs, 
-        #                        #length_before_new_iter=samples_per_epoch ## no use atm
-        #                        ) 
-    elif bal_wgh == 0: ## rocng
-        sampler = RandomSampler(ds, 
-                            replacement=False,
-                            num_samples=samples_per_epoch, # !!!! set intern to len(ds)
-                            generator=TCRNG
-                            )
-    elif 0 < bal_wgh < 1:
-        rebal_wgh = 0.5 - ( 1 - (len_nor/len_abn) )
-        weights = [rebal_wgh]*len_abn + [1-rebal_wgh]*len_nor
-        sampler = WeightedRandomSampler(weights, 
-                            replacement=False,
-                            num_samples=samples_per_epoch, 
-                            generator=TCRNG
-                            )
-        log.warning(f'TRAIN: WeightSammpler {rebal_wgh=} {len(weights)=}')    
-    else: raise ValueError 
-    log.info(f"TRAIN: SMPLR {sampler=} w/ {len(sampler)} [{bal_wgh=} {samples_per_epoch=}]")
-
-
 def get_trainloader(cfg):
-    from ._data import FeaturePathListFinder, debug_cfg_data, analyze_sampler
+    from ._data import FeaturePathListFinder, debug_cfg_data
     if cfg.get("debug"): debug_cfg_data(cfg)
     
     log.info(f'TRAIN: getting trainloader')
 
     cfg_ds = cfg.data
-    cfg_dload = cfg.dataload.train
+    cfg_dload = cfg.dataload
     cfg_dproc = cfg.dataproc
     
     get_rng(cfg.seed)
@@ -86,11 +49,31 @@ def get_trainloader(cfg):
     
     ds = TrainDS(cfg_dload, cfg_ds, cfg_dproc, rgbfl, audfl)  
     
-    sampler = get_sampler(cfg_dproc, cfg_dload, len_abn, len_nor )
-    ## safe to set droplast true for mperclass
+    ## --- Sampler ---
+    bal_abn_bag = cfg_dload.balance.bag
+    bal_abn_set = cfg_dload.balance.set
+    if bal_abn_bag == 0:## rocng
+        ## same as batch_size=cfg_dload.bs, shuffle=True, drop_last=True
+        ## but set them all together
+        sampler = RandomSampler(ds, 
+                    #replacement=False,
+                    #num_samples=samples_per_epoch, # !!!! set intern to len(ds)
+                    generator=TCRNG
+                    )
+    else: sampler = AbnormalBatchSampler(
+                    labels,
+                    bal_abn_bag=bal_abn_bag,
+                    bs=cfg_dload.bs,
+                    bal_abn_set=bal_abn_set,
+                    generator=NPRNG
+                    ) 
+    log.info(f"TRAIN: SMPLR {sampler=} w/ {len(sampler)} [{bal_abn_bag=} {bal_abn_set=}]")
+
     bsampler = BatchSampler(sampler , cfg_dload.bs , True) #cfg_dload.droplast
-    #if cfg.get("debug"): 
-    analyze_sampler(bsampler, labels, cfg_ds.id, iters=1)
+    #if cfg.get("debug"):
+    a={}
+    a['abs']=bsampler 
+    analyze_sampler(a, labels, cfg_ds.id, iters=1,vis=False)
     
     dataloader = DataLoader( ds,
                         batch_sampler=bsampler,
@@ -101,7 +84,7 @@ def get_trainloader(cfg):
                         pin_memory=cfg_dload.pinmem, 
                         persistent_workers=cfg_dload.prstwrk 
                         )
-    cfg.dataload.train.itersepo = len(dataloader)
+    cfg.dataload.itersepo = len(dataloader)
     assert len(bsampler) == len(dataloader) 
     
     log.info(f"TRAIN **: {len(ds)}  {len(sampler)=}  {len(bsampler)=}=iters_per_epo  {len(dataloader)=}")
@@ -488,8 +471,8 @@ class DataCollator:
 #    )
 #    for ds, sampler in [(ads, samplers[0]), (nds, samplers[1])]  # Abnormal then Normal  
 #]
-#cfg.dataload.train.itersepo = max( len(dataloaders[0]), len(dataloaders[1]))
-#log.debug(f'TRAIN: iterations_per_epoch {cfg.dataload.train.itersepo}')
+#cfg.dataload.itersepo = max( len(dataloaders[0]), len(dataloaders[1]))
+#log.debug(f'TRAIN: iterations_per_epoch {cfg.dataload.itersepo}')
 '''
 def sequencial(self, feat, crop=0, fn=''):
         

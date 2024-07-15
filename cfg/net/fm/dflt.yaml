@@ -1,0 +1,4 @@
+id: ???
+
+_target_: "src.model.net.layers.${net.fm.id}.FeatModulator"
+_cfg: ~

@@ -1,7 +1,3 @@
-clas:
-  _target_: src.model.loss.clas.Loss
-  _cfg:
-    fx: topk  ## topk wink full
-    topk: 16
-    wink: 3
-    winkconv: false
+_target_: src.model.loss.score.Clas
+fx: 'topk' ## full
+k: 3 ## if -1 set dynamic according seqlen

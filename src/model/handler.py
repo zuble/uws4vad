@@ -54,8 +54,8 @@ class ModelHandler:
     def __init__(self, cfg, istrain=False):
         self.cfg = cfg
         
-        self.id = f"{cfg.model.net.id}" ## if using dyn_name -> cfg.name can be used
-        if cfg.model.net.vrs: self.id = self.id+f"_{cfg.model.net.vrs}"
+        self.id = f"{cfg.net.id}" ## if using dyn_name -> cfg.name can be used
+        if cfg.net.vrs: self.id = self.id+f"_{cfg.net.vrs}"
         ## used later on test load to pre check if atual arch match state
         ## can fall into cases where eg cls used is diff !!??
         ## construct a + reliable id

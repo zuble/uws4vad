@@ -20,11 +20,10 @@ debug:
   - 'src'
 
 
-dataloader:
-  train:
-    in2mem: False
-    nworkers: 0
-    pinmem: False
+dataload:
+  in2mem: False
+  nworkers: 0
+  pinmem: False
 
   test:
     in2mem: False

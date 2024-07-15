@@ -1,21 +1,20 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 from pytorch_metric_learning import losses
 from pytorch_metric_learning import distances
 from pytorch_metric_learning import reducers
 from pytorch_metric_learning import regularizers
 
+from src.model.pstfwd.utils import PstFwdUtils
 
 from functools import partial
-
 from src.utils.logger import get_log
 log = get_log(__name__)
     
     
 class MPP(nn.Module):
-    def __init__(self):
+    def __init__(self, _cfg, pfu: PstFwdUtils = None): 
         super().__init__()
         self.w_triplet = [5, 20]
         self.w_mpp = 1.
@@ -44,8 +43,9 @@ class MPP(nn.Module):
         } 
         
 class Rtfm(nn.Module):
-    def __init__(self, _cfg):
-        super(Rtfm, self).__init__()
+    def __init__(self, _cfg, pfu: PstFwdUtils = None):
+        super().__init__()
+        self.pfu = pfu
         self.alpha = _cfg.alpha
         self.margin = _cfg.margin
         
@@ -65,9 +65,9 @@ class Rtfm(nn.Module):
         }
         
 class ContrastiveLoss(nn.Module):
-    def __init__(self, margin=200.0):
-        super(ContrastiveLoss, self).__init__()
-        self.margin = margin
+    def __init__(self, _cfg, pfu: PstFwdUtils = None): 
+        super().__init__()
+        self.margin = 200.0
 
     def forward(self, output1, output2, label):
         euclidean_distance = F.pairwise_distance(output1, output2, keepdim=True) ## bag*nc, 1
@@ -76,8 +76,8 @@ class ContrastiveLoss(nn.Module):
         return loss_contrastive
     
 class MagnCont(nn.Module):
-    def __init__(self, _cfg):
-        super(MagnCont, self).__init__()
+    def __init__(self, _cfg, pfu: PstFwdUtils = None): 
+        super().__init__()
         self.alpha = _cfg.alpha
         self.margin = _cfg.margin
         
@@ -111,7 +111,7 @@ class MagnCont(nn.Module):
 
 class Dev(nn.Module):
     def __init__(self, _cfg):
-        super(Dev, self).__init__()
+        super().__init__()
         
         #self.loss_feat = losses.TripletMarginLoss(
         #    margin=0.2,# _cfg.margin,

@@ -56,7 +56,7 @@ def tester(cfg, vis):
     log.info(f'$$$$ TEST starting')
 
     ## MODEL
-    net, netpstfwd = build_net(cfg)
+    net, inferator = build_net(cfg,infer=True)
 
     ##########
     watching = cfg_vldt.watch.frmt
@@ -71,7 +71,7 @@ def tester(cfg, vis):
     VLDT = Validate(cfg, cfg_vldt, cfg.data.frgb, vis, watching)
     if cfg.vldt.dryrun:
         log.info("DBG DRY VLDT RUN")
-        VLDT.start(net, netpstfwd); VLDT.reset() #;return
+        VLDT.start(net, inferator); VLDT.reset() #;return
 
     
     ## LOAD

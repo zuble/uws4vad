@@ -1,9 +1,0 @@
-#defaults:
-#  - net: ???
-#  - optima: ???
-#  - lrs: null
-#  - loss: null
-
-epochs: ???
-
-dryfwd: False

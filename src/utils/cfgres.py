@@ -7,6 +7,8 @@ from omegaconf import OmegaConf
 from hydra.core.global_hydra import GlobalHydra
 from hydra import initialize_config_dir, compose
 
+from src.utils.logger import get_log
+log = get_log(__name__)
 
 ## hydra cfg resolvers
 ## decorator at main
@@ -56,20 +58,23 @@ def dyn_crops2use(frgb_ncrops, crops2use_stg):
     else: raise ValueError(f"Invalid crops2use setting: {crops2use_stg}. Must be between 1 and {frgb_ncrops} (or -1 for maximum).")
     return crops2use
 
-
-def dyn_mainet(idd,vrs):
+#####
+def dyn_per_ds(ds,option_ucf,option_xdv):
+    if ds == 'ucf': return option_ucf
+    elif ds == 'xdv': return option_xdv
+def dyn_oneorboth(idd,vrs):
     if not vrs: return f"src.model.net.{idd}.Network"
-    else: return f"src.model.net.{idd}.{vrs}"    
-    
+    else: return f"src.model.net.{idd}.{vrs}" 
+def dyn_underscore(*args):
+    # Join non-empty arguments with '_'
+    return '_'.join(arg for arg in args if arg)
+#####  
+
+
 def dyn_retatt(watch_frm, intest):
     if not intest: return False
     elif 'attws' not in watch_frm: return False
     else: return True
-    
-    
-def dyn_name(x,y): 
-    if y: return f"{x}_{y}"
-    else: return x
     
 def dyn_vadtaskname(ds,dtproc):
     tmp = f"{ds.id}_{ds.frgb.id.lower()}"
@@ -105,13 +110,14 @@ def reg_custom_resolvers(version_base: str, config_path: str, config_name: str) 
         'dyn_vldt': dyn_vldt,
         'dyn_vldtmtrc': dyn_vldtmtrc,
         'dyn_crops2use': dyn_crops2use,
-        'dyn_mainet': dyn_mainet,
-        'dyn_name': dyn_name,
+        'dyn_oneorboth': dyn_oneorboth,
+        'dyn_underscore': dyn_underscore,
         'dyn_vldtfwd': dyn_vldtfwd,
         'dyn_retatt': dyn_retatt,
         'dyn_vadtaskname': dyn_vadtaskname,
         'dyn_fencrops': dyn_fencrops,
-        'dyn_dataroot': dyn_dataroot
+        'dyn_dataroot': dyn_dataroot,
+        'dyn_per_ds':dyn_per_ds
     }
     for resolver, function in new_res.items():
         OmegaConf.register_new_resolver(resolver, function)

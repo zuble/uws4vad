@@ -184,7 +184,8 @@ class Validate:
         ## None means ret_att is False
         if watching: self.ret_att = 'attws' in watching
         else: self.ret_att = False
-        assert cfg.model.net.main._cfg.ret_att == self.ret_att
+        log.warning(f"TODO ret_att or ret_emb 4 visdom")
+        #assert cfg.net.main._cfg.ret_att == self.ret_att
         
         ## after self.fwd() run, self.sls will have the SL scores acquired from chosen net forward
         ## attws will be populated is set, otherwise empty list are flag
@@ -198,7 +199,7 @@ class Validate:
         self.watch_info.reset()
         
     #@torch.no_grad()
-    def _fwd_attnomil(self, net, netpstfwd, feat):
+    def _fwd_attnomil(self, net, inferator, feat):
         '''
         as one score per forward, segment&repeat to get len(scores)=len(feats)
         #if self.cfg_frgb.fstep == 64: chuk_size = 8
@@ -235,14 +236,14 @@ class Validate:
             log.debug(f"attws: {self.attws.shape} {self.attws.ctx}") 
     
     #@torch.no_grad()    
-    def _fwd_glob(self, net, netpstfwd, feat):
+    def _fwd_glob(self, net, inferator, feat):
         ndata = net(feat)
-        self.sls = netpstfwd.infer(ndata)
+        self.sls = inferator(ndata)
         #self.sls = self.sls.view(-1) ## !!!!! take care in infer with a super() on return
         
     
     @torch.no_grad()    
-    def start(self, net, netpstfwd):
+    def start(self, net, inferator):
         net.eval()
         tic = time.time()
         
@@ -257,12 +258,12 @@ class Validate:
                 feat = feat.unsqueeze(0) 
             elif feat.ndim == 3: pass ## no crop in ds
             elif feat.ndim == 4 and feat.shape[0] == 1: 
-                ## 1 crop atleast, atm netpstfwd.infer isnot account this
+                ## 1 crop atleast, atm inferator.infer isnot account this
                 feat = feat.view(-1, feat.shape[2], feat.shape[3]) ## 1*nc, t, f
             else: raise ValueError(f'[{i}] feat.ndim {feat.ndim}')
             #log.debug(f'[{i}] {feat.shape} , {fn} , {label}')
             
-            self.fwd(net, netpstfwd, feat)
+            self.fwd(net, inferator, feat)
             #log.debug(f'-> sls: {self.sls.shape}')
             ## self.sls is at segment level 
             

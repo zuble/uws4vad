@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from src.model.net.layers.pdc import PiramidDilatedConv
+
 from src.utils.logger import get_log
 log = get_log(__name__)
 
@@ -102,14 +104,12 @@ class _NonLocalBlockND(nn.Module):
             return z, f_div_C
         return z
 
-
 class NONLocalBlock1D(_NonLocalBlockND):
     def __init__(self, in_channels, inter_channels=None, sub_sample=True, bn_layer=True):
         super(NONLocalBlock1D, self).__init__(in_channels,
                                             inter_channels=inter_channels,
                                             dimension=1, sub_sample=sub_sample,
                                             bn_layer=bn_layer)
-
 
 class Aggregate(nn.Module):
     def __init__(self, dfeat, rate=4):
@@ -118,35 +118,9 @@ class Aggregate(nn.Module):
         self.dfeat = dfeat ## orig in 2048
         self.dout = dfeat // rate ## 2048/4=512
         
-        bn = nn.BatchNorm1d
-        self.conv_1 = nn.Sequential(
-            nn.Conv1d(in_channels=self.dfeat, 
-                    out_channels=self.dout, 
-                    kernel_size=3,
-                    stride=1,dilation=1, padding=1),
-            nn.ReLU(),
-            bn(self.dout)
-            # nn.dropout(0.7)
-        )
-        self.conv_2 = nn.Sequential(
-            nn.Conv1d(in_channels=self.dfeat, 
-                    out_channels=self.dout, 
-                    kernel_size=3,
-                    stride=1, dilation=2, padding=2),
-            nn.ReLU(),
-            bn(self.dout)
-            # nn.dropout(0.7)
-        )
-        self.conv_3 = nn.Sequential(
-            nn.Conv1d(in_channels=self.dfeat, 
-                    out_channels=self.dout, 
-                    kernel_size=3,
-                    stride=1, dilation=4, padding=4),
-            nn.ReLU(),
-            bn(self.dout)
-            # nn.dropout(0.7),
-        )
-        self.conv_4 = nn.Sequential(
+        self.pdc = PiramidDilatedConv(dfeat, rate)
+        
+        self.conv_4 = nn.Sequential( 
             nn.Conv1d(in_channels=self.dfeat, 
                     out_channels=self.dout, 
                     kernel_size=1,
@@ -154,44 +128,68 @@ class Aggregate(nn.Module):
             nn.ReLU(),
             # nn.dropout(0.7),
         )
-        self.conv_5 = nn.Sequential(
-            nn.Conv1d(in_channels=self.dfeat, 
-                    out_channels=self.dfeat, 
-                    kernel_size=3,
-                    stride=1, padding=1, bias=False), # should we keep the bias?
-            nn.ReLU(),
-            nn.BatchNorm1d(self.dfeat),
-            # nn.dropout(0.7)
-        )
-
         self.non_local = NONLocalBlock1D(self.dout, sub_sample=False, bn_layer=True)
-
-
+        
+        self.conv_5 = nn.Sequential(
+                    nn.Conv1d(in_channels=self.dfeat, 
+                            out_channels=self.dfeat, 
+                            kernel_size=3,
+                            stride=1, padding=1, bias=False), # should we keep the bias?
+                    nn.ReLU(),
+                    nn.BatchNorm1d(self.dfeat),
+                    # nn.dropout(0.7)
+                )
     def forward(self, x):
-        residual = out = x ## (b, dfeat, t)
-        log.debug(f'Aggregate/x {out.shape}') 
-
-        out1 = self.conv_1(out)
-        out2 = self.conv_2(out)
-        out3 = self.conv_3(out) ## (b, dout, t)
-        log.debug(f'Aggregate/conv_123 {out1.shape, out2.shape, out3.shape}')
-        out_cat = torch.cat((out1, out2, out3), dim = 1)
-        log.debug(f'Aggregate/conv_fl123-cat {out_cat.shape}')
+        residual = x ## (b, dfeat, t)
         
+        ## local
+        out_cat = self.pdc(x)
         ## global
-        out = self.conv_4(out) ## (b, dout, t)
-        log.debug(f'Aggregate/conv_4 {out.shape}')
-        out = self.non_local(out) ## (b, dout, t)
-        log.debug(f'Aggregate/non_local {out.shape}')
-        
-        ## aggregate features
-        out = torch.cat((out_cat, out), dim=1) ## (b, dfeat, t)
-        log.debug(f'Aggregate/cat {out.shape}')
-        
-        out = self.conv_5(out) ## (b, dfeat, t)
-        log.debug(f'Aggregate/conv_5 {out.shape}')
-        
-        ## enhanced feature
+        out_enc = self.conv_4(x) ## (b, dout, t)
+        out_nl = self.non_local(out_enc) ## (b, dout, t)
+        ## aggregate 
+        out_agg = torch.cat((out_cat, out_nl), dim=1) ## (b, dfeat, t)
+        out = self.conv_5(out_agg) ## (b, dfeat, t)
+        ## enhance
         xe = out + residual ## (b, dfeat, t)
-        log.debug(f'Aggregate/enhanced {xe.shape}')
+        
+        log.debug(f'Agg/x {x.shape}') 
+        log.debug(f'Agg/pdc {out_cat.shape}')
+        log.debug(f'Agg/conv_4 {out_enc.shape}')
+        log.debug(f'Agg/non_local {out_nl.shape}')
+        log.debug(f'Agg/agg {out_agg.shape}')
+        log.debug(f'Agg/conv_5 {out.shape}')
+        log.debug(f'Agg/enhanced {xe.shape}')
         return xe
+    
+    #def forward(self, x):
+    #    residual = out = x ## (b, dfeat, t)
+    #    log.debug(f'PDCNL/x {out.shape}') 
+    #
+    #    ## local
+    #    out1 = self.conv_1(out)
+    #    out2 = self.conv_2(out)
+    #    out3 = self.conv_3(out) ## (b, dout, t)
+    #    log.debug(f'PDCNL/conv_123 {out1.shape, out2.shape, out3.shape}')
+    #    out_cat = torch.cat((out1, out2, out3), dim = 1)
+    #    log.debug(f'PDCNL/conv_fl123-cat {out_cat.shape}')
+    #    out_cat = self.pdc(out)
+    #    log.debug(f'PDCNL/conv_fl123-cat {out_cat.shape}')
+    #    
+    #    ## global
+    #    out = self.conv_4(out) ## (b, dout, t)
+    #    log.debug(f'PDCNL/conv_4 {out.shape}')
+    #    
+    #    out = self.non_local(out) ## (b, dout, t)
+    #    log.debug(f'PDCNL/non_local {out.shape}')
+    #    
+    #    ## aggregate features
+    #    out = torch.cat((out_cat, out), dim=1) ## (b, dfeat, t)
+    #    log.debug(f'PDCNL/cat {out.shape}')
+    #    out = self.conv_5(out) ## (b, dfeat, t)
+    #    log.debug(f'PDCNL/conv_5 {out.shape}')
+    #    
+    #    ## enhanced feature
+    #    xe = out + residual ## (b, dfeat, t)
+    #    log.debug(f'PDCNL/enhanced {xe.shape}')
+    #    return xe

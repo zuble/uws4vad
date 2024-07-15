@@ -45,8 +45,8 @@ def print_config_tree(
     cfg: DictConfig,
     print_order: Sequence[str] = (
         "path",
-        #"dl",
         "model",
+        "net",
         "hydra",
         "exp"
     ),
