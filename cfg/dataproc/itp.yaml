@@ -4,3 +4,4 @@ defaults:
 seg:
   sel: itp
   len: 32 
+  rnd: 0

@@ -3,9 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 
-from src.model.net.layers import BasePstFwd
+from src.model.pstfwd.utils import PstFwdUtils
 
-from hydra.utils import instantiate as instantiate
+from omegaconf.dictconfig import DictConfig
 from src.utils.logger import get_log
 log = get_log(__name__)
 
@@ -58,8 +58,8 @@ class Attention(nn.Module):
 
         attn1 = self.attend(dots)
 
-        tmp_ones = torch.ones(n)#.cuda()
-        tmp_n = torch.linspace(1, n, n)#.cuda()
+        tmp_ones = torch.ones(n).to(x.device)
+        tmp_n = torch.linspace(1, n, n).to(x.device)
         tg_tmp = torch.abs(tmp_n * tmp_ones - tmp_n.view(-1,1))
         attn2 = torch.exp(-tg_tmp / torch.exp(torch.tensor(1.)))
         attn2 = (attn2 / attn2.sum(-1)).unsqueeze(0).unsqueeze(1).repeat(b,self.heads, 1, 1)
@@ -128,7 +128,7 @@ class NormalHead(nn.Module):
 
 class Temporal(nn.Module):
     def __init__(self, dfeat, dout):
-        super(Temporal, self).__init__()
+        super().__init__()
         self.conv_1 = nn.Sequential(
             nn.Conv1d(in_channels=dfeat, out_channels=dout, 
                     kernel_size=3,
@@ -141,7 +141,7 @@ class Temporal(nn.Module):
 
 
 class Network(nn.Module):
-    def __init__(self, dfeat, _cfg):
+    def __init__(self, dfeat, _cfg: DictConfig, rgs=None):
         super().__init__()
         
         self.dfeat = sum(dfeat)
@@ -169,6 +169,33 @@ class Network(nn.Module):
         }
 
 
+class Infer():
+    def __init__(self, _cfg, pfu: PstFwdUtils = None): 
+        super().__init__()
+        self._cfg = _cfg
+        self.pfu = pfu
+        
+    def __call__(self, ndata):
+        
+        ## t    
+        dists =self.pfu._get_mtrcs_dfm(ndata["norm_feats"], ndata["anchors"], ndata["variances"], infer=True)
+        log.debug(f"{dists[0].shape=}, {dists[1].shape=}")
+        ## t  
+        dists_sum = sum(dists).squeeze(0) 
+        log.debug(f"{dists_sum.shape=}")
+        #log.error(f"{dists[0].max()=} {dists[1].max()=}")
+
+        scores = self.pfu.uncrop(ndata['norm_scors'], 'mean')
+        log.error(f"scores {scores.shape} ") #{scores.max()}
+        
+        out = scores * dists_sum
+        log.error(f"scores {out.shape} ") #{scores.max()}
+        
+        return out
+
+    
+    
+'''
 class NetPstFwd(BasePstFwd):
     def __init__(self, _cfg):
         super().__init__(_cfg)
@@ -208,26 +235,7 @@ class NetPstFwd(BasePstFwd):
         
         #super().logdat([L0,L1])
         return super().merge(L0, L1) 
-
-
-    def infer(self, ndata):
-        #dists = [self.get_mahalanobis_dist(norm_feat, anchor, var) for norm_feat, anchor, var in zip(ndata["norm_feats"], ndata["anchors"], ndata["variances"])]
         
-        ## t    
-        dists = super()._get_mtrcs_dfm(ndata["norm_feats"], ndata["anchors"], ndata["variances"], infer=True)
-        log.debug(f"{dists[0].shape=}, {dists[1].shape=}")
-        ## t  
-        dists_sum = sum(dists).squeeze(0) 
-        log.debug(f"{dists_sum.shape=}")
-        #log.error(f"{dists[0].max()=} {dists[1].max()=}")
-
-        
-        scores = super().uncrop(ndata['norm_scors'], 'mean')
-        log.error(f"scores {scores.shape} ") #{scores.max()}
-        
-        return super().out( scores * dists_sum ) #
-    
-    
         ## DMF-based dist calculus, ret: [(b,t), (b,t)]
         #dists = [self.calc_mahalanobis_dist(norm_feat, anchor, var) for norm_feat, anchor, var in zip(ndata["norm_feats"], ndata["anchors"], ndata["variances"])]
         #dists = []
@@ -273,5 +281,4 @@ class NetPstFwd(BasePstFwd):
         #    log.debug(f"{abn_feats.shape=}, {nor_feats.shape=}")
         #    log.debug(f"{abn_dists.shape=}, {nor_dists.shape=}")
         #    log.debug(f"norm_sel {tmp_fnor_sel[..., None].shape} , abn_sel {tmp_fabn_sel[..., None].shape}")
-        
-        
+        '''

@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 
 
 from src.model import ModelHandler, build_net
-from src.vldt import Validate, Metrics
+from src.vldt import Validate, Metrics, MetricsPlotter
 from src.utils import hh_mm_ss, get_log, Visualizer, save_pkl, load_pkl
 log = get_log(__name__)
 
@@ -71,7 +71,7 @@ def tester(cfg, vis):
     VLDT = Validate(cfg, cfg_vldt, cfg.data.frgb, vis, watching)
     if cfg.vldt.dryrun:
         log.info("DBG DRY VLDT RUN")
-        VLDT.start(net, inferator); VLDT.reset() #;return
+        _ = VLDT.start(net, inferator); VLDT.reset() #;return
 
     
     ## LOAD
@@ -81,8 +81,8 @@ def tester(cfg, vis):
     log.error(net)
     #net.to(cfg.dvc) ## AttributeError: '_IncompatibleKeys' object has no attribute 'to'
 
-    vldt_info, watch_info, _ = VLDT.start(net, netpstfwd) ## class, dict, _
-
+    vldt_info, watch_info, mtrc_info, curv_info = VLDT.start(net, netpstfwd) ## class, dict, _
+    pltr = MetricsPlotter(vis); pltr.metrics(mtrc_info); pltr.curves(curv_info)
     
     #if cfg_vldt.savepkl: save_pkl(cfg.EXPERIMENTPATH, vldt_info, 'vldt')
     #if cfg_vldt.watch.savepkl: save_pkl(cfg.EXPERIMENTPATH, watch_info, 'watch')

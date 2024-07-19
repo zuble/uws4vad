@@ -4,9 +4,12 @@ defaults:
   - dflt.yaml
 
 debug:
+  id: dltest
   path: 
     - "src.data.testdl"
     - "src.data._data"
+
+
 
 dataloader:
   test:

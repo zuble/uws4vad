@@ -1,11 +1,12 @@
 defaults:
-  - _.yaml
-  - net: bndfm
+  - _dflt
+  - pstfwd: dflt
   - optima: adam
   - lrs: null
-  - loss: null
+  - loss: bndfm
   #- _self_
 
+id: bndfm
 epochs: 50
 
 clipnorm: True
@@ -13,11 +14,3 @@ clipnorm: True
 optima:
   lr: 0.0001
   weight_decay: 0.00005
-
-loss:
-  mpp: ## feat lvl
-    _target_: src.model.loss.feat.MPP
-  
-  norm:
-    _target_: src.model.loss.score.Normal
-

@@ -1,24 +1,21 @@
 defaults:
-  - _.yaml
-  - main: dflt
+  - _dflt
   - cls: ~
-  - pstfwd: dflt
 
 id: bnwvad
-
+#wght_init: xavier0 
 
 main:
-  _cfg:
-    emb_dim: 512
+  emb_dim: 512
 
-    ## transf
-    depth: 2
-    heads: 4
-    head_dim: 128
-    mlp_dim: 512
-    do: 0.
+  ## transf
+  depth: 2
+  heads: 4
+  head_dim: 128
+  mlp_dim: 512
+  do: 0.
 
-    ## normal head
-    nh_dimratios: [16, 32] ## mlp_dim/[] control conv dim
-    nh_ks: [1, 1, 1]
-    #ncrops: ${datatrnsfrm.train.crops2use}
+  ## normal head
+  nh_dimratios: [16, 32] ## mlp_dim/[] control conv dim
+  nh_ks: [1, 1, 1]
+  #ncrops: ${datatrnsfrm.train.crops2use}

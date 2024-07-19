@@ -1,7 +1,7 @@
 import torch
 import os, os.path as osp, numpy as np, time, cv2, gc
 
-from src.vldt.metric import Metrics
+from src.vldt.metric import Metrics, Plotter
 from src.data import get_testloader, run_dl
 from src.utils import get_log, hh_mm_ss
 
@@ -140,6 +140,8 @@ class VldtInfo:
     def reset(self):
         for lbl, metrics in self.DATA.items():
             for key, _ in metrics.items(): metrics[key] = []
+
+
 
 
 ###############
@@ -315,9 +317,11 @@ class Validate:
         self.watch_info.upgrade()
         #self.watch_info.log()
 
-        mtrc_info = self.metrics.get_fl(self.vldt_info)
+        mtrc_info, curv_info, table_res = self.metrics.get_fl(self.vldt_info)
+        
         log.info(f'$$$$ VALIDATE @ {hh_mm_ss(time.time() - tic)}')
-        return self.vldt_info, self.watch_info.DATA, mtrc_info
+        ## outputs purposes: test / test / train (to save alongside the model state dict)
+        return self.vldt_info, self.watch_info.DATA, mtrc_info, curv_info, table_res
 
 
 ###########
@@ -326,7 +330,7 @@ class GTFL:
         Retrieves the Ground Truth Frame Level for the specified video
         either for the XDV or UCF dataset
         based on total frames to generate initial sequence
-        and annotations put 1's
+        and from annotations set 1's
     '''
     def __init__(self, cfg_ds):
         #log.debug(f'GTFL:\n{cfg_ds}')

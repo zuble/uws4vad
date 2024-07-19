@@ -12,12 +12,13 @@ hydra:
       level: DEBUG
   verbose: True  ## sets hydra loggers to debug
 
-tag: dbg
+
 
 ## sets log lvl 2 dbg when each entrie in module __name__
 debug:
-  path:
-  - 'src'
+  id: debug
+  path: 
+    - src
 
 
 dataload:

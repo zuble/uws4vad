@@ -17,6 +17,7 @@ class PstFwdUtils:
         self.ncrops_tst = _cfg.ncrops[1]
 
         ## 4train
+        self.abn_bal = _cfg.bal_abn_bag
         self.bs = _cfg.bs
         self.bat_div = int(self.bs*_cfg.bal_abn_bag)
         self.seg_len = _cfg.seg_len
@@ -87,22 +88,22 @@ class PstFwdUtils:
         Returns:
             tuple: A tuple containing the abnormal and normal data.
         """
-        if labels is None: raise ValueError
-            #assert self.mil, "Labels are needed for non-MIL scenarios."
-            #abn = arr[self.bs // 2:]
-            #nor = arr[:self.bs // 2]
         log.debug(f"unbag pre") 
-
-        #mask = labels != 0
-        #log.error(f"\n{arr.shape}\n {labels}\n {mask}")
-        abn = arr[labels != 0]
-        nor = arr[labels == 0]
         
-        abn2 = arr[:self.bat_div]
-        nor2 = arr[self.bat_div:]
-
-        self.is_equal(abn2,abn)
-        self.is_equal(nor2,nor)
+        if labels is None: #raise ValueError
+            assert self.abn_bal == 0.5, "Labels are needed for non-MIL scenarios."
+            abn = arr[:self.bat_div]
+            nor = arr[self.bat_div:]
+        else:
+            #mask = labels != 0
+            #log.error(f"\n{arr.shape}\n {labels}\n {mask}")
+            abn = arr[labels != 0]
+            nor = arr[labels == 0]
+            
+            #self.is_equal(abn2,abn)
+            #self.is_equal(nor2,nor)
+            
+        
             
         ## permute here so indexing operates on right dim
         if permute == '1023':
@@ -153,13 +154,13 @@ class PstFwdUtils:
     def calc_l2_norm(self, tensor, dim):
         return torch.linalg.norm(tensor, ord=2, dim=dim)
     
-    def _get_mtrcs_magn(self, feats, labels=None, apply_do=False):
+    def get_mtrcs_magn(self, feats, labels=None, apply_do=False):
         assert feats.ndim == 3
         if self.ncrops: assert feats.shape[0] == self.bs*self.ncrops
         fmagn = self.calc_l2_norm(feats, 2) ## bs*nc, t
         fmagn_uncp = self.uncrop(fmagn, 'mean') ## bs,t
         abn_fmagn, nor_fmagn = self.unbag(fmagn_uncp, labels)
-        log.debug(f"fmagn {list(fmagn.shape)}->{list(fmagn_uncp.shape)}->({list(abn_fmagn.shape)}, {list(nor_fmagn.shape)})")
+        log.debug(f"fmagn {list(feats.shape)}->{list(fmagn.shape)}->{list(fmagn_uncp.shape)}->({list(abn_fmagn.shape)}, {list(nor_fmagn.shape)})")
         
         if apply_do:
             #log.debug(f"fmagn do {abn_fmagn} {nor_fmagn}")
@@ -380,7 +381,7 @@ class PstFwdUtils:
         """Logs information about data dictionaries."""
         log_string = ""
         for i, d in enumerate(ds):
-            log_string += f"D[{i+1}]:"
+            log_string += f"\nD[{i+1}]:"
             if isinstance(d, dict):
                 for key, value in d.items():
                     if isinstance(value, torch.Tensor):
@@ -400,7 +401,7 @@ class PstFwdUtils:
             else:
                 log_string += f"  - (Not a dictionary): {d}\n"
                 
-        log.debug(log_string)
+        log.info(log_string)
 
     ## agg return
     def merge(self, *dicts):

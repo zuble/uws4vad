@@ -4,9 +4,12 @@ defaults:
   - dflt.yaml
 
 debug:
+  id: model
   path: 
     - "src.model"
     #- "src.model.metric.Metrics"
+
+
 
 model:
   dryfwd: True

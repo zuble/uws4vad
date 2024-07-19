@@ -1,11 +1,19 @@
-# disable python warnings if they annoy you
+## disable python warnings
 no_warns: False
-# ask user for tags if none are provided in the config
+## ask for tags if none are provided in the config
 enforce_tags: True
-# pretty print config tree at the start of the run using Rich library
+
+## pretty print config tree at the start of the run using Rich library
+## 0 -> no print
+## 1 -> prints dflts on utils.xtra
+## >1 -> print all blocks
 cfg: 11
-# 0 -> no print
-# 1 -> prints dflts on utils.xtra
-# >1 -> print all blocks
+
 
 net: 1
+
+vis:
+  restart: False
+  ## all : delete every env
+  ## debug: deletes env with "debug" in the name
+  delete: ~

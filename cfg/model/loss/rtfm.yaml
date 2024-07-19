@@ -3,11 +3,9 @@ mgnt:
   alpha: 0.0001
   margin: 100
 
-smooth: 
-  _target_: src.model.loss.score.smooth
-
-spars:
-  _target_: src.model.loss.score.sparsity
-  
-bce:
-  _target_: src.model.loss.score.Bce
+#smooth: 
+#  _target_: src.model.loss.score.smooth
+#spars:
+#  _target_: src.model.loss.score.sparsity
+#bce:
+#  _target_: src.model.loss.score.Bce

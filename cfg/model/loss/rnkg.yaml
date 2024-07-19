@@ -1,0 +1,3 @@
+rnkg:
+  _target_: src.model.loss.score.Ranking
+  lambda12: [8e-5,8e-5]

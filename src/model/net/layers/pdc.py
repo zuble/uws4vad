@@ -8,7 +8,7 @@ log = get_log(__name__)
 
 class PiramidDilatedConv(nn.Module):
     def __init__(self, dfeat, rate=4):
-        super(PiramidDilatedConv, self).__init__()
+        super().__init__()
         
         self.dfeat = dfeat ## orig in 2048
         self.dout = dfeat // rate ## 2048/4=512
@@ -44,7 +44,7 @@ class PiramidDilatedConv(nn.Module):
 
     def forward(self, x):
         ## (b, dfeat, t)
-        log.debug(f'PDC/x {out.shape}') 
+        log.debug(f'PDC/x {x.shape}') 
 
         out1 = self.conv_1(x)
         out2 = self.conv_2(x)

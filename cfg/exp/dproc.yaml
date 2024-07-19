@@ -1,0 +1,33 @@
+# @package _global_
+
+#defaults:
+#  #- override /data: ucf_cliptsa  ## ucf_vadclip  ucf_i3drocng
+#  - override /datatrnsfrm: mil_intrplt
+#  - override /dataloader: low
+#  - override /net: rtfm
+#  - override /model: rtfm
+#  - override /vldt: dflt
+
+hydra:
+  mode: MULTIRUN
+  sweeper:
+    #grid_params:
+    params:
+      dataproc.seg.sel: itp, seq
+      dataproc.seg.rnd: jit
+
+exp_name: dproc
+tags: ["dataproc"]
+
+model:
+  epochs: 5
+  optima:
+    lr: 0.0001
+#dataproc: 
+#  seg:
+#    sel: seq
+#    len: 200
+dataload:
+  balance:
+    bag: 0.5
+  bs: 64

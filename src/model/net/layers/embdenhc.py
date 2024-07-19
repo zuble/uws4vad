@@ -21,7 +21,7 @@ log = get_log(__name__)
 ## occurs a dimensional reduction
 class Temporal(nn.Module):
     def __init__(self, dfeat, out_len):
-        super(Temporal, self).__init__()
+        super().__init__()
         self.conv_1 = nn.Sequential(
             nn.Conv1d(in_channels=dfeat, 
                     out_channels=out_len, 
@@ -41,7 +41,7 @@ class Temporal(nn.Module):
 ## no dimension reduction
 class Temporal2(nn.Module):
     def __init__(self, dfeat, ks=7):
-        super(Temporal2, self).__init__()
+        super().__init__()
         
         self.conv = nn.Conv1d(in_channels=dfeat,
                             out_channels=dfeat,
@@ -57,3 +57,39 @@ class Temporal2(nn.Module):
         x = self.conv(x)
         return x
     
+    
+## snippet-level anomalous attention
+class Attention(nn.Module):
+    def __init__(self, dfeat):
+        super().__init__()
+        self.dfeat = dfeat
+        ## 512/512/1
+        self.hdim = dfeat // 2
+        
+        self.cmlp = nn.Sequential(
+            nn.Conv1d(in_channels=self.dfeat, 
+                    out_channels=self.hdim, 
+                    kernel_size=3,
+                    padding=1),
+            nn.LeakyReLU(0.2),
+            nn.Dropout(0.7),
+            
+            nn.Conv1d(in_channels=self.hdim, 
+                    out_channels=self.hdim, 
+                    kernel_size=3,
+                    padding=1),
+            nn.LeakyReLU(0.2),
+            nn.Dropout(0.7),
+            
+            nn.Conv1d(in_channels=self.hdim, 
+                    out_channels=1, 
+                    kernel_size=1),
+            nn.Dropout(0.7),
+            nn.Sigmoid()
+            )
+    def forward(self, x):
+        b, f, t = x.shape
+        assert f == self.dfeat
+        #log.info(f'Attention/attention0_conv0_bias: {self.att[0].bias.data()}')
+        x = self.cmlp(x)
+        return x

@@ -31,7 +31,8 @@ def count_parms(net):
 def wght_init(m):
     #classname = m.__class__.__name__
     #if classname.find('Conv') != -1 or classname.find('Linear') != -1:
-    if isinstance(m, nn.Linear) or isinstance(m, nn.Conv1d):
+    if isinstance(m, (nn.Conv1d, nn.Linear)):
+        log.debug(f"WI: {m}")
         tc_init.xavier_uniform_(m.weight)
         #tc_init.constant_(m.bias, 0)
         if m.bias is not None:
@@ -50,7 +51,7 @@ def build_net(cfg):
     ## ARCH
     ## in Network.innit sum or ..
     dfeat = [ cfg.data.frgb.dfeat, (cfg.data.faud.dfeat if cfg.data.get("faud") else 0)]
-    log.error(f"{dfeat}")
+    log.info(f"{dfeat=}")
     
     ## !!!!!!!!!!!!!!
     ## how to have a feature modulator variable network
@@ -58,15 +59,7 @@ def build_net(cfg):
     ## while having a robust builder in order to lock a Network design
     ## still delving into this and its blocking me to experiment
 
-    ## if theres cls, instaneate it inside Network.innit
-    ## otherwise import from layers.classifier or construct
-    if cfg.net.get("cls"):
-        log.debug(f"{cfg.net.cls=}")
-        rgs = instantiate(cfg.net.cls, dfeat=dfeat)
-        log.debug(f"{rgs=}")
-    else:
-        rgs = None
-    log.error(f"{cfg.net.main=}")
+    log.info(f"{cfg.net.main=}")
     #cfg_net_main = cfg.net.main
     cfg_net_main = DictConfig({
                         '_target_': cfg.net.main._target_,
@@ -77,12 +70,27 @@ def build_net(cfg):
     #cfg_net_main = OmegaConf.resolve(cfg_net_main)
     #log.error(cfg_net_main)
     
+    ## if theres cls, instaneate it inside Network.innit
+    ## otherwise import from layers.classifier or construct
+    if cfg.net.get("cls"):
+        log.debug(f"{cfg.net.cls=}")
+        rgs = instantiate(cfg.net.cls, dfeat=dfeat)
+        log.debug(f"{rgs=}")
+    else:
+        rgs = None
+    
     net = instantiate(cfg_net_main, dfeat=dfeat, rgs=rgs)
-    log.info(f"{net=}")
     
     if cfg.net.wght_init == 'xavier0':
         net.apply(wght_init)
     else: raise NotImplementedError
+    
+    ## EXTRA
+    if cfg.model.dryfwd:  dry_run(net, cfg, dfeat)
+    if cfg.xtra.get("net"):
+        log.info(f"\n{net}\n")
+        #for name, param in net.named_parameters():
+        #    log.info(f"Layer: {name} | Size: {param.size()} | Values : {param[:2]} \n")
     
     ## inferator
     cfg_infer = DictConfig({
@@ -91,17 +99,8 @@ def build_net(cfg):
                     **{k: v for k, v in cfg.net.infer.items() if k != '_target_'}
                 }
             })
-    log.error(cfg_infer)
     pstfwd_utils = instantiate(cfg.model.pstfwd)
     inferator = instantiate(cfg_infer, pfu=pstfwd_utils) 
-    log.info(f"{inferator=}")
+    log.info(f"INFER {cfg_infer=} {inferator=}")
     
-    
-    ## EXTRA
-    if cfg.model.dryfwd:  dry_run(net, cfg, dfeat)
-    if cfg.xtra.get("net"):
-        log.info(f"\n{net}\n")
-        #for name, param in net.named_parameters():
-        #    log.info(f"Layer: {name} | Size: {param.size()} | Values : {param[:2]} \n")
-
     return net, inferator

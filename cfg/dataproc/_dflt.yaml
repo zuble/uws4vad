@@ -1,16 +1,15 @@
 ## SEGMENTATION
 seg: 
-  ## itp (interpolate) -> avg adj sel snippet feats ;; if on sel has no effect
+  ## itp (interpolate) -> avg adj sel snippet feats
+  ## the two form the selorpad from xdv
   ## uni (uniformm) -> picks len idxs equally spaced trough linspace 
-  ## seq (sequencial) -> picks len idx sequential
-  ## ucf: itp | xdv: seq
-  sel: ??? 
-  ## ucf: 32 | xdv: 200
-  len: ??? 
-  rnd: 
-    ## jit -> jitter selection of adjacent idxs when sel is uni
-    ## glob -> rnd whole idxs of feat (each crop will have same indexing)
-    - null
+  ## seq (sequence) -> picks a sequence of len idx
+  sel: ??? ## ucf: itp | xdv: seq
+  len: ??? ## ucf: 32 | xdv: 200
+  ## ON / OFF 
+  jit: 0 ## jitter selection of adjacent idxs when sel is uni
+  rnd: 0 ## randomizes idxs of segmented features (each crop will have same indexing)
+
 
 ## CROPS
 ## set here 

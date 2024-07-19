@@ -72,7 +72,8 @@ class ModelHandler:
                 "net": None,
                 "optima": None,
                 "step": None,
-                "epo": None
+                "epo": None,
+                "mtrc_info":None
             }
             log.info(f"[train] load path set as {self.ckpt_path}") 
     
@@ -91,7 +92,7 @@ class ModelHandler:
                         if subparam._grad is not None:
                             subparam._grad.data = subparam._grad.data.to(dvc)
                             
-    def record(self, mtrc_info, net, optima, trn_inf):
+    def record(self, mtrc_info, curv_info, table_res, net, optima, trn_inf):
         
         ## make modular by acpeting both subset and full metrcs
         ## and save high sate by pais
@@ -109,8 +110,11 @@ class ModelHandler:
                 "net": nett.state_dict(),
                 "optima": optimaa.state_dict(),
                 "step": trn_inf['step'],
-                "epo": trn_inf['epo']
+                "epo": trn_inf['epo'],
+                "mtrc_info": mtrc_info,
+                "curv_info": curv_info
             }
+            self.high_table = table_res
             log.info(f"saved new high {self.high_info['rec_val']} -> {tmp_res}")
             self.high_info['rec_val'] = tmp_res
         ## this can be used by setting an additional low_info
@@ -125,7 +129,7 @@ class ModelHandler:
         #        "tmp_res": tmp_res
         #    }
     
-    def save_state(self, net, optima, trn_inf):
+    def save_state(self, net=None, optima=None, trn_inf=None):
         
         if self.high_state['net'] is not None:
             tmp_fn = f"{self.cfg.seed}--{self.high_state['epo']}_{self.high_state['step']}"
@@ -133,7 +137,7 @@ class ModelHandler:
             
             mstate = self.high_state
             torch.save(mstate, f"{save_path}.state.pt")
-            torch.save(net, f"{save_path}.pt")
+            torch.save(mstate['net'], f"{save_path}.pt")
             
             log.info(f"savedfrom high state {self.high_info['rec_val']} {self.high_info['mtrc2wtch']} ")
             log.info(f"fn: {tmp_fn}")

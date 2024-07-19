@@ -18,7 +18,7 @@ def init_seed(cfg, istrain=True):
     def get_seed():
         ## https://stackoverflow.com/questions/57416925/best-practices-for-generating-a-random-seeds-to-seed-pytorch/57416967#57416967
         RAND_SIZE = 4
-        random_data = os.urandom( RAND_SIZE )  ## Return a string of size random bytes suitable for cryptographic use.
+        random_data = os.urandom( RAND_SIZE )
         return int.from_bytes(random_data, byteorder="big")
 
 

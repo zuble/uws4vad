@@ -4,13 +4,15 @@
 defaults:
   - dflt.yaml
 
-tag: dltrain
+#tag: dltrain
 
 debug:
+  id: dltrain
   path: 
     - "src.data.traindl"
     - "src.data._data"
 
-dataloader:
-  train:
-    dryrun: True
+
+
+dataload:
+  dryrun: True

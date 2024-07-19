@@ -65,9 +65,9 @@ def dyn_per_ds(ds,option_ucf,option_xdv):
 def dyn_oneorboth(idd,vrs):
     if not vrs: return f"src.model.net.{idd}.Network"
     else: return f"src.model.net.{idd}.{vrs}" 
-def dyn_underscore(*args):
-    # Join non-empty arguments with '_'
-    return '_'.join(arg for arg in args if arg)
+def dyn_join(seperator, *args):
+    # Join non-empty arguments with seperator
+    return seperator.join(arg for arg in args if arg)
 #####  
 
 
@@ -77,11 +77,11 @@ def dyn_retatt(watch_frm, intest):
     else: return True
     
 def dyn_vadtaskname(ds,dtproc):
-    tmp = f"{ds.id}_{ds.frgb.id.lower()}"
+    tmp = f"{ds.frgb.id.lower()}"
     if dtproc.crops2use.train: 
-        tmp += f"-{str(dtproc.crops2use.train)}"
+        tmp += f"{str(dtproc.crops2use.train)}"
     if ds.get("aud"): 
-        tmp += f"_{ds.aud.id.lower()}"
+        tmp += f"-{ds.aud.id.lower()}"
     return tmp
 
 #def dyn_fetaskname(cfg_faud,cfg_frgb):
@@ -93,9 +93,10 @@ def dyn_vadtaskname(ds,dtproc):
 #    if ds.get("aud"): 
 #        tmp += f"_{ds.aud.id.lower()}"
 #    return tmp
-def dyn_dataroot(p1, p2):
+def dyn_dataroot(p1, p2, p3):
     if osp.isdir(p1): return p1
     elif osp.isdir(p2): return p2
+    elif osp.isdir(p3): return p3
 
 
 def reg_custom_resolvers(version_base: str, config_path: str, config_name: str) -> Callable:
@@ -111,7 +112,7 @@ def reg_custom_resolvers(version_base: str, config_path: str, config_name: str) 
         'dyn_vldtmtrc': dyn_vldtmtrc,
         'dyn_crops2use': dyn_crops2use,
         'dyn_oneorboth': dyn_oneorboth,
-        'dyn_underscore': dyn_underscore,
+        'dyn_join': dyn_join,
         'dyn_vldtfwd': dyn_vldtfwd,
         'dyn_retatt': dyn_retatt,
         'dyn_vadtaskname': dyn_vadtaskname,

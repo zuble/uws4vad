@@ -7,6 +7,7 @@ from src.model.pstfwd.utils import PstFwdUtils
 from hydra.utils import instantiate as instantiate
 from omegaconf import DictConfig, OmegaConf, open_dict
 
+import logging
 from src.utils.logger import get_log
 log = get_log(__name__)
 
@@ -66,7 +67,7 @@ def build_loss(cfg):
                     **{k: v for k, v in lcfg.items() if k != '_target_'}
                 }
             })
-            log.error(loss_cfg)
+            #log.error(loss_cfg)
             loss_instance = instantiate(loss_cfg, pfu=pstfwd_utils)
             
             lossfx[lid] = loss_instance
@@ -75,7 +76,7 @@ def build_loss(cfg):
             lossfx[lid] =  instantiate(lcfg, _convert_="partial", _partial_=True) 
             
     for key, value in lossfx.items():
-        log.debug({key: value})
+        log.info({key: value})
     
     l_comp = LossComputer(lossfx, pstfwd_utils)
         
@@ -84,20 +85,18 @@ def build_loss(cfg):
 
 
 ## ---- processor ----
-
 def print_grad_fn_info(tensor, tensor_name="Tensor"):
     """Prints information about the grad_fn of a tensor."""
     if tensor.grad_fn is not None:
         log.debug(f"{tensor_name} grad_fn:")
         log.debug(f" - Type: {type(tensor.grad_fn)}")
         log.debug(f" - Name: {tensor.grad_fn.__class__.__name__}")
-        # Print inputs if available
         if hasattr(tensor.grad_fn, 'next_functions'):
             log.debug(" - Inputs:")
             for i, func in enumerate(tensor.grad_fn.next_functions):
                 if func[0] is not None:
                     log.debug(f"   - Input {i}: {func[0].__class__.__name__}")
-        log.debug("-" * 20)  # Separator
+        log.debug("-" * 20)
     else:
         log.debug(f"{tensor_name} has no grad_fn (likely a leaf variable).")
         log.debug("-" * 20)
@@ -110,25 +109,27 @@ class LossComputer(nn.Module):
         #self._ = pfu.
 
     def forward(self, ndata, ldata):
-        self.pfu.logdat(ndata)
+        if log.isEnabledFor(logging.DEBUG):
+            self.pfu.logdat(ndata,ldata)
         
         loss_glob = torch.tensor(0., requires_grad=True, device=self.pfu.dvc)
         loss_dict = {}
 
         for loss_name, loss_fn in self.lfxs.items():
-            # Apply pre-processing if needed (using self.postprocess_utils)
-            # processed_data = self.postprocess_utils.some_processing_function(...)
+            
+            ## ndata = self.pfu.some_predifend_pipeline(ndata)
 
-            loss_output = loss_fn(ndata, ldata)  
-            self.pfu.logdat(loss_output)
+            loss_output = loss_fn(ndata, ldata)
+            if log.isEnabledFor(logging.DEBUG):
+                self.pfu.logdat(loss_output)
             
             ## this ugly !!!!!!!!!!!!!
             for component_name, component_value in loss_output.items():
+                #log.debug(f"{component_name}  {component_value}")
                 #print_grad_fn_info(component_value,component_name)
                 loss_glob = loss_glob + component_value 
                 
-            #for component_name, component_value in loss_output.items():    
-            #    loss_dict[f"{loss_name}/{component_name}"] = component_value.item()
+                loss_dict[f"{loss_name}/{component_name}"] = component_value
                 
         #print_grad_fn_info(loss_glob, "Final Loss") 
         return loss_glob, loss_dict

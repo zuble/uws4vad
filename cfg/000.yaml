@@ -1,19 +1,18 @@
 # @package _global_
 
 # https://github.com/idejie/PyTorch-Hydra-Template
-## specify here default configuration
-## order of defaults determines the order in which configs override each other
-defaults:
-  - _self_
-
+  
 ###############
 ## determines path of log @ hydra/dflt.yaml
 ## ${path.log_dir}/${name}/${task_name}
-name: ${dyn_underscore:${net.id},${net.vrs},${model.id}}  ## -> {}_{}
+name: ${dyn_join:"-",${net.id},${net.vrs},${model.id},${data.id}} # "${net.id}${net.vrs}-${model.id}-${data.id}"   # bndfm-rank-xdv
 task_name: ${dyn_vadtaskname:${data},${dataproc}}
+exp_name: ~ ## 4 exp_id 
+
+
 ## saved as a seperate tags.log at dyn output
 ## use as experiment guides key points
-tags: ["dev"]
+tags: [""]
 
 ## gpu idx or -1 for CPU
 ## set trough main wrapper custim resolver

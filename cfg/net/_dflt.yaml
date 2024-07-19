@@ -11,12 +11,8 @@ main:
   ## serves as a indicator in Validate.fwd to either save the attws or not
   ## then on each network with such, use dyn res (example in attnmil)
   #ret_att: False
-
-fm:
-  - null
-
-cls: ???
-
+fm: ~
+cls: ~
 
 infer:
   _target_: "src.model.net.${net.id}.Infer"

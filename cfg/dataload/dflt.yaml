@@ -13,7 +13,7 @@ balance:
   bag: ${dyn_per_ds:${data.id},0.5,0}
   ## controls the num_samples as int(set_balance * len(abnormal_ds))
   ## or as the number of additional batchs to yield per epoch
-  set: 1
+  set: 1    ## 2049//1095 = 1.075  balances abnormal set to be of same size as normal 
 
 in2mem: False
 itersepo: ~ ## assigned in runtime @ get_trainloader !!

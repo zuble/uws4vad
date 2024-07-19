@@ -1,0 +1,14 @@
+# @package _global_
+
+defaults:
+  - dflt.yaml
+
+debug:
+  id: pstfwd
+  path: 
+    - "src.model.pstfwd"
+
+
+
+#model:
+#  dryfwd: True

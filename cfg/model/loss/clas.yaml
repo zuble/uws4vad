@@ -1,3 +1,5 @@
-_target_: src.model.loss.score.Clas
-fx: 'topk' ## full
-k: 3 ## if -1 set dynamic according seqlen
+clas:  
+  _target_: src.model.loss.score.Clas
+  fx: 'topk' ## full
+  k: -1 ## if -1 set dynamic according seqlen
+  per_crop: False ## iterates over each

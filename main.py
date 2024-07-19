@@ -3,9 +3,11 @@ import pyrootutils
 
 import torch
 print(f"{torch.__version__=}")
+
 import hydra
 from hydra.utils import instantiate as instantiate
 from omegaconf import DictConfig, OmegaConf
+from hydra.core.hydra_config import HydraConfig
 
 from src import utils
 from tqdm import tqdm
@@ -28,7 +30,7 @@ _HYDRA_PARAMS = {
 def main(cfg: DictConfig) -> None:
     log = utils.get_log(__name__, cfg)
     #log.debug(f"Working dir : {os.getcwd()}")
-    #log.debug(f"Output dir  : {hydra.core.hydra_config.HydraConfig.get().runtime.output_dir}")
+    #log.debug(f"Output dir  : {HydraConfig.get().runtime.output_dir}")
     #log.debug(f"Original dir : {hydra.utils.get_original_cwd()}")
 
     #log.debug(utils.collect_random_states())
@@ -41,6 +43,7 @@ def main(cfg: DictConfig) -> None:
         #tmp.aud_emb(cfg)
         tmp.aud_len_mat()
 
+
     elif cfg.get("fext"):
         if cfg.modal == 'rgb':
             from src.fext import VisFeatExtract
@@ -51,10 +54,32 @@ def main(cfg: DictConfig) -> None:
             from src.fext import AudFeatExtract
             utils.xtra(cfg)
             AudFeatExtract(cfg)
+
             
     else:
-        vis = utils.Visualizer(f'{cfg.name} / {cfg.task_name}', restart=True, del_all=False)
-        #vis.delete(f'{cfg.name}/{cfg.task_name}')
+        ## move out
+        #vis=None
+        #if not cfg.get("debug", False):
+        vis_name = f"{cfg.name}_{cfg.task_name}"
+        if cfg.exp_name: vis_name += f"__{cfg.exp_name}"
+        if 'MULTIRUN' in str(HydraConfig.get().mode):
+            path_parts = cfg.path.out_dir.split("/")
+            vis_name += f"__{path_parts[-2]}__{path_parts[-1]}" ## date_jobnum
+        else: 
+            vis_name += f"___{osp.basename(cfg.path.out_dir)}"
+        log.info(f"{vis_name=}")
+        
+        vis = utils.Visualizer(vis_name, 
+                            restart=cfg.xtra.vis.restart, 
+                            delete=cfg.xtra.vis.delete
+                            )
+        if cfg.xtra.vis.delete: return
+        vis.textit(['out_dir',cfg.path.out_dir,
+                    #'choices', HydraConfig.get().runtime.choices, 
+                    'overrides', HydraConfig.get().overrides.task,
+                    'sweeper', HydraConfig.get().sweeper.params
+                    ])
+        
         
         if cfg.get("train"):
             from src.train import trainer

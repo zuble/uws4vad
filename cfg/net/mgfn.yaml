@@ -3,7 +3,6 @@ defaults:
   - main: dflt
   #- fm: gf
   - cls: ~
-  - pstfwd: dflt
 
 id: mgfn
 

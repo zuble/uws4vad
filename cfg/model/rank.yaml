@@ -1,8 +1,10 @@
 defaults:
   - _dflt
+  - pstfwd: dflt
   - optima: adam
   - lrs: null
-
+  - loss: rnkg
+  
   #- loss: _dflt
   ###- loss: rnkg
   ##- loss@score: rnkg
@@ -13,17 +15,11 @@ defaults:
   #- _self_
 
 id: rank
-
 epochs: 5
-
 optima:
   lr: 1.0e-3
   weight_decay: 1.0e-5
 
-loss:
-  rnkg: #${model.loss.rnkg}
-    _target_: src.model.loss.score.Ranking
-    lambda12: [8e-5,8e-5]
 
 
 

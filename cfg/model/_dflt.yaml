@@ -3,7 +3,7 @@ defaults:
   #- net: 
   #- optima: 
   #- lrs: 
-  - pstfwd: dflt
+  #- pstfwd: dflt
   #- loss: ??? ## better to have expose in each model_cfg
 
 dryfwd: False

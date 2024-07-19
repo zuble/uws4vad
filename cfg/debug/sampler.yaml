@@ -1,13 +1,11 @@
+# @package _global_
+
 defaults:
   - dflt.yaml
 
 debug:
+  id: smplr
   path: 
     - "src.data.samplers"
-    - "src.data._data"
 
-tag: smplr
 
-dataloader:
-  train:
-    dryrun: True

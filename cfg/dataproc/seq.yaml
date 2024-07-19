@@ -4,6 +4,5 @@ defaults:
 seg:
   sel: seq
   len: 200
-  rnd:
-    #- jit
-    #- glob
+  jit: 0
+  rnd: 0

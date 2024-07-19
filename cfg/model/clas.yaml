@@ -1,13 +1,13 @@
 defaults:
-  - _.yaml
-  - net: cmala
+  - _dflt
+  - pstfwd: dflt
   - optima: adam
   - lrs: null
   - loss: clas
   #- _self_
 
+id: clas
 epochs: 10
-
 optima:
   lr: 1.0e-4
   weight_decay: 1.0e-5

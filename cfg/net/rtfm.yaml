@@ -9,6 +9,6 @@ main:
   do: 0.7
 
 fm:
-  pdcnl:  
-    _target_: src.model.net.layers.pdcnl.FeatModulator
-    ks: 7
+  agg:  
+    _target_: src.model.net.layers.aggregate.Aggregate
+    

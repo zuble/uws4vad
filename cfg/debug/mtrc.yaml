@@ -4,5 +4,7 @@ defaults:
   - dflt.yaml
 
 debug:
+  id: metric
   path: 
     - "src.vldt.metric"
+

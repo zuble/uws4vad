@@ -6,15 +6,15 @@ defaults:
 
 run:
   dir: ${path.log_dir}/${name}/${task_name}/runs/${now:%d-%m}_${now:%H-%M-%S}
-  #dir: ${hydra:runtime.cwd}/log/runs/${now:%d-%m}_${now:%H-%M-%S}
 sweep:
-  dir: ${path.log_dir}/${name}/${task_name}/multiruns/${now:%d-%m}_${now:%H-%M-%S}
+  #dir: ${path.log_dir}/{name}/${task_name}/multiruns/${now:%d-%m}_${now:%H-%M-%S}
   #dir: ${hydra:runtime.cwd}/log/multiruns/${now:%d-%m}_${now:%H-%M-%S}
-  subdir: ${hydra.job.num}
+  dir: /media/jtstudents/T77/TH/vad/zutc_vad/log/   #/mnt/t77   #/run/media/zuble/T77
+  subdir: ${name}/${task_name}/multirun/${now:%d-%m}_${now:%H-%M-%S}/${hydra.job.num}
 
 
 job_logging:
-
+  level: debug
   formatters:
     simple: 
       format: '[%(asctime)s][${name}--${task_name}][%(levelname)s] - %(message)s'

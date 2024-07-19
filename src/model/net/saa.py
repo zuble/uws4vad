@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from src.model.net.layers import BasePstFwd
+from src.model.pstfwd.utils import PstFwdUtils
+from src.model.net.layers import Aggregate, Attention, SMlp
 
 from omegaconf.dictconfig import DictConfig
 from src.utils.logger import get_log
@@ -10,27 +11,66 @@ log = get_log(__name__)
 
 
 class Network(nn.Module):
-    def __init__(self, dfeat: int, _cfg: DictConfig):
+    def __init__(self, dfeat: int, _cfg: DictConfig, rgs):
         super().__init__()
-        self.dfeat = dfeat
-    
+        self.dfeat = sum(dfeat)
+        
+        ## idea
+        #if _fm is not None:
+        #    self.fmodulator = instantiate(_fm, dfeat=self.dfeat)
+        #else: self.fmodulator = Aggregate(self.dfeat)
+        
+        self.aggregate = Aggregate(self.dfeat)
+        self.do = nn.Dropout( _cfg.do )
+        
+        self.attn = Attention(self.dfeat)
+        
+        self.slrgs = rgs
+        self.sig = nn.Sigmoid()
+        
     def forward(self, x):
-        return 
-
-class NetPstFwd(BasePstFwd):
-    def __init__(self, bs, ncrops):
-        super().__init__(bs, ncrops)
-
-    def train(self, ndata, ldata, lossfx):
-        super().uncrop(ndata, '', 'mean') ## crop0
-        x = super().uncrop2(x, 'mean')
+        b, t, f = x.shape
         
-        L0 = lossfx['']()
-        L1 = lossfx['']()
+        rgbf = x[:, :, :self.dfeat]
+        #audf = x[:, :, self.dfeat:]
         
-        return L0.update(L1)
-
-    def infer(self, ndata):
-
+        ## rgbf temporal refinement/ennahncment
+        x_new = self.aggregate( rgbf.permute(0,2,1) ) ## (b, f, t)
+        x_new = self.do(x_new)
+        log.debug(f'SAA/aggregate {x_new.shape}')
         
-        return ndata['slscores']    
+        ########
+        #xva_new = np.concatenate((xv_new, audf.transpose((0, 2, 1)) ), axis=1)
+        ########
+        
+        ## for each segment feature -> 1 att value
+        #attw = np.zeros((b,t), ctx=self.dvc[0])
+        attw = self.attn(x_new).squeeze(dim=1) ## (b, 1, t) > (b, t)
+        log.debug(f'MindSpore/attw {attw.shape}')
+        
+        
+        scors = self.sig( self.slrgs(x_new.permute(0,2,1)) )
+        
+        return { ## standard output
+            'scores': scors, 
+            #'feats': x_new,
+            'attw': attw
+        }
+
+
+class Infer():
+    def __init__(self, _cfg, pfu: PstFwdUtils = None): 
+        super().__init__()
+        self._cfg = _cfg
+        self.pfu = pfu
+        
+    def __call__(self, ndata):
+        self.pfu.logdat(ndata)
+        assert ndata['scores'].shape[0] == 1 ## not dealing with crops at infer atm
+        
+        tmp = ndata['attw'] * ndata['scores'] ## SL_MindSpore: eq(16,4)
+        
+        log.debug(f'attw: {ndata["attw"]=}')
+        log.debug(f"scores: {ndata['scores']=}")
+        
+        return tmp

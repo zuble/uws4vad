@@ -1,0 +1,13 @@
+defaults:
+  - _dflt
+  - pstfwd: dflt
+  - optima: adam
+  - lrs: null
+  - loss: mbs
+  #- _self_
+
+id: supre
+epochs: 5
+optima:
+  lr: 1.0e-3
+  weight_decay: 1.0e-5

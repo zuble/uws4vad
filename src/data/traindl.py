@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import DataLoader, Dataset, BatchSampler, RandomSampler, WeightedRandomSampler
 from pytorch_metric_learning.samplers import MPerClassSampler
-from src.data.samplers import AbnormalBatchSampler, analyze_sampler
+from src.data.samplers import AbnormalBatchSampler, analyze_sampler, dummy_train_loop
 import numpy as np
 
 import glob , os, os.path as osp , math , time
@@ -20,7 +20,7 @@ def get_rng(seed):
     ## https://pytorch.org/docs/1.8.1/generated/torch.Generator.html#torch.Generator
     TCRNG = torch.Generator().manual_seed(seed)
 
-def get_trainloader(cfg):
+def get_trainloader(cfg, vis=None):
     from ._data import FeaturePathListFinder, debug_cfg_data
     if cfg.get("debug"): debug_cfg_data(cfg)
     
@@ -52,29 +52,46 @@ def get_trainloader(cfg):
     ## --- Sampler ---
     bal_abn_bag = cfg_dload.balance.bag
     bal_abn_set = cfg_dload.balance.set
-    if bal_abn_bag == 0:## rocng
+    if bal_abn_bag == 0:
         ## same as batch_size=cfg_dload.bs, shuffle=True, drop_last=True
-        ## but set them all together
         sampler = RandomSampler(ds, 
                     #replacement=False,
                     #num_samples=samples_per_epoch, # !!!! set intern to len(ds)
                     generator=TCRNG
                     )
     else: sampler = AbnormalBatchSampler(
-                    labels,
-                    bal_abn_bag=bal_abn_bag,
-                    bs=cfg_dload.bs,
-                    bal_abn_set=bal_abn_set,
-                    generator=NPRNG
-                    ) 
-    log.info(f"TRAIN: SMPLR {sampler=} w/ {len(sampler)} [{bal_abn_bag=} {bal_abn_set=}]")
-
-    bsampler = BatchSampler(sampler , cfg_dload.bs , True) #cfg_dload.droplast
-    #if cfg.get("debug"):
-    a={}
-    a['abs']=bsampler 
-    analyze_sampler(a, labels, cfg_ds.id, iters=1,vis=False)
+                        labels,
+                        bal_abn_bag=bal_abn_bag,
+                        bs=cfg_dload.bs,
+                        bal_abn_set=bal_abn_set,
+                        generator=NPRNG
+                    )
+    bsampler = BatchSampler(sampler, cfg_dload.bs, True) #cfg_dload.droplast
+    log.info(f"TRAIN: {sampler=} w/ {len(sampler)} -> [{bal_abn_bag=} {bal_abn_set=}]")
+    log.info(f"TRAIN: {bsampler=} w/ {len(bsampler)} ")
     
+    if cfg.get("debug"):
+        if cfg.debug.id == 'smplr':
+            a={ f'abs_{bal_abn_bag}': bsampler, 
+                'org_xdv': BatchSampler(
+                            RandomSampler(ds,
+                            generator=TCRNG
+                            ),cfg_dload.bs , False),
+                #'abs_bal_os': BatchSampler(
+                #            AbnormalBatchSampler(
+                #                labels,
+                #                bal_abn_bag=0.5,
+                #                bs=cfg_dload.bs,
+                #                bal_abn_set=bal_abn_set,
+                #                generator=NPRNG
+                #            ),cfg_dload.bs, False) 
+                }
+            analyze_sampler(a, labels, cfg_ds.id, iters=1,vis=vis)
+            dummy_train_loop(vis)
+    else: 
+        a={ f'abs_{bal_abn_bag}': bsampler}
+        analyze_sampler(a, labels, cfg_ds.id, iters=1,vis=None)
+
     dataloader = DataLoader( ds,
                         batch_sampler=bsampler,
                         #batch_size=cfg_dload.bs, shuffle=True, drop_last=True,
@@ -306,6 +323,8 @@ class FeatSegm():
         assert cfg.sel in ['itp','uni','seq']
         self.sel = cfg.sel
         self.len = cfg.len
+        self.jit = cfg.jit
+        self.rnd = cfg.rnd
         self.rnd = cfg.rnd
         
         self.fx = self.interpolate if cfg.sel == 'itp' else self.sel_or_pad 
@@ -344,7 +363,7 @@ class FeatSegm():
                 
         #idxs_glob = []
         idxs_glob = None
-        if 'glob' in self.rnd:
+        if self.rnd:
             ## aply glob rnd only after self.trnsfrm.fx is call
             idxs_glob = np.arange(self.len)
             NPRNG.shuffle(idxs_glob)
@@ -361,7 +380,7 @@ class FeatSegm():
         ## jitter betwen adjacent chosen idxx
         ## only when theres no repetead idxs
         ## taken from MIST random_petrub
-        if 'jit' in self.rnd:
+        if self.jit:
             if feat_len > self.len:
                 #log.debug(f'JIT / OLD {idxx=}')
                 for i in range(self.len):
@@ -433,8 +452,8 @@ class DataCollator:
         ldata={}
         cfeat, seqlen, label = tdata
         
-        if self.seg_sel != 'itp': ## it may come w/ pad
-            ldata["seqlen"] = seqlen.to(trn_inf['dvc'])
+        #if self.seg_sel != 'itp': ## it may come w/ pad ## better always pass
+        ldata["seqlen"] = seqlen.to(trn_inf['dvc'])
         ldata["label"] = label.to(trn_inf['dvc'])
         
         log.debug(f"E[{trn_inf['epo']}]B[{trn_inf['bat']}][{self.seg_sel}] feat: {cfeat.shape} ,seqlen: {seqlen.shape} {seqlen}, lbl: {label} {label.shape} {label.device}")

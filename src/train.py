@@ -11,8 +11,8 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRe
 
 from src.data import get_trainloader, get_testloader, run_dl
 from src.model import ModelHandler, build_net, build_loss
-from src.vldt import Validate, Metrics
-from src.utils import hh_mm_ss, get_log, Visualizer
+from src.vldt import Validate, Metrics, Plotter, Tabler
+from src.utils import hh_mm_ss, get_log
 log = get_log(__name__)
 
 
@@ -26,7 +26,7 @@ def trainer(cfg, vis):
     }
     
     ## DATA
-    dataloader, collator = get_trainloader(cfg) 
+    dataloader, collator = get_trainloader(cfg, vis) 
     if cfg.dataload.dryrun: run_dl(dataloader,iters=2,vis=True) ;return
     
     ## MODEL
@@ -55,8 +55,7 @@ def trainer(cfg, vis):
     vldt = Validate(cfg, cfg_vldt, cfg.data.frgb, vis)
     if cfg.vldt.dryrun:
         log.info("DBG DRY VLDT RUN")
-        vldt.start(net, inferator); vldt.reset() ;return
-        
+        vldt.start(net, inferator); vldt.reset() ;return    
     tmeter = TrainMeter( cfg.dataload, cfg_vldt, vis)
     
     #progress = Progress(
@@ -112,12 +111,21 @@ def trainer(cfg, vis):
                     log.error(f"E[{trn_inf['epo']}] B[{trn_inf['bat']}] S[{(trn_inf['step'])}] Loss exploded {loss_glob.item()}")
                     log.error(loss_indv)
                     raise Exception("Loss exploded")
-                tmeter.update({'bat': loss_glob.item()})
+                
+                tmeter.update({'global': loss_glob.item()})
                 for key, value in loss_indv.items():
                     ## Update individual loss parts
                     tmeter.update({key: value.item()})  
                 tmeter.log_bat(trn_inf)
-            
+                
+                abn_bag_len = torch.sum(ldata["label"] == 1).item()
+                vis.plot_lines('abn/nor bag ratio', abn_bag_len / ldata["label"].shape[0],
+                            opts=dict(
+                                title=f"Batch vs. abn/nor bag ratio", 
+                                xlabel='Batch',
+                                ylabel='Abn Bag Tatio'
+                        ))
+                
             if lrs is not None: lrs.step()
                 
             ## monitor 
@@ -128,19 +136,21 @@ def trainer(cfg, vis):
             if (epo + 1) % cfg_vldt.freq == 0:
                 log.info(f'$$$ Validation at epo {epo+1}')
                 #torch.backends.cudnn.benchmark = False
-                _, _, mtrc_info = vldt.start(net, inferator)
-                if cfg_vldt.mtrc_visplot: vis.plot_vldt_mtrc(mtrc_info,epo)
+                _, _, mtrc_info, curv_info, table_res = vldt.start(net, inferator)
                 vldt.reset()
                 #torch.backends.cudnn.benchmark = True
-                MH.record( mtrc_info, net, optima, trn_inf)
+                MH.record( mtrc_info, curv_info, table_res, net, optima, trn_inf)
             
             #progress.update(task1, advance=1)
             
         log.info(f"$$$$ train done in {hh_mm_ss(time.time() - trn_inf['ttic'])}")
-        
         if not cfg.get("debug"): 
-            MH.save_state(net, optima, trn_inf)
-
+            MH.save_state()
+            pltr = Plotter(vis)
+            pltr.metrics(MH.high_state['mtrc_info'])
+            pltr.curves(MH.high_state['curv_info'])
+            Tabler(False,True,vis).table2img(MH.high_table,'high_res_table')
+        
     except Exception as e:
         log.error(traceback.format_exc())
 
@@ -182,8 +192,18 @@ class TrainMeter:
     def update(self, lbat_indv):
         for loss_name, l in lbat_indv.items():
             self.loss_meters[loss_name].add_value(l)
-            if self.plot: self.vis.plot_lines(f"bat-{loss_name}", l)
-            
+            if self.plot:
+                self.vis.plot_lines(
+                    f"bat-{loss_name}",
+                    l,
+                    opts=dict(
+                        title=f"Batch Loss - {loss_name}",
+                        xlabel='Batch',
+                        ylabel='Loss',
+                        showlegend=True
+                    )
+                )    
+                
     def reset(self):
         for meter in self.loss_meters.values():
             meter.reset()
@@ -205,8 +225,16 @@ class TrainMeter:
         for loss_name, meter in self.loss_meters.items():
             sms += f" {loss_name} {meter.get_global_avg():.4f}"
             
-            if self.plot: 
-                self.vis.plot_lines(f"epo-{loss_name}", meter.get_global_avg())
-        
+            if self.plot:
+                self.vis.plot_lines(
+                    f"epo-{loss_name}",
+                    meter.get_global_avg(),
+                    opts=dict(
+                        title=f"Epoch Average Loss - {loss_name}",  
+                        xlabel='Epoch',
+                        ylabel='Loss',
+                        showlegend=True
+                    )
+                )
         sms += f" @ {hh_mm_ss(time.time()-trn_inf['etic'])}"
         log.info(f"{sms}")

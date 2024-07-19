@@ -1,0 +1,10 @@
+# @package _global_
+
+defaults:
+  - dflt.yaml
+
+debug:
+  id: vis
+  path: 
+    - "src.utils.vis"
+

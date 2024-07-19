@@ -1,0 +1,13 @@
+defaults:
+  - _dflt
+  - cls: mlp
+  
+id: saa
+wght_init: xavier0 
+
+main:
+  do: 0.7
+
+fm:
+  agg:  
+    _target_: src.model.net.layers.aggregate.Aggregate

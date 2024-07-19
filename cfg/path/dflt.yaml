@@ -9,7 +9,7 @@ work_dir: ${hydra:runtime.cwd}
 ## where to store small data gt,..
 data_dir: ${path.work_dir}/data/
 ## where hydra creates stuff
-log_dir: ${path.work_dir}/log/
+log_dir: ${path.work_dir}/log
 
 # path to output directory, created dynamically by hydra
 out_dir: ${hydra:runtime.output_dir}
@@ -22,8 +22,9 @@ fext:
 ##########
 root_ion: /mnt/t77
 root_slarch: /run/media/zuble/T77
+root_feup: /media/jtstudents/T77
 ## since run from usb and dif mach
-data_root: ${dyn_dataroot:${path.root_ion},${path.root_slarch}}
+data_root: ${dyn_dataroot:${path.root_ion},${path.root_slarch},${path.root_feup}}
 
 ## each dl/ds/info has both gt/vroot/froot point to these
 ucf_froot: '${path.data_root}/FEAT/UCF'

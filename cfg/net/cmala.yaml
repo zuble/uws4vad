@@ -2,7 +2,6 @@ defaults:
   - _.yaml
   - main: dflt
   - cls: conv
-  - pstfwd: dflt
 
 id: cmala
 wght_init: xavier0 

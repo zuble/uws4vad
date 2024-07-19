@@ -29,8 +29,8 @@ train:
 
   ## METRICS
   ## send intermidiate metrics results to visdom
-  mtrc_visplot: false
-  
+  mtrc_visplot_epo: true
+
   ## MODELHANDLER
   ## metrc and lbl to watch results for record wghts
   ## if empty metric: ucf -> AUC_ROC | xdv -> AUC_PR
@@ -70,11 +70,10 @@ test:
   mtrc_savetable: 0
   ## sends plotly figs roc/pr curves 2 visdom
   curv_visplot: 1
-  #### !!!!!!1
-  gtfl_visplot: 0 ## to implement ~!!!!!!
-  #### !!!!!!
+  ## send full 
+  ## only workign when per_what is lbl
+  gtfl_visplot: 0 
 
-  
 
   watch: ## B1 FIGHT | B2 SHOOT | B4 RIOT | B5 ABUSE | B6 CARACC | G EXPLOS
     ## saves watch_info returned per Validate into .pkl format
