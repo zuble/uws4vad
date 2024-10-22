@@ -32,9 +32,10 @@ class Temporal(nn.Module):
         )
         self.dfeat = dfeat
     def forward(self, x):
-        b, f, t = x.shape
+        b, t, f = x.shape
         assert f == self.dfeat
-        return self.conv_1(x)
+        
+        return self.conv_1( x.permute(0, 2, 1) ).permute(0, 2, 1)
     
 ############################
 ## TAD https://github.com/ktr-hubrt/WSAL/blob/master/models.py
@@ -56,7 +57,6 @@ class Temporal2(nn.Module):
         x = F.pad(x, (self.ks//2, self.ks//2), mode='replicate')
         x = self.conv(x)
         return x
-    
     
 ## snippet-level anomalous attention
 class Attention(nn.Module):

@@ -91,6 +91,7 @@ def print_grad_fn_info(tensor, tensor_name="Tensor"):
         log.debug(f"{tensor_name} grad_fn:")
         log.debug(f" - Type: {type(tensor.grad_fn)}")
         log.debug(f" - Name: {tensor.grad_fn.__class__.__name__}")
+        log.debug(f" - Device: {tensor.device}")
         if hasattr(tensor.grad_fn, 'next_functions'):
             log.debug(" - Inputs:")
             for i, func in enumerate(tensor.grad_fn.next_functions):
@@ -118,7 +119,7 @@ class LossComputer(nn.Module):
         for loss_name, loss_fn in self.lfxs.items():
             
             ## ndata = self.pfu.some_predifend_pipeline(ndata)
-
+    
             loss_output = loss_fn(ndata, ldata)
             if log.isEnabledFor(logging.DEBUG):
                 self.pfu.logdat(loss_output)
@@ -126,10 +127,10 @@ class LossComputer(nn.Module):
             ## this ugly !!!!!!!!!!!!!
             for component_name, component_value in loss_output.items():
                 #log.debug(f"{component_name}  {component_value}")
-                #print_grad_fn_info(component_value,component_name)
+                print_grad_fn_info(component_value,component_name)
                 loss_glob = loss_glob + component_value 
                 
                 loss_dict[f"{loss_name}/{component_name}"] = component_value
                 
-        #print_grad_fn_info(loss_glob, "Final Loss") 
+        print_grad_fn_info(loss_glob, "Final Loss") 
         return loss_glob, loss_dict

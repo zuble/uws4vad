@@ -3,11 +3,44 @@ from collections import defaultdict
 import numpy as np
 import torch
 
-
 from src.utils import logger
 log = logger.get_log(__name__)
 
+'''
+def get_sampler(cfg, ds=None, tc_gen=None, np_gen=None):
+    
+    cfg_ds = cfg.data
+    cfg_dload = cfg.dataload
+    
+    bal_abn_bag = cfg_dload.balance.bag
+    bal_abn_set = cfg_dload.balance.set
+    
+    if bal_abn_bag == -1: ## mperclass
+        
+    elif bal_abn_bag == 0:
+        assert (ds and gen) is not None
+        ## same as batch_size=cfg_dload.bs, shuffle=True, drop_last=True
+        sampler = RandomSampler(ds, 
+                    #replacement=False,
+                    #num_samples=samples_per_epoch, # !!!! set intern to len(ds)
+                    generator=tc_gen
+                    )
+    else: 
+        sampler = AbnormalBatchSampler(
+                    labels,
+                    bal_abn_bag=bal_abn_bag,
+                    bs=cfg_dload.bs,
+                    bal_abn_set=bal_abn_set,
+                    generator=np_gen
+                )
+    
+    
+    
+    return
+'''
 
+
+#######################
 def get_labels_to_indices(labels):
     """
     Creates labels_to_indices, which is a dictionary mapping each label
@@ -147,7 +180,7 @@ class AbnormalBatchSampler(Sampler):
             
         #log.info(f"{total_yielded=}")
         return iter(idx_list)
-
+########################
 
 
 def analyze_sampler(bsamplers, labels, dataset_name, iters=2, vis=None):
@@ -262,9 +295,7 @@ def analyze_sampler(bsamplers, labels, dataset_name, iters=2, vis=None):
 
 
 ###########################
-## --------------------- ##
-
-        
+## --------------------- ##    
 def dummy_train_loop(vis):
     from torch.utils.data import Dataset, BatchSampler, RandomSampler
     class DummyDataset(Dataset):

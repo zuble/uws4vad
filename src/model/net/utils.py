@@ -32,7 +32,7 @@ def wght_init(m):
     #classname = m.__class__.__name__
     #if classname.find('Conv') != -1 or classname.find('Linear') != -1:
     if isinstance(m, (nn.Conv1d, nn.Linear)):
-        log.debug(f"WI: {m}")
+        log.debug(f"WeigthInnit: {m}")
         tc_init.xavier_uniform_(m.weight)
         #tc_init.constant_(m.bias, 0)
         if m.bias is not None:
@@ -61,6 +61,8 @@ def build_net(cfg):
 
     log.info(f"{cfg.net.main=}")
     #cfg_net_main = cfg.net.main
+    ## this enables to have all parameters in cfg under _target_
+    ## while having only one parameters in _init_ method of target class
     cfg_net_main = DictConfig({
                         '_target_': cfg.net.main._target_,
                         '_cfg': {
@@ -74,23 +76,23 @@ def build_net(cfg):
     ## otherwise import from layers.classifier or construct
     if cfg.net.get("cls"):
         log.debug(f"{cfg.net.cls=}")
-        rgs = instantiate(cfg.net.cls, dfeat=dfeat)
+        rgs = instantiate(cfg.net.cls, dfeat=dfeat).to(cfg.dvc)
         log.debug(f"{rgs=}")
+        net = instantiate(cfg_net_main, dfeat=dfeat, rgs=rgs)
     else:
-        rgs = None
+        net = instantiate(cfg_net_main, dfeat=dfeat)
     
-    net = instantiate(cfg_net_main, dfeat=dfeat, rgs=rgs)
     
     if cfg.net.wght_init == 'xavier0':
         net.apply(wght_init)
     else: raise NotImplementedError
     
     ## EXTRA
+    #if cfg.get("debug"):
+    #    for name, param in net.named_parameters():
+    #        log.info(f"Layer: {name} | Size: {param.size()} | DVC: {param.device} Values : {param[:2]} \n")
+    if cfg.xtra.get("net"): log.info(f"\n{net}\n")
     if cfg.model.dryfwd:  dry_run(net, cfg, dfeat)
-    if cfg.xtra.get("net"):
-        log.info(f"\n{net}\n")
-        #for name, param in net.named_parameters():
-        #    log.info(f"Layer: {name} | Size: {param.size()} | Values : {param[:2]} \n")
     
     ## inferator
     cfg_infer = DictConfig({
@@ -99,7 +101,8 @@ def build_net(cfg):
                     **{k: v for k, v in cfg.net.infer.items() if k != '_target_'}
                 }
             })
-    pstfwd_utils = instantiate(cfg.model.pstfwd)
+    ## tst flag set ncrops rigth
+    pstfwd_utils = instantiate(cfg.model.pstfwd, tst=True)
     inferator = instantiate(cfg_infer, pfu=pstfwd_utils) 
     log.info(f"INFER {cfg_infer=} {inferator=}")
     

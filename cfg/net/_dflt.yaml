@@ -6,7 +6,7 @@ vrs: ""
 wght_init: xavier0 
 
 main:
-  _target_: "src.model.net.${net.id}${net.vrs}.Network" 
+  _target_: "src.model.net.${net.id}.Network${net.vrs}" 
   ## defaults this even if network dont have this option
   ## serves as a indicator in Validate.fwd to either save the attws or not
   ## then on each network with such, use dyn res (example in attnmil)

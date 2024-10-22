@@ -19,15 +19,13 @@ lbls:
     - 'G.EXPLOS'
     - '111.ANOM'
     - 'ALL'
-
-len: ## 2405 ANOM / 2349 NORM
-  train: ## 3954
-    normal: 2049
-    abnormal: 1905
-  test: ## 800
-    normal: 300
-    abnormal: 500
-
+  len: ## 2405 ANOM / 2349 NORM
+    train:
+      multi:  [2049, 481, 442, 384, 50, 444, 382, 1905, 3954]
+      single: [2049, 445, 336, 381, 36, 393, 314, 1905, 3954]
+    test:
+      multi:  [300, 126, 104, 101, 11, 106, 103, 500, 800]
+      single: [300, 120, 84,  101, 8,  91,  96,  500, 800]
   
 gt: ${hydra:runtime.cwd}/data/gt/xdv.txt
 tframes: '${hydra:runtime.cwd}/data/gt/xdv_tframes.txt'

@@ -1,7 +1,9 @@
 import torch
 import torch.nn as nn
-import torch.nn.init as torch_init
-from src.model.net.layers import BasePstFwd, SConv
+import torch.nn.functional as F
+
+from src.model.pstfwd.utils import PstFwdUtils
+from src.model.net.layers import SConv, VLstm, Temporal
 
 import math#, numpy as np
 #from scipy.spatial.distance import pdist, squareform
@@ -10,9 +12,37 @@ from hydra.utils import instantiate as instantiate
 from src.utils.logger import get_log
 log = get_log(__name__)
 
+
+########
+class SelfAnttention(nn.Module):
+    def __init__(self, dfeat, att_dim=128, r=1, do=0.3, cls_dim=64):
+        super().__init__()
+        self.net_att = nn.Sequential(
+            nn.Linear(dfeat, att_dim),
+            nn.Tanh(),
+            nn.Linear(att_dim, r),
+            nn.Softmax(dim=1),
+            nn.Dropout(do)
+            )
+        self.net_cls = nn.Sequential(
+            nn.Linear(dfeat, cls_dim),
+            nn.Linear(cls_dim, 1),
+            nn.Sigmoid()
+            )
+    def forward(self, x):
+        b, t, f = x.shape
+        old_x = x ## b, t, audf
+        att_wght = self.net_att(x) ## (b, t, r)
+        mxyz = [ (old_x * att_wght[:,:,0].unsqueeze(2)).sum(dim=1) for i in range(att_wght.shape[2])]
+        mcat = torch.cat(mxyz, dim=1)  # (b, r*f)
+        x_cls = self.net_cls(mcat).view(b)
+        return x_cls
+#######
+
+
 #class DistanceAdj(nn.Module):
 #    def __init__(self):
-#        super(DistanceAdj, self).__init__()
+#        super().__init__()
 #        self.w = nn.Parameter(torch.FloatTensor(1))
 #        self.bias = nn.Parameter(torch.FloatTensor(1))
 #
@@ -28,32 +58,28 @@ log = get_log(__name__)
 ## from pel4vad
 class DistanceAdj2(nn.Module):
     def __init__(self, sigma, bias):
-        super(DistanceAdj2, self).__init__()
+        super().__init__()
         self.w = nn.Parameter(torch.FloatTensor(1))
         self.b = nn.Parameter(torch.FloatTensor(1))
         self.w.data.fill_(sigma)    
         self.b.data.fill_(bias)
-
-    def forward(self, batch_size, seq_len):
+    def forward(self, batch_size, seq_len, dvc):
         arith = torch.arange(seq_len).reshape(-1, 1).float()
-        dist = torch.cdist(arith, arith, p=1).float()#.cuda()
+        dist = torch.cdist(arith, arith, p=1).float().to(dvc)
         dist = torch.exp(-torch.abs(self.w * dist ** 2 - self.b))
         dist = dist.unsqueeze(0).repeat(batch_size, 1, 1)
-
         return dist
     
 class CrossAttention(nn.Module):
     def __init__(self, dfaud, dfrgb, xat_hdim, n_heads=1):
-        super(CrossAttention, self).__init__()
+        super().__init__()
         self.dfaud = dfaud
         self.dfrgb = dfrgb
         self.xat_hdim = xat_hdim
         self.n_heads = n_heads
-
         self.q = nn.Linear(dfaud, xat_hdim)
         self.k = nn.Linear(dfrgb, xat_hdim)
         self.v = nn.Linear(dfrgb, xat_hdim)
-
         self.o = nn.Linear(xat_hdim, dfrgb)
         self.norm_fact = 1 / math.sqrt(xat_hdim)
         self.act = nn.Softmax(dim=-1)
@@ -62,7 +88,6 @@ class CrossAttention(nn.Module):
         Q = self.q(x).reshape(-1, x.shape[0], x.shape[1], self.xat_hdim // self.n_heads)
         K = self.k(y).reshape(-1, y.shape[0], y.shape[1], self.xat_hdim // self.n_heads)
         V = self.v(y).reshape(-1, y.shape[0], y.shape[1], self.xat_hdim // self.n_heads)
-
         #print(adj)
         att_map = torch.matmul(Q, K.permute(0, 1, 3, 2)) * self.norm_fact
         #print(f"global {att_map.shape} {att_map}\n\n")        
@@ -72,12 +97,11 @@ class CrossAttention(nn.Module):
         temp = torch.matmul(att_map, V).reshape(y.shape[0], y.shape[1], -1)
         output = self.o(temp).reshape(-1, y.shape[1], y.shape[2])
 
-        return output
+        return output ## B T FRGB
 
 class CMA_LA(nn.Module):
     def __init__(self, dfrgb, dfaud, xat_hdim=128, ffn_hdim=512, do=0.1):
-        super(CMA_LA, self).__init__()
-
+        super().__init__()
         self.cross_attention = CrossAttention(dfaud, dfrgb, xat_hdim)
         self.ffn = nn.Sequential(
             nn.Conv1d(dfrgb, ffn_hdim, kernel_size=1),
@@ -87,72 +111,76 @@ class CMA_LA(nn.Module):
             nn.Dropout(do),
         )
         self.norm = nn.LayerNorm(dfrgb)
-
     def forward(self, x_rgb, x_aud, adj):
         new_x = x_rgb + self.cross_attention(x_aud, x_rgb, adj)
         new_x = self.norm(new_x)
         new_x = new_x.permute(0, 2, 1)
-        new_x = self.ffn(new_x)
-
-        return new_x
-
+        new_x = self.ffn(new_x) 
+        return new_x ## B FAUD T 
 
 class Network(nn.Module):
-    def __init__(self, dfeat, _cfg, _cls = None):
-        super(Network, self).__init__()
+    def __init__(self, dfeat, _cfg, rgs=None):
+        super().__init__()
         self.dfrgb, self.dfaud = dfeat[0], dfeat[1]        
         self.xat_hdim = _cfg.xat_hdim
-        self.ffn_hdim = self.dfrgb//2 #_cfg.ffn_hdim
+        #if self.xat_hdim != self.dfaud:
+        #    self.xat_hdim = self.dfaud
+            
+        self.embedding = Temporal(self.dfaud, self.xat_hdim )
+        
+        self.ffn_hdim = self.dfrgb#//2 #_cfg.ffn_hdim
         self.do = _cfg.do
         
         self.dis_adj = DistanceAdj2(_cfg.sigma, _cfg.bias)
         self.cross_attention = CMA_LA(dfrgb=self.dfrgb, 
-                                    dfaud=self.dfaud , 
+                                    dfaud=self.xat_hdim, #self.dfaud , 
                                     xat_hdim=self.xat_hdim, 
                                     ffn_hdim=self.ffn_hdim)
+        self.slrgs = rgs
+        if self.slrgs is None:
+            self.slrgs = SConv(dfeat=self.xat_hdim, 
+                                ks=7) #self.dfaud
         self.sig = nn.Sigmoid()
-        
-        if _cls is not None:
-            self.slcls = instantiate(_cls, dfeat=self.dfaud)
-        else: self.slcls = SConv(dfeat=dfaud, ks=7)
+        #self.santt = SelfAnttention(self.dfaud)
+        #self.cls = VLstm(self.dfaud, self.dfaud//2)
         
     def forward(self, x):
         frgb = x[:, :, :self.dfrgb]
         faud = x[:, :, self.dfrgb:]
         
+        faud = self.embedding(faud)
+        
         bs, seqlen = frgb.shape[0:2]
-        adj = self.dis_adj(bs, seqlen)
+        adj = self.dis_adj(bs, seqlen, x.device) ## b, t, t
 
         ## rgbf enhanced by audf -> ffn to macth audnf
-        new_v = self.cross_attention(frgb, faud, adj) ## b, f, t
+        new_v = self.cross_attention(frgb, faud, adj) ## b, dfaud, t 
+        sls = self.sig( self.slrgs( new_v.permute(0, 2, 1) ) ) ## b, t
+        #x_cls = self.santt( new_v.permute(0, 2, 1) )
         
-        sls = self.sig( self.slcls( new_v.permute(0, 2, 1) ) )
+        #vls = self.sig( self.cls(new_v.permute(0, 2, 1)) )
         
         log.debug(f" rgb_aud/ {frgb.shape} {faud.shape}")
         log.debug(f"cross_att/ {new_v.shape}")
         log.debug(f"sls/ {sls.shape}")
+        #log.debug(f"x_cls/ {x_cls.shape}")
+        #log.debug(f"vls/ {vls.shape}")
         return {
-            'sls': sls
+            #'vlscores': vls, ## <- for bce
+            'scores': sls, # <- for clas
+            #'feats':  new_v.permute(0, 2, 1) 
+            #"vls": x_cls, ## <- for salient
         }
-
-class NetPstFwd(BasePstFwd):
-    def __init__(self, _cfg):
-        super().__init__(_cfg)
         
-    def train(self, ndata, ldata, lossfx):
-        super().uncrop(ndata, 'sls', 'mean') ## crop0
-        #log.info(f" pos_rshp: {ndata['sls'].shape}")
+class Infer():
+    def __init__(self, _cfg, pfu: PstFwdUtils = None): 
+        super().__init__()
+        self._cfg = _cfg
+        self.pfu = pfu
         
-        L0 = lossfx['clas'](ndata['sls'], ldata)
-        
-        return L0
-        
-    def infer(self, ndata):
-        #log.debug(f"sls: {ndata['sls']=}")
-        return ndata['sls']    
-    
-    
-    
+    def __call__(self, ndata): 
+        scores = self.pfu.uncrop(ndata['scores'], 'mean')
+        return scores
     
 ## adj in cross attention
 #tensor([[[0.9802, 0.9608, 0.8025, 0.5945],

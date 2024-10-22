@@ -9,8 +9,6 @@ debug:
     - "src.data.testdl"
     - "src.data._data"
 
-
-
-dataloader:
+dataload:
   test:
     dryrun: True

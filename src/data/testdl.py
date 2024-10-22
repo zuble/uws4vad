@@ -12,11 +12,11 @@ log = logger.get_log(__name__)
 #############################
 ## TEST
 def get_testloader(cfg):
-    from ._data import FeaturePathListFinder, debug_cfg_data, run_dl
-    debug_cfg_data(cfg)
+    from ._data import FeaturePathListFinder, debug_cfg_data, run_dltest
+    if cfg.get("debug"): debug_cfg_data(cfg)
     
     cfg_ds = cfg.data
-    cfg_dloader = cfg.dataload.test
+    cfg_dload = cfg.dataload.test
     cfg_dproc = cfg.dataproc
     
     
@@ -51,25 +51,25 @@ def get_testloader(cfg):
     ## both gt.npy for xdv and ucf have same lenght as total number of segments in feats * window length of the feature extractor
     #######################################
     
-    ds = TestDS(cfg_dloader, cfg_ds, cfg_dproc, rgbfl, audfl)
+    ds = TestDS(cfg_dload, cfg_ds, cfg_dproc, rgbfl, audfl)
     loader = DataLoader( ds , 
-                        batch_size=cfg_dloader.bs , 
-                        shuffle=cfg_dloader.shuffle, 
-                        num_workers=cfg_dloader.nworkers, 
-                        #prefetch_factor=cfg_dloader.pftch_fctr if cfg_dloader.pftch_fctr != 0 else None,
-                        pin_memory=cfg_dloader.pinmem, 
-                        persistent_workers=cfg_dloader.prstwrk 
+                        batch_size=cfg_dload.bs , 
+                        shuffle=cfg_dload.shuffle, 
+                        num_workers=cfg_dload.nworkers, 
+                        #prefetch_factor=cfg_dload.pftch_fctr if cfg_dload.pftch_fctr != 0 else None,
+                        pin_memory=cfg_dload.pinmem, 
+                        persistent_workers=cfg_dload.prstwrk 
                         )
     
-    if cfg_dloader.dryrun:
+    if cfg_dload.dryrun:
         log.warning(f"DBG DRY TEST DL")            
-        run_dl(loader)
-    
+        run_dltest(loader)
+
     return loader
 
 
 class TestDS(Dataset):
-    def __init__(self, cfg_dloader, cfg_ds, cfg_dproc, rgbflst, audflst=[]):
+    def __init__(self, cfg_dload, cfg_ds, cfg_dproc, rgbflst, audflst=[]):
 
         self.rgbflst = rgbflst
         self.audflst = audflst
@@ -79,7 +79,7 @@ class TestDS(Dataset):
         self.dfeat = cfg_ds.frgb.dfeat
         if audflst: self.peakboo_aud(cfg_ds.faud.dfeat)
 
-        if cfg_dloader.in2mem: self.loadin2mem(cfg_dloader.nworkers)
+        if cfg_dload.in2mem: self.loadin2mem(cfg_dload.nworkers)
         else: self.in2mem = 0
     
     
@@ -90,7 +90,7 @@ class TestDS(Dataset):
         tojo2 = np.load(peakboo2)    
         assert dfeat == tojo2.shape[-1]
         self.dfeat += dfeat
-        log.debug(f'TRAIN: AUD {osp.basename(peakboo2)} {np.shape(tojo2)}')    
+        log.debug(f'TEST: AUD {osp.basename(peakboo2)} {np.shape(tojo2)}')    
     
         
     def load_data(self,idx):
@@ -107,9 +107,8 @@ class TestDS(Dataset):
     def get_label(self,idx):
         fn = osp.basename(self.rgbflst[int(idx)])
         label = self.lbl_mng.encod(fn)
-        #log.debug(f'vid[{idx}] {label=} {type(label)} {fn}')
+        log.debug(f'vid[{idx}] {label=} {type(label)} {fn}')
         return label , fn
-    
     
     def get_feat(self, idx):
         """
@@ -146,15 +145,16 @@ class TestDS(Dataset):
             ## MIX
             if self.crops2use:
                 aud_feats = np.repeat(aud_feats[np.newaxis, :, :], self.crops2use, axis=0)  # (ncrops, t, dfaud)
-                feats = np.concatenate((rgb_feats, aud_feats), axis=2) 
+                feats = np.concatenate((rgb_feats, aud_feats), axis=2) # (ncrops, t, dfrgb+dfaud)
                 log.debug(f'vid[{idx}] MIX (w/nc): {feats.shape} {feats.dtype}')
             else:
-                feats = np.concatenate((rgb_feats, aud_feats), axis=1)
+                feats = np.concatenate((rgb_feats, aud_feats), axis=1) # (t, dfrgb+dfaud)
                 log.debug(f'vid[{idx}] MIX: {feats.shape} {feats.dtype}')
             
             return feats
         
         else: return rgb_feats
+        
 
     def _match_audio_length(self, aud_feats, t_rgb):
         """
@@ -176,7 +176,7 @@ class TestDS(Dataset):
             idxs2 = np.round(np.arange(t_rgb) * (t_aud) / (t_rgb)).astype(np.int32)
             
             repeat_counts = np.ones(t_aud, dtype=int)
-            # Distribute the required repetitions at the end of the array
+            ## Distribute the required repetitions at the end of the array
             for i in range(t_rgb - t_aud):
                 repeat_counts[-(i % t_aud) - 1] += 1
             idxs3 = np.repeat(np.arange(t_aud), repeat_counts)
@@ -202,7 +202,7 @@ class TestDS(Dataset):
             #     log.error(f'Segmentation mismatch!')
             # ---------------------------------------------------
             return new_aud_feats
-
+        elif 1 <= (t_aud - t_rgb) <= 2: return aud_feats[:t_rgb]
         else: raise ValueError(f'MISMATCH: Incompatible lengths - RGB: {t_rgb}, Audio: {t_aud}')
         
     def __getitem__(self, idx):
@@ -210,9 +210,9 @@ class TestDS(Dataset):
         if self.in2mem:
             feats, (label, fn)= self.data[int(idx)]    
         else:   
-            label,fn = self.get_label(idx)
+            label, fn = self.get_label(idx)
             feats = self.get_feat(idx)
-        
+
         return feats , label , str(fn)
     
     def __len__(self):
@@ -247,10 +247,10 @@ class LBL:
         ## norm
         if self.cfg_lbls.id[0] in fn: aux = [self.cfg_lbls.info[0]]
         else:
-            ## A = 0 , B1-B4-B6 = 146 , B1-B5-G = 157 , B4-0-0 = 400
-            ## oldie aux = aux.replace('B', '').replace('-', '').replace('A', '0').replace('G', '7')   
-            aux = fn[fn.find('label_')+len('label_'):] ## B2-G-0
+            aux = fn[fn.find('label_')+len('label_'):] ## B2-G-0 or B2-G-0__0
+            aux = aux.split("__")[0]
             aux = [ a for a in aux.split('-') if a != '0'] ## ['B2', 'G']
             idxs = [self.cfg_lbls.id.index(a) for a in aux] ## [2, 6]
-            aux = [self.cfg_lbls.info[i] for i in idxs] ## 'B2.SHOOT', 'G.EXPLOS']
+            aux = [self.cfg_lbls.info[i] for i in idxs] ## ['B2.SHOOT', 'G.EXPLOS'] pass as tuple
+            #log.debug(aux)
         return aux

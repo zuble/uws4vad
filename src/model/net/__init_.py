@@ -21,10 +21,10 @@ from src.model.net.mir import (
 #    Network,
 #    NetPstFwd
 #)
-#from src.model.net.attnmil import (
-#    VCls,
-#    SAVCls,
-#    SAVCls_lstm,
-#    NetPstFwd
-#)
+from src.model.net.anm import (
+    NetworkVCls,
+    NetworkSAVCls,
+    NetworkSAVCls_lstm,
+    Infer
+)
 ###################

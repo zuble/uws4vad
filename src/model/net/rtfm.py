@@ -3,11 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from src.model.pstfwd.utils import PstFwdUtils
-from src.model.net.layers import Aggregate, SMlp
+from src.model.net.layers import Aggregate, SMlp, SConv, Transformer, Temporal
 
 from omegaconf.dictconfig import DictConfig
 from hydra.utils import instantiate as instantiate
-from src.utils.logger import get_log
+from src.utils import get_log
 log = get_log(__name__)
 
 
@@ -22,9 +22,13 @@ class Network(nn.Module):
         #    self.fmodulator = instantiate(_fm, dfeat=self.dfeat)
         #else: self.fmodulator = Aggregate(self.dfeat)
         
-        self.aggregate = Aggregate(self.dfeat)
-        self.do = nn.Dropout( _cfg.do )
+        self.fm = Aggregate(self.dfeat, do=_cfg.do)
+        #self.emb_hdim = 512 #self.dfeat//2
+        #self.embedding = Temporal(self.dfeat, self.emb_hdim)
+        #self.fm = Transformer(self.emb_hdim , depth=2, heads=4, dim_head=128, ff_hdim=self.emb_hdim, dropout=0.)
+        
         self.slrgs = rgs
+        #self.slrgs = SConv(dfeat=self.dfeat, ks=7)
         #if _cls is not None:
         #    self.slrgs = instantiate(_cls, dfeat=self.dfeat)
         #else: raise Exception
@@ -36,10 +40,10 @@ class Network(nn.Module):
         rgbf = x[:, :, :self.dfeat]
         #audf = x[:, :, self.dfeat:]
         
-        ## rgbf temporal refinement/ennahncment
-        x_new = self.aggregate( rgbf.permute(0,2,1) ).permute(0,2,1) ## (b, t, f)
-        x_new = self.do(x_new)
-        log.debug(f'RTFM/aggregate {x_new.shape}')
+        #x = rgbf
+        #x = self.embedding(x)
+        x_new = self.fm( rgbf ) ## (b, t, f)
+        log.debug(f'fm {x_new.shape}')
         
         scors = self.sig( self.slrgs(x_new) )
 
@@ -56,7 +60,8 @@ class Infer():
         self.pfu = pfu
         
     def __call__(self, ndata): 
-        return ndata['scores'] 
+        scores = self.pfu.uncrop(ndata['scores'], 'mean')
+        return scores
     
 
 

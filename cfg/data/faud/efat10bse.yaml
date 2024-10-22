@@ -4,13 +4,13 @@ defaults:
 ## EfficientAT
 ## https://github.com/fschmid56/EfficientAT_HEAR
 ## https://github.com/fschmid56/EfficientAT
-id: efat
-vrs: 10bse
+id: EFAT_10BSE
+#vrs: 10bse
 ds: 
-  - ucf
-feat_dim: 1032
+  - xdv
+dfeat: 1032
 
-clip_len: 16  
+clip_len: 16   # target_frames_per_segment
 ncrops: 0
 
 

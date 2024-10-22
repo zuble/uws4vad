@@ -1,0 +1,72 @@
+# @package _global_
+
+# extend the vitamin with morre epochs since there are no crops
+
+defaults:
+  - override /data/frgb: vitamina  #i3drocng vadclip cliptsa slowfast slowfast5 vitamina
+  - override /model: bndfm
+  #- override /model/optima: adam  # adam  adadelta  adagrad
+  - override /net: bndfm 
+
+
+#hydra:
+#  mode: MULTIRUN
+#  sweeper:
+#    params:
+#      #dataproc.seg.sel: uni, itp
+#      #dataproc.seg.len: 32, 100, 200, 300
+#      #dataproc.seg.jit: 0, 1
+#      #dataproc.seg.rnd: 0, 1
+#      #model.loss.mpp.margin: 2,3,4,5,6,7,8,9,10
+      #dataproc.culum: B1.FIGHT, B2.SHOOT, B4.RIOT, B5.ABUSE, B6.CARACC, G.EXPLOS
+
+
+#exp_name: dloadbag-itp200-bs128-bagbal50-0.0001-CAS #dloadbag-itp32-12300-bs128-bagbal50-fast0.001
+#exp_name: OG-AGG-bs128-bagset1.2-0.00001-cas
+exp_name: OG-bs128-0.0001-cas
+tags: ["dataload"]
+
+model:
+  epochs: 30
+  optima:
+    lr: 0.00001   #0.00001
+    weight_decay: 0.0005  #0.005
+    
+  loss:
+    mpp:
+  #    w_mpp: 0.01
+      w_triplet: [5, 20]
+      margin: 1
+    normal:
+      w: 1
+
+net:
+  main:
+##    do: 0.2
+    nh_dimratios: [16,32] # [16, 32] #
+    moment: 0.1
+
+#vldt:
+#  train:
+#    freq: 2
+
+dataproc: 
+  seg:
+    sel: itp
+    len: 200
+    #jit: 
+    #rnd: 1 
+  cropasvideo: 
+    train: True  
+    test: True
+  #culum: 
+  #  - B4.RIOT
+
+
+dataload:
+  balance:
+    bag: 0.5
+    set: 1.2
+  bs: 128
+
+

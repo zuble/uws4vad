@@ -31,7 +31,8 @@ def trainer(cfg, vis):
     
     ## MODEL
     net, inferator = build_net(cfg)
-    optima = instantiate(cfg.model.optima, params=net.parameters() , _convert_="partial") #,
+    net.to(cfg.dvc)
+    optima = instantiate(cfg.model.optima, params=net.parameters() , _convert_="partial") #;log.info(f"{optima=}")
     _, loss_computer = build_loss(cfg)
     
     ## LOAD
@@ -41,8 +42,7 @@ def trainer(cfg, vis):
         mstate = MH.get_train_state(trn_inf)
         net.load_state_dict(mstate["net"]) #, strict=True
         optima.load_state_dict(mstate["optima"])
-    net.to(cfg.dvc)
-    
+
     ## LRS
     lrs = None
     if cfg.model.get("lrs"):
@@ -81,7 +81,7 @@ def trainer(cfg, vis):
             ##########
             net.train()    
             #for batch in tqdm(dataloader, leave = False, desc="Batch:", unit='bat'):
-            for batch in dataloader:
+            for bi, batch in enumerate(dataloader):
                 trn_inf['bat'] =+ 1
                 trn_inf['step'] =+ 1
                 btic = time.time()
@@ -121,10 +121,14 @@ def trainer(cfg, vis):
                 abn_bag_len = torch.sum(ldata["label"] == 1).item()
                 vis.plot_lines('abn/nor bag ratio', abn_bag_len / ldata["label"].shape[0],
                             opts=dict(
-                                title=f"Batch vs. abn/nor bag ratio", 
-                                xlabel='Batch',
+                                title=f"Batch vs. abn/nor bag ratio",  #Abnormal Bag Ratio
                                 ylabel='Abn Bag Tatio'
                         ))
+                
+                #if bi % 20 == 0:
+                #    log.warning(f"{bi} ")
+                #    _, _, _, _, _ = vldt.start(net, inferator)
+                #    vldt.reset()
                 
             if lrs is not None: lrs.step()
                 
@@ -139,17 +143,19 @@ def trainer(cfg, vis):
                 _, _, mtrc_info, curv_info, table_res = vldt.start(net, inferator)
                 vldt.reset()
                 #torch.backends.cudnn.benchmark = True
-                MH.record( mtrc_info, curv_info, table_res, net, optima, trn_inf)
+                if not cfg.get("debug"): 
+                    MH.record( mtrc_info, curv_info, table_res, net, optima, trn_inf)
             
             #progress.update(task1, advance=1)
             
         log.info(f"$$$$ train done in {hh_mm_ss(time.time() - trn_inf['ttic'])}")
-        if not cfg.get("debug"): 
-            MH.save_state()
-            pltr = Plotter(vis)
-            pltr.metrics(MH.high_state['mtrc_info'])
-            pltr.curves(MH.high_state['curv_info'])
-            Tabler(False,True,vis).table2img(MH.high_table,'high_res_table')
+        if not cfg.get("debug"): ## move                                                    <<<<<<<<<
+            if cfg.get("save"): MH.save_state()
+            if MH.high_info['rec_val'] > 0.5:
+                pltr = Plotter(vis)
+                pltr.metrics(MH.high_state['mtrc_info'])
+                pltr.curves(MH.high_state['curv_info'])
+                Tabler(False,True,vis).table2img(MH.high_table,'high_res_table')
         
     except Exception as e:
         log.error(traceback.format_exc())
@@ -230,7 +236,7 @@ class TrainMeter:
                     f"epo-{loss_name}",
                     meter.get_global_avg(),
                     opts=dict(
-                        title=f"Epoch Average Loss - {loss_name}",  
+                        title=f"Average Loss per Epoch - {loss_name.capitalize()}",  
                         xlabel='Epoch',
                         ylabel='Loss',
                         showlegend=True

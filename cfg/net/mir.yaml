@@ -9,5 +9,7 @@ wght_init: xavier0 ## xavier uniform upon weihghts / bias 0
 ## the classifier is build upon cls cfg if given
 ## if not pass parameters for the chosen in Network.init at _cfg
 cls:
-  hdim_ratio: 4
+  hdim_ratio: 
+    - 2
+    - 2
   do: 0.7

@@ -31,14 +31,14 @@ class MetricCalculator:
         auc_roc = auc(fpr, tpr)
         #auc_roc2 = roc_auc_score(gt, preds)
         
-        ap = average_precision_score(gt, preds)
+        ap = average_precision_score(gt, preds) ## <- tend to give lower values
         
         precision, recall, _ = precision_recall_curve(gt, preds)
-        au_prc = auc(recall, precision)
+        au_prc = auc(recall, precision) ## <- trapezoid rule is optimistic
 
         mtrc_info[key]['AP'].append(ap)
-        mtrc_info[key]['AUC_PR'].append(au_prc)
-        mtrc_info[key]['AUC_ROC'].append(auc_roc)
+        mtrc_info[key]['AUC-PR'].append(au_prc)
+        mtrc_info[key]['AUC-ROC'].append(auc_roc)
 
         curv_info[key]['precision'].append(precision)
         curv_info[key]['recall'].append(recall)
@@ -97,7 +97,7 @@ class DataHandler:
         log.debug(f"{self.lbls4plot=}")
         
         self.mtrc_info = {self.lbls4plot[0]: {'FN': [], 'FAR': []} }
-        self.mtrc_info.update( {lbl: {'FN': [], 'AP': [], 'AUC_PR': [], 'AUC_ROC': []} for lbl in self.lbls4plot[1:]} )
+        self.mtrc_info.update( {lbl: {'FN': [], 'AP': [], 'AUC-PR': [], 'AUC-ROC': []} for lbl in self.lbls4plot[1:]} )
             
         self.curv_info = {lbl: {'precision': [], 'recall': [], 'fpr': [], 'tpr': []} for lbl in self.lbls4plot[1:]}
         
@@ -122,8 +122,8 @@ class DataHandler:
         ## self.mtrc_info/000.NORM/FAR: 150 <class 'list'>
         ## self.mtrc_info/8.ROADACC/FN: 23 <class 'list'>
         ## self.mtrc_info/8.ROADACC/AP: 23 <class 'list'>
-        ## self.mtrc_info/8.ROADACC/AUC_PR: 23 <class 'list'>
-        ## self.mtrc_info/8.ROADACC/AUC_ROC: 23 <class 'list'>        
+        ## self.mtrc_info/8.ROADACC/AUC-PR: 23 <class 'list'>
+        ## self.mtrc_info/8.ROADACC/AUC-ROC: 23 <class 'list'>        
             
     def proc_by_label(self, dict_data):
         """Organizes data for label-wise analysis."""
@@ -131,7 +131,7 @@ class DataHandler:
         log.debug(f"{self.lbls4plot=}")
 
         self.mtrc_info = {self.lbls4plot[0]: {'FAR': []}}
-        self.mtrc_info.update({lbl: {'AP': [], 'AUC_PR': [], 'AUC_ROC': []} for lbl in self.lbls4plot[1:]})
+        self.mtrc_info.update({lbl: {'AP': [], 'AUC-PR': [], 'AUC-ROC': []} for lbl in self.lbls4plot[1:]})
 
         self.curv_info = {lbl: {'precision': [], 'recall': [], 'fpr': [], 'tpr': []} for lbl in self.lbls4plot[1:]}
         
@@ -151,9 +151,9 @@ class Tabler:
         self.vis = vis
     def log_per_lbl(self, mtrc_info): 
         ## AU ROC/PR(single table lbls/metrics) and sends always 2 log , nd in test can send 2 visdom depending on cfg.TEST.VLDT
-        mtrc_names = list(next(iter( list(mtrc_info.values())[1:] )).keys()) ## AP AUC_PR AUC_ROC
+        mtrc_names = list(next(iter( list(mtrc_info.values())[1:] )).keys()) ## AP AUC-PR AUC-ROC
         headers = ["FL"] + mtrc_names ; rows=[]
-        ## FL AP AUC_PR AUC_ROC
+        ## FL AP AUC-PR AUC-ROC
         for i, (lbl_name, metrics) in enumerate(mtrc_info.items()):
             if lbl_name != "000.NORM": 
                 fmetrics = {k: f"{v[0]:.4f}" for k, v in metrics.items()}
@@ -175,12 +175,12 @@ class Tabler:
         ## table-it, 1 per lbl with all videos metrics ordered by AP high to low
         for i, (lbl_name, metrics) in enumerate(mtrc_info.items()):
             if lbl_name != "000.NORM":
-                ## metrics: {'FN': ['Abuse028', 'Abuse030'], 'AP': [0.040333334281393796, 0.23268166089965397], 'AUC_PR': [0.03263809909950772, 0.19132147623132323], 'AUC_ROC': [0.2375417601595612, 0.8626980607184614]}
-                tmp = list(zip(metrics['FN'], metrics['AP'], metrics['AUC_PR'], metrics['AUC_ROC']))
+                ## metrics: {'FN': ['Abuse028', 'Abuse030'], 'AP': [0.040333334281393796, 0.23268166089965397], 'AUC-PR': [0.03263809909950772, 0.19132147623132323], 'AUC-ROC': [0.2375417601595612, 0.8626980607184614]}
+                tmp = list(zip(metrics['FN'], metrics['AP'], metrics['AUC-PR'], metrics['AUC-ROC']))
                 
                 sort_index = list(metrics.keys()).index(self.sort_mtrc)
                 tmp = sorted(tmp, key=lambda x: x[sort_index], reverse=True)
-                metrics['FN'], metrics['AP'], metrics['AUC_PR'], metrics['AUC_ROC'] = zip(*tmp) 
+                metrics['FN'], metrics['AP'], metrics['AUC-PR'], metrics['AUC-ROC'] = zip(*tmp) 
                 
                 headers = [lbl_name] + list(metrics.keys())[1:] ; rows = []
                 for i in range(len(metrics['FN'])):
@@ -261,10 +261,7 @@ class Metrics:
             self.tabler.log_per_vid( self.data_handler.mtrc_info )
             
             if self.mtrc_vis_plot: raise NotImplementedError
-        
-        
-        
-            
+
         else: ## glob && lbl
             ## glob: 000.NORM | 111.ANOM | ALL
             ## lbl: 000.NORM | B1.FIGHT | B2.SHOOT | B4.RIOT | B5.ABUSE | B6.CARACC | G.EXPLOS | 111.ANOM | ALL
@@ -287,18 +284,15 @@ class Metrics:
             return self.data_handler.mtrc_info, self.data_handler.curv_info, table
 ######################################################################
 
-    
-    
-    
-    
+
 class Plotter:
     def __init__(self, vis):
         self.vis = vis  
         self.full_metric_names = {
-            'FAR': 'False Acceptance Rate (FAR)',
+            'FAR': 'False Alarm Rate (FAR)',
             'AP': 'Average Precision (AP)',
-            'AUC_PR': 'Area Under Precision-Recall Curve (AUC-PR)',
-            'AUC_ROC': 'Area Under ROC Curve (AUC-ROC)'
+            'AUC-PR': 'Area Under Precision-Recall Curve (AUC-PR)',
+            'AUC-ROC': 'Area Under ROC Curve (AUC-ROC)'
             }
         self.all_labels_per_epo_index = {}
         
@@ -342,10 +336,10 @@ class Plotter:
         colors = px.colors.qualitative.Plotly  # Or any other color scale
 
         ## starts fresh not needed as this runs for test and end epo
-        self.vis.close(f'ROC Curves'); self.vis.close(f'Precision-Recall Curves') 
+        #self.vis.close(f'ROC Curves'); self.vis.close(f'Precision-Recall Curves') 
         
         roc_fig = make_subplots( rows=1, cols=1,subplot_titles=('ROC Curves per Class',) ) #
-        pr_fig = make_subplots(rows=1, cols=1, subplot_titles=('Precision-Recall Curves',)) #
+        pr_fig = make_subplots(rows=1, cols=1, subplot_titles=('PR Curves per Class',)) #
         #if self.xtra_mtrcs: f1_fig = make_subplots(rows=1, cols=1, subplot_titles=('F1 Curves',))
         
         for idx, (lbl, data) in enumerate(curv_info.items()):
@@ -386,27 +380,27 @@ class Plotter:
         #    f1_fig.update_layout(height=500, showlegend=True, title_text="F1 Curves" )
         #    self.vis.potly(f1_fig)
     
-    
+    ## run at end o fepo with best state
     ## 1 plot per metric, xaxis is lbls
     def metrics(self, mtrc_info):
         log.debug("Sending per-label metrics 2 visdom")
         
-        metrics_data = { 'FAR':[], 'AP':[], 'AUC_PR':[], 'AUC_ROC':[] }
+        metrics_data = { 'FAR':[], 'AP':[], 'AUC-PR':[], 'AUC-ROC':[] }
 
         self.vis.close(f'AP')
-        self.vis.close(f'AUC_PR')
-        self.vis.close(f'AUC_ROC')
+        self.vis.close(f'AUC-PR')
+        self.vis.close(f'AUC-ROC')
         
         for lbl_name, metrics in mtrc_info.items():
             log.debug(f"Plotter/metrics: {lbl_name} {metrics = }")
         
         lbls4plot=[]
         for lbl_name, metrics in mtrc_info.items():
-            lbls4plot.append(lbl_name)
+            lbls4plot.append(lbl_name.split('.')[-1])
             if lbl_name == '000.NORM':
                 metrics_data['FAR'].extend(metrics['FAR'])
             else:
-                for metric_name in ['AP', 'AUC_PR', 'AUC_ROC']:  
+                for metric_name in ['AP', 'AUC-PR', 'AUC-ROC']:  
                     metrics_data[metric_name].extend(metrics[metric_name])
         
         #xticklabels = lbls4plot  
@@ -429,7 +423,7 @@ class Plotter:
             if metric_name == 'FAR':
                 scatter_data = np.column_stack(([1], values))  # Use [1] for x-coordinate
                 opts = dict(
-                    title=f'Best {str(metric_name)}',
+                    title=f'{str(metric_name)} - Best Abnormal Epoch',
                     xtickvals=[1],  # Only one tick for FAR
                     xticklabels=lbls4plot[0],
                     ylabel=full_metric_name
@@ -437,8 +431,10 @@ class Plotter:
             else:
                 scatter_data = np.column_stack((xtickvals, values))
                 opts = dict(
-                    title=f'Best {str(metric_name)} per Label',
-                    #legend=self.lbls4plot, #markersize=10, #markercolor=colors,
+                    title=f'{str(metric_name)} per Class - Best Abnormal Epoch',
+                    #legend=self.lbls4plot,
+                    #markersize=10, markercolor=colors,
+                    markersymbol='diamond-wide',
                     xtickvals=xtickvals,
                     xticklabels=xticklabels,
                     ylabel=full_metric_name
@@ -451,34 +447,34 @@ class Plotter:
         log.debug("Sending per-label metrics 2 visdom")
         
         for lbl_name, metrics in mtrc_info.items():
-            if lbl_name == '000.NORM':
+            if '000' in lbl_name:
                 wname = f"epo-{lbl_name}"
                 self.vis.plot_lines(
                     wname,
                     metrics['FAR'][0],
                     opts=dict(
-                        title=f"FAR - Normal",  
-                        xlabel='Epoch',
+                        title=f"FAR per Epoch",  
+                        xlabel='Validation Epoch',
                         ylabel=self.full_metric_names['FAR']
                     )
                 )
             else:
-                for metric_name in ['AP', 'AUC_PR', 'AUC_ROC']:
+                for metric_name in ['AP', 'AUC-PR', 'AUC-ROC']:
                     full_metric_name = self.full_metric_names[metric_name]
                     wname =  f"epo-{lbl_name}-{metric_name}"
                     self.vis.plot_lines(
                         wname,
                         metrics[metric_name][0],
                         opts=dict(
-                            title=f"{metric_name} - {lbl_name.split('.')[-1]}", 
-                            xlabel='Epoch',
+                            title=f"{metric_name} per Epoch - {lbl_name.split('.')[-1].capitalize()} Set", 
+                            xlabel='Validation Epoch',
                             ylabel=full_metric_name 
                         )
                     )
     ## 1 plot per metric with multiple label lines, xaxis is epochs    
     def metrics_all_labels_per_epo(self, mtrc_info):
         """Plots all labels for each metric on a single plot per epoch."""
-        for metric_name in ['AP', 'AUC_PR', 'AUC_ROC']:
+        for metric_name in ['AP', 'AUC-PR', 'AUC-ROC']:
             full_metric_name = self.full_metric_names[metric_name]
             win_name = f"epo-all-{metric_name}"
 
@@ -497,8 +493,8 @@ class Plotter:
                     Y=np.column_stack(y_data),
                     win=win_name,
                     opts=dict(
-                        title=f"{metric_name} per Class",
-                        xlabel='Epoch',
+                        title=f"{metric_name} per Epoch",
+                        xlabel='Validation Epoch',
                         ylabel=full_metric_name,
                         legend=[lbl.split(".")[-1] for lbl in mtrc_info if metric_name in mtrc_info[lbl]]
                     )

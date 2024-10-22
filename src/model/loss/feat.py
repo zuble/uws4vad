@@ -19,11 +19,17 @@ class MPP(nn.Module):
     def __init__(self, _cfg, pfu: PstFwdUtils = None): 
         super().__init__()
         self.pfu = pfu
-        
+        assert self.pfu.bat_div == self.pfu.bs // 2
+        if self.pfu.seg_sel != 'itp':
+            log.warning("MPP WITHOUT ITP, PADDED SEQ NOT INVESTIGATED")
+        self.margin = _cfg.margin
         self.w_triplet = _cfg.w_triplet
         self.w_mpp = _cfg.w_mpp
-    
+
     def preproc(self, norm_feats, anchors, variances, labels):
+        assert norm_feats[0].shape[-1] == self.pfu.seg_len
+        assert norm_feats[1].shape[-1] == self.pfu.seg_len
+        ## [(b,fred1,t), (b,fred2,t)] ;; [fred1,fred2] ;; [fred1,fred2]
 
         abn_dists, nor_dists = self.pfu._get_mtrcs_dfm(norm_feats, anchors, variances)
         
@@ -32,7 +38,7 @@ class MPP(nn.Module):
         sel_abn_feats, sel_nor_feats = [], []
         for feats, abn_dist, nor_dist in zip(norm_feats, abn_dists, nor_dists):
             
-            feats = feats.permute(0,2,1)
+            feats = feats.permute(0,2,1) ## bs, t, f
             feats = self.pfu.uncrop(feats, 'mean') ## bs, t, f
             abn_feats, nor_feats = self.pfu.unbag(feats, labels) ## bag, t, f
             
@@ -41,19 +47,20 @@ class MPP(nn.Module):
             tmp_abn, tmp_nor = self.pfu.sel_feats_sbs(abn_feats, nor_feats, abn_dist, nor_dist)
             #self.pfu.is_equal(tmp_abn,tmp_abn2)
             #self.pfu.is_equal(tmp_nor,tmp_nor2)
-            
             sel_abn_feats.append(tmp_abn[..., None]) ## _, red1, 1 ;; _, red2, 1
             sel_nor_feats.append(tmp_nor[..., None]) ## _, red1, 1 ;; _, red2, 1
             
         return sel_abn_feats, sel_nor_feats
-        
+    
     def forward(self, ndata, ldata):
         anchors = ndata['anchors']
         variances = ndata["variances"]
         norm_feats = ndata["norm_feats"]
         labels = ldata['label']
         seqlen = ldata['seqlen']
+        
         abn_sel, nor_sel = self.preproc(norm_feats, anchors, variances, labels)
+        #self.pfu.logdat({'abn': abn_sel,'nor': nor_sel})
         
         def mahalanobis_distance(mu, x, var):
             return torch.sqrt(torch.sum((x - mu)**2 / var, dim=-1))
@@ -62,15 +69,17 @@ class MPP(nn.Module):
         
         L = []
         for anchor, var, pos, neg, wt in zip(anchors, variances, nor_sel, abn_sel, self.w_triplet):
-            triplet_loss = nn.TripletMarginWithDistanceLoss(margin=1, distance_function=partial(mahalanobis_distance, var=var))
+            lossf = nn.TripletMarginWithDistanceLoss(margin=self.margin, distance_function=partial(mahalanobis_distance, var=var))
             
-            B, C, k = pos.shape
+            B, C, k = pos.shape ## 5699, red1, 1 // 5699, red2, 1
             pos = pos.permute(0, 2, 1).reshape(B*k, -1)
             neg = neg.permute(0, 2, 1).reshape(B*k, -1)
-            loss_triplet = triplet_loss(anchor[None, ...].repeat(B*k, 1), pos, neg)
+            
+            loss_triplet = lossf(anchor[None, ...].repeat(B*k, 1), pos, neg)
             L.append(loss_triplet * wt)
             
-        L = torch.stack(L, dim=0).sum()
+        #L = torch.stack(L, dim=0).sum()
+        L = sum(L)
         log.debug(f'{L=}')
         return {
             'mpp': self.w_mpp * L,
@@ -83,13 +92,43 @@ class Rtfm(nn.Module):
         self.pfu = pfu
         assert self.pfu.bat_div == self.pfu.bs // 2
         
+        if _cfg.preproc == 'og': self.preproc = self._preproc
+        elif _cfg.preproc == 'sbs': self.preproc = self._preproc2
+        
         self.alpha = _cfg.alpha
         self.margin = _cfg.margin
         self.bce = nn.BCELoss()
         self.smooth = smooth
         self.sparse = sparsity
     
-    def preproc(self, feats, labels):
+    def _preproc2(self, feats, labels):
+        ####################
+        ## experiment batch-level sel as bndfm
+        feats_uc = self.pfu.uncrop(feats, 'mean') ## bs, t, f 
+        abn_feats, nor_feats = self.pfu.unbag(feats_uc, labels) ## bag, t, f
+        abn_fmgnt, nor_fmgnt = self.pfu.get_mtrcs_magn(feats, labels=labels, apply_do=True) ## bag,t
+        
+        #abn_fmgnt, nor_fmgnt = self.pfu.get_mtrcs_magn(feats, labels=labels, apply_do=True)
+        #feats_pnc = self.pfu.uncrop(feats, force=True) ## bs,nc,t,f
+        #abn_feats, nor_feats = self.pfu.unbag(feats_pnc, labels=labels, permute='1023') ## nc,bag,t,f
+        
+        sel_abn_feats, sel_nor_feats = self.pfu.sel_feats_sbs(abn_feats, nor_feats, abn_fmgnt, nor_fmgnt)
+        
+        k_sample = self.pfu._get_k_sample(sel_lvl='static')
+        idx_abn = torch.topk(abn_fmgnt, k_sample, dim=1)[1] ## (bag, k_sample)
+        idx_nor = torch.topk(nor_fmgnt, k_sample, dim=1)[1] ## (bag, k_sample)
+        
+        return sel_abn_feats, idx_abn, sel_nor_feats, idx_nor
+        #log.debug(f"{sel_abn_feats.shape=} {sel_nor_feats.shape=}")
+        #abn_feat = sel_abn_feats
+        #nor_feat = sel_nor_feats
+        ### 4 scores
+        #idx_abn = self.pfu._get_topk_idxs(abn_fmgnt, self.k, self.do)
+        #idx_nor = self.pfu._get_topk_idxs(nor_fmgnt, self.k, self.do)
+        #L0 = lossfx['mgnt'](abn_feat, nor_feat) ## video
+        ########################
+    
+    def _preproc(self, feats, labels):
         ## bag*nc,f
 
         abn_fmgnt, nor_fmgnt = self.pfu.get_mtrcs_magn(feats, labels=labels, apply_do=True)
@@ -111,11 +150,11 @@ class Rtfm(nn.Module):
         feats = ndata['feats']
         scores = ndata['scores']
         labels = ldata['label']
-        
+
         sel_abn_feats, idx_abn, sel_nor_feats, idx_nor = self.preproc(feats, labels)
         log.debug(f"{sel_abn_feats.shape=} {sel_nor_feats.shape=}")
         
-        ## needs mil
+        
         l2n_abn = torch.norm(sel_abn_feats, p=2, dim=1) ## (bag*nc)
         l_fabn = torch.abs(self.margin - l2n_abn)
         l_fnor = torch.norm(sel_nor_feats, p=2, dim=1) ## (bag*nc)
@@ -124,21 +163,6 @@ class Rtfm(nn.Module):
         log.debug(f"{l_fabn.shape=} {l_fnor.shape=} {loss_mgnt=} ")
         
         
-        ####################
-        ## experiment batch-level sel as bndfm
-        #feats_uc = self.pfu.uncrop(feats, 'mean') ## bs, t, f 
-        #abn_feats, nor_feats = self.pfu.unbag(feats_uc, labels) ## bag, t, f
-        #abn_fmgnt, nor_fmgnt = self._get_mtrcs_magn(feats, labels=labels) ## bag,t
-        #sel_abn_feats, sel_nor_feats = self.pfu.sel_feats_sbs(abn_feats, nor_feats, abn_fmgnt, nor_fmgnt, 0.1, 0.4)
-        #
-        #log.debug(f"{sel_abn_feats.shape=} {sel_nor_feats.shape=}")
-        #abn_feat = sel_abn_feats
-        #nor_feat = sel_nor_feats
-        ### 4 scores
-        #idx_abn = self.pfu._get_topk_idxs(abn_fmgnt, self.k, self.do)
-        #idx_nor = self.pfu._get_topk_idxs(nor_fmgnt, self.k, self.do)
-        #L0 = lossfx['mgnt'](abn_feat, nor_feat) ## video
-        ########################
         
         ## SCORE
         scores = self.pfu.uncrop( scores, 'mean') ## bs*nc,t -> bs, t
@@ -146,79 +170,110 @@ class Rtfm(nn.Module):
         vls_abn, vls_nor = self.pfu.sel_scors( abn_scors, nor_scors, idx_abn, idx_nor, avg=True) ## bag
         log.debug(f"{vls_abn.mean()=}  {vls_nor.mean()=}")
         
-        ## !!!!! labels may be out of order for dl w/ bal_wgh != 0.5
-        loss_scor = self.bce(torch.cat((vls_abn,vls_nor)), ldata['label']) ## vls
-        #L1 = lossfx['bce'](vls_abn, torch.ones_like(vls_abn), 'abn') ## vls
-        #L2 = lossfx['bce'](vls_nor, torch.zeros_like(vls_nor), 'nor') ## vls
         
+        loss_scor = self.bce(torch.cat((vls_abn,vls_nor)), ldata['label']) ## vls
         ## (bag*t)
-        loss_smooth = self.smooth(abn_scors.view(-1)) ## sls
+        #loss_smooth = self.smooth(abn_scors.view(-1)) ## sls
         loss_spars = self.sparse(abn_scors.view(-1), rtfm=True) ## sls
         
-        
-        return self.pfu.merge( {
+        return {
                 'rtfm': self.alpha * loss_mgnt,
                 'bce': loss_scor,
-            }, 
-            loss_smooth,
-            loss_spars
-            )
+            }
+        #return self.pfu.merge( {
+        #        'rtfm': self.alpha * loss_mgnt,
+        #        'bce': loss_scor,
+        #    }, 
+        #    #loss_smooth,
+        #    loss_spars
+        #    )
         
     
 class ContrastiveLoss(nn.Module):
-    def __init__(self, _cfg, pfu: PstFwdUtils = None): 
+    def __init__(self, margin=200.0): 
         super().__init__()
-        self.margin = 200.0
+        self.margin = margin
 
     def forward(self, output1, output2, label):
         euclidean_distance = F.pairwise_distance(output1, output2, keepdim=True) ## bag*nc, 1
-        loss_contrastive = torch.mean((1-label) * torch.pow(euclidean_distance, 2) +
-                                      (label) * torch.pow(torch.clamp(self.margin - euclidean_distance, min=0.0), 2))
+        loss_contrastive = torch.mean(
+                            (1-label) * torch.pow(euclidean_distance, 2) +
+                            (label) * torch.pow( torch.clamp(self.margin - euclidean_distance, min=0.0), 2)
+                        )
         return loss_contrastive
     
 class MagnCont(nn.Module):
     def __init__(self, _cfg, pfu: PstFwdUtils = None): 
         super().__init__()
         self.pfu = pfu
+        assert self.pfu.bat_div == self.pfu.bs // 2
+        
         self.alpha = _cfg.alpha
-        self.margin = _cfg.margin
-
+        
         self.crit = ContrastiveLoss(_cfg.margin)
-
-    def forward(self, ndata, ldata):
-        feats = ndata['feats']
-        scores = ndata['scores']
-        labels = ldata['label']
+        
+    def preproc(self, feats, labels):
+        ## bag*nc,f
         
         abn_fmgnt, nor_fmgnt = self.pfu.get_mtrcs_magn(feats, labels=labels, apply_do=True)
-        ## bag*nc,k,f ->  bag*nc, f (crop dim kept exposed)
+
+        feats_pnc = self.pfu.uncrop(feats, force=True) ## bs,nc,t,f
+        abn_feats, nor_feats = self.pfu.unbag(feats_pnc, labels=labels, permute='1023') ## nc,bag,t,f
+        
+        ## nc,bag,k,f ->  bag*nc, k, f (crop dim kept exposed and no avg)
+        sel_abn_feats, idx_abn = self.pfu.gather_feats_per_crop(abn_feats, abn_fmgnt, avg=False)
+        sel_nor_feats, idx_nor = self.pfu.gather_feats_per_crop(nor_feats, nor_fmgnt, avg=False)
+        
+        ## bag*nc,k,f ->  bag*nc, k, f  not tested
         #sel_abn_feat, sel_nor_feats, idx_abn, idx_nor = super().sel_feats_ss(abn_feats, nor_feats, 
         #                                                                abn_fmgnt, nor_fmgnt,
-        #                                                                per_crop=True, avg=True)
+        #                                                                per_crop=True, avg=False)
+        return sel_abn_feats, idx_abn, sel_nor_feats, idx_nor
+    
+    def forward(self, ndata, ldata):
+        feats = ndata['feats']
+        #scores = ndata['scores']
+        labels = ldata['label']
         
+        sel_abn_feats, _, sel_nor_feats, _ = self.preproc(feats, labels)
+        log.debug(f"{sel_abn_feats.shape=} {sel_nor_feats.shape=}")
         
+        seperate = sel_abn_feats.shape[0] // 2
+
         ## different from rtfm, no mean over topk sel feats
-        ## thus abn/nor_feamagnitude = bag*nc, k, f 
-        loss_con = self.crit(torch.norm(abn_feamagnitude, p=1, dim=2), ## bag*nc, k
-                                    torch.norm(nor_feamagnitude, p=1, dim=2), ## bag*nc, k
+        ## thus sel_abn_feats/sel_nor_feats = bag*nc, k, f 
+        loss_con = self.crit(torch.norm(sel_abn_feats, p=1, dim=2), ## bag*nc, k
+                                    torch.norm(sel_nor_feats, p=1, dim=2), ## bag*nc, k
                                     1)  # try tp separate normal and abnormal
         ## bag*nc, k, f 
-        loss_con_n = self.crit(torch.norm(nor_feamagnitude[int(seperate):], p=1, dim=2), ## (bag*nc)/2, k
-                                    torch.norm(nor_feamagnitude[:int(seperate)], p=1, dim=2),  ## (bag*nc)/2, k
+        loss_con_n = self.crit(torch.norm(sel_nor_feats[seperate:], p=1, dim=2), ## (bag*nc)/2, k
+                                    torch.norm(sel_nor_feats[:seperate], p=1, dim=2),  ## (bag*nc)/2, k
                                     0)  # try to cluster the same class 
         ## bag*nc, k, f 
-        loss_con_a = self.crit(torch.norm(abn_feamagnitude[int(seperate):], p=1, dim=2), ## (bag*nc)/2, k
-                                    torch.norm(abn_feamagnitude[:int(seperate)], p=1, dim=2), ## (bag*nc)/2, k
+        loss_con_a = self.crit(torch.norm(sel_abn_feats[seperate:], p=1, dim=2), ## (bag*nc)/2, k
+                                    torch.norm(sel_abn_feats[:seperate], p=1, dim=2), ## (bag*nc)/2, k
                                     0)
+        #loss_total = loss_cls + self.alpha * (0.001 * loss_con + loss_con_a + loss_con_n )
         
-        #loss_total = loss_cls + 0.001 * (0.001 * loss_con + loss_con_a + loss_con_n )
+        ## SCORE
+        #scores = self.pfu.uncrop( scores, 'mean') ## bs*nc,t -> bs, t
+        #abn_scors, nor_scors = self.pfu.unbag(scores, labels) ## bag, t
+        #vls_abn, vls_nor = self.pfu.sel_scors( abn_scors, nor_scors, idx_abn, idx_nor, avg=True) ## bag
+        #log.debug(f"{vls_abn.mean()=}  {vls_nor.mean()=}")
+        #
+        #loss_scor = self.bce(torch.cat((vls_abn,vls_nor)), ldata['label']) ## vls
+        ##L1 = lossfx['bce'](vls_abn, torch.ones_like(vls_abn), 'abn') ## vls
+        ##L2 = lossfx['bce'](vls_nor, torch.zeros_like(vls_nor), 'nor') ## vls
+        
+        ## (bag*t)
+        #loss_smooth = self.smooth(abn_scors.view(-1)) ## sls
+        #loss_spars = self.sparse(abn_scors.view(-1), rtfm=True) ## sls
         
         return {
-            'mc': 0
+            'abn-nor': loss_con * self.alpha**2,
+            'abn':  loss_con_a * self.alpha,
+            'nor':  loss_con_n * self.alpha,
         }
-
-
-
 
 
 class Dev(nn.Module):

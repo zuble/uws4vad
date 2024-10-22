@@ -1,0 +1,37 @@
+# @package _global_
+
+
+defaults:
+  - override /data/frgb: i3drocng
+  - override /model: clas  ## ranking
+  - override /net: rtfm   ## rtfm
+
+#hydra:
+#  mode: MULTIRUN
+#  sweeper:
+#    params:
+#      dataproc.crops2use.test: 1, 5
+#      dataproc.seg.seg.len: 32, 200
+#      model.loss.class.per_crop: True, False
+
+exp_name: dproccrop
+tags: ["dproccrop"]
+
+  
+model:
+  epochs: 5
+  optima:
+    lr: 0.0001
+  loss:
+    clas:
+      per_crop: False
+
+dataproc: 
+  seg:
+    sel: itp
+    len: 32
+
+dataload:
+  bs: 32
+  balance:
+    bag: 0.5

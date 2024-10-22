@@ -1,9 +1,8 @@
-mbs:  
-  _target_: src.model.loss.score.MultiBranchSupervision
-  eps: 0.2
-  alpha: 0.8
-  gamma: 0.8
-  mu: 0.01
-  M: 400
+_target_: src.model.loss.score.MultiBranchSupervision
+eps: 0.2
+alpha: 0.8
+gamma: 0.8
+mu: 0.01
+M: 400
 
-  per_crop: False ## iterates over each
+per_crop: False ## iterates over each

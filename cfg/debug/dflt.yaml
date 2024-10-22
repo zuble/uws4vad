@@ -10,7 +10,11 @@ hydra:
   job_logging:
     root:
       level: DEBUG
+  ## find  out now that i can set directly the leve lt debug for each module here
+  ## verbose: "src.model.net" 
+  ## https://hydra.cc/docs/tutorials/basic/running_your_app/logging/
   verbose: True  ## sets hydra loggers to debug
+  
 
 
 
@@ -25,11 +29,13 @@ dataload:
   in2mem: False
   nworkers: 0
   pinmem: False
+  prstwrk: false
 
   test:
     in2mem: False
     nworkers: 0
     pinmem: False
+    prstwrk: false
 #
 #model:
 #  epochs: 1

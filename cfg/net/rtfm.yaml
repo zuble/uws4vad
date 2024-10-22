@@ -8,6 +8,11 @@ wght_init: xavier0
 main:
   do: 0.7
 
+cls:
+  hdim_ratio: 
+    - 4
+    - 4
+
 fm:
   agg:  
     _target_: src.model.net.layers.aggregate.Aggregate

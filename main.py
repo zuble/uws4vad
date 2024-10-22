@@ -25,7 +25,7 @@ _HYDRA_PARAMS = {
 }
 
 
-@utils.reg_custom_resolvers(**_HYDRA_PARAMS)
+@utils.reg_custom_resolvers(**_HYDRA_PARAMS)  ## @src/utils/cfgres.py
 @hydra.main(**_HYDRA_PARAMS)
 def main(cfg: DictConfig) -> None:
     log = utils.get_log(__name__, cfg)
@@ -39,9 +39,15 @@ def main(cfg: DictConfig) -> None:
         from src import tmp
         utils.xtra(cfg)
         
+        func_name = cfg.get("tmp")  
+        target_func = getattr(tmp, func_name) 
+        target_func(cfg)
+        ## or
+        #instance = target_func()  
+        
         #tmp.Debug(cfg)
         #tmp.aud_emb(cfg)
-        tmp.aud_len_mat()
+        #tmp.aud_len_mat()
 
 
     elif cfg.get("fext"):
@@ -57,6 +63,7 @@ def main(cfg: DictConfig) -> None:
 
             
     else:
+        ## ----------------------------------
         ## move out
         #vis=None
         #if not cfg.get("debug", False):
@@ -73,13 +80,14 @@ def main(cfg: DictConfig) -> None:
                             restart=cfg.xtra.vis.restart, 
                             delete=cfg.xtra.vis.delete
                             )
-        if cfg.xtra.vis.delete: return
+        if cfg.xtra.vis.delete: vis.delete(envn=vis_name);return
+        
         vis.textit(['out_dir',cfg.path.out_dir,
                     #'choices', HydraConfig.get().runtime.choices, 
                     'overrides', HydraConfig.get().overrides.task,
                     'sweeper', HydraConfig.get().sweeper.params
                     ])
-        
+        ## ------------------------------
         
         if cfg.get("train"):
             from src.train import trainer

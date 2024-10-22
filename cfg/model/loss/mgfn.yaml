@@ -1,8 +1,4 @@
 ## MGFN
-mgnt:
-  _target_: src.model.loss.feat.MagnCont
-  alpha: 0.001
-  margin: 200.0
-bce:
-  _target_: src.model.loss.score.Bce
-  version: magn
+_target_: src.model.loss.feat.MagnCont
+alpha: 0.001
+margin: 200.0

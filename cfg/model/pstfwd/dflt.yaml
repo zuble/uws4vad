@@ -3,18 +3,23 @@
 ## as well as for each Loss class
 _target_: src.model.pstfwd.PstFwdUtils
 _cfg:
-  bs: ${dataload.bs}
   dvc: ${dvc}
+
+  bs: ${dataload.bs}
   bal_abn_bag: ${dataload.balance.bag}
   ncrops: 
     - ${dataproc.crops2use.train}
     - ${dataproc.crops2use.test}
+  cropasvideo: 
+    - ${dataproc.cropasvideo.train}
+    - ${dataproc.cropasvideo.test}
   seg_sel: ${dataproc.seg.sel}
   seg_len: ${dataproc.seg.len}
 
+  ## 
   k: 3
   do: 0.7
   
   ## sbs sel strat train
-  sls_ratio: ${dyn_per_ds:${data.id}, 0.1, 0.2}
-  bls_ratio: ${dyn_per_ds:${data.id}, 0.2, 0.4}
+  sls_ratio: ${dyn_per_ds:${data.id}, 0.1, 0.2} ## ucf, xdv
+  bls_ratio: ${dyn_per_ds:${data.id}, 0.2, 0.4} ## ucf, xdv

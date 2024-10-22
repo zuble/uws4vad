@@ -1,0 +1,8 @@
+## https://cv.gluon.ai/model_zoo/action_recognition.html
+## features will be searched in froot/id set in each ds.info set dl/.yaml
+id: SLOWFAST_4X16_RN50_K400_C5
+ds: 
+  - xdv
+fstep: 64
+dfeat: 2304
+ncrops: 5

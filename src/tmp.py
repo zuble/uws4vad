@@ -6,13 +6,83 @@ import numpy as np
 import glob , os, os.path as osp, time
 from hydra.utils import instantiate as instantiate
 
-from src.data import get_trainloader, run_dl
-from src.utils.logger import get_log
+from src.data import get_trainloader, run_dl, get_testloader
+from src.utils import get_log, Visualizer
 log = get_log(__name__)
 
 
+def mpcs(cfg):
+    from pytorch_metric_learning.samplers import MPerClassSampler
+    from src.data import LBL, FeaturePathListFinder
+    from torch.utils.data import BatchSampler
+    
+    labels_id = cfg.data.lbls.info[:-2]
+    log.info(labels_id)
+    
+    #traindl, trainfrmt = get_trainloader(self.cfg) 
+    
+    rgbfplf = FeaturePathListFinder(cfg, 'train', 'rgb')
+    argbfl, nrgbfl = rgbfplf.get('ANOM', cfg.dataproc.culum), rgbfplf.get('NORM')
+    rgbfl = argbfl + nrgbfl
 
+    lbl_mng = LBL(ds=cfg.data.id, cfg_lbls=cfg.data.lbls)
+    
+    lbls=[]
+    for path in rgbfl: lbls.extend( lbl_mng.encod(osp.basename(path)) )
+    
+    m = len(labels_id)  ## xdv ~ 7
+    ## 128 -> 126 | 64 -> 63 | 32 -> 28
+    bs = cfg.dataload.bs - cfg.dataload.bs // m
+    niters = len(rgbfl)
+    log.info(f"{m=} {bs=} {niters=}   ")
+    sampa = MPerClassSampler(lbls, m, bs, niters)
+    
+    
+    bsampler = BatchSampler(sampa, bs, True)
+    log.info(f" {len(sampa)=}  {len(bsampler)=}")
+    
+    
+    #for bi, batch_idxs in enumerate(bsampler):
+    #    for batch_idx in batch_idxs:
+    #        log.info(f"[{bi}] {lbls[batch_idx]}   ")
+    
+    #a={ f'MPerClassSampler': bsampler}
+    #analyze_sampler(a, lbls, cfg.data.id, iters=1,vis=None)
+    
+    
 
+def embeds(cfg):
+    vis = Visualizer('TMP_EMBEDS', 
+            restart=cfg.xtra.vis.restart, 
+            delete=cfg.xtra.vis.delete
+            )
+    
+    #trn_inf = {
+    #    'epo': 0,
+    #    'bat': 0,
+    #    'step': 0,
+    #    'ttic': None,
+    #    'dvc': cfg.dvc
+    #}
+    #dataloader, collator = get_trainloader(cfg, vis)
+    #for batch in dataloader:
+    #    feat, ldata = collator(batch, trn_inf)
+    #    log.info(f"{feat.shape}")
+    #    break
+    
+    DL = get_testloader(cfg)
+    for i, data in enumerate(DL):
+        feat=data[0][0]; label=data[1][0]; fn=data[2][0]
+        break
+    log.info(f"{fn}  {feat.shape}   {label}  ")
+    
+    #label = label
+    
+    net, inferator = build_net(cfg)
+    
+    #label = ldata["label"].repeat_interleave(cfg.dataproc.crops2use.train)
+    #vis.embeddings()
+    
 class Debug():
     
     def __init__(self, cfg):

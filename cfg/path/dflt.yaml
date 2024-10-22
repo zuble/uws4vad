@@ -17,6 +17,7 @@ out_dir: ${hydra:runtime.output_dir}
 
 fext:
   models_dir: ${path.work_dir}/data/fext/
+  ## if debug this is used, otherwise set to cfg.data.froot/RGB or cfg.data.froot/AUD 
   out_dir: ${path.work_dir}/data/ftmp/
 
 ##########

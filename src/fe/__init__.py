@@ -3,7 +3,10 @@ from src.fe.handler import (
     get_aud_model
 )
 
-from src.fe.dlvid import get_vidloader
+from src.fe.dlvid import (
+    get_vidloader,
+    VideoDS
+)
 from src.fe.dlaud import get_audloader
 
 

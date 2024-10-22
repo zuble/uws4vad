@@ -3,11 +3,12 @@ defaults:
   - pstfwd: dflt
   - optima: adam
   - lrs: null
-  - loss: bndfm
+  - loss@loss.normal: bn-score
+  - loss@loss.mpp: bn-mpp
   #- _self_
 
 id: bndfm
-epochs: 50
+epochs: 10
 
 clipnorm: True
 

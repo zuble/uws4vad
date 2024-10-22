@@ -1,0 +1,7 @@
+_target_: torch.optim.Adagrad
+lr: 0.001
+lr_decay: 0
+weight_decay: 0
+eps: 1e-10
+
+

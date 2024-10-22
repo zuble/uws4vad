@@ -1,0 +1,29 @@
+defaults:
+  - _dflt
+  - cls: ~
+
+id: anm
+vrs: ${dyn_per_ds:${data.id}, VCls, SAVCls_lstm} 
+#vrs: SAVCls  #VCls  SAVCls_lstm
+wght_init: xavier0 
+
+main:
+  ## if 0, no embedding layer is used
+  ## else dout = dfeat // embd_dim
+  embd_dim: 0
+
+  att_dim: ${dyn_per_ds:${data.id}, 64, 128} #
+  r: ${dyn_per_ds:${data.id}, 3, 1} 
+  do: 0.3
+  cls_dim: 32
+
+  spat: True  ## only SAVCls 
+  
+  ## only SAVCls_lstm 
+  lstm_dim: 256  
+  lstm_bd: true 
+  
+
+  ## if in test and watching attws -> set to True
+  ## ndata has "attws" key populated
+  ret_att: False #${dyn_retatt:${vldt.test.watch.frmt},${test}}

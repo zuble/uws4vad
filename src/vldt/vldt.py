@@ -1,8 +1,9 @@
 import torch
 import os, os.path as osp, numpy as np, time, cv2, gc
+from sklearn.metrics import average_precision_score
 
 from src.vldt.metric import Metrics, Plotter
-from src.data import get_testloader, run_dl
+from src.data import get_testloader, run_dltest
 from src.utils import get_log, hh_mm_ss
 
 log = get_log(__name__)
@@ -16,7 +17,7 @@ class WatchInfo:
         self.DATA = {self.lbl: {'FN': [], 'GT': [], 'FL': [], 'ATTWS': []}} if watching else {}
         self.watching = watching
 
-    def updt(self, fn, gt, fl, attws):
+    def updt(self, fn, gt, fl, attws=None):
         if not self.watching: return
         self.DATA[self.lbl]['FN'].append(fn)
         self.DATA[self.lbl]['GT'].append(gt)
@@ -63,8 +64,8 @@ class VldtInfo:
             ## global: store normal and all abnormal
             ## 000.NORM | 111.ANOM | ALL
             self.DATA = {   self.norm:  {'GT': [], 'FL': []}, ## far
-                            self.anom: {'GT': [], 'FL': []}, ## auc
-                            self.all: {'GT': [], 'FL': []} }  ## auc
+                            self.anom: {'GT': [], 'FL': []}, ## auc / ap
+                            self.all: {'GT': [], 'FL': []} }  ## auc / ap on fstep16, after upgrade 2330384
             self.updt = self._updt_glob
         elif per_what == 'lbl':
             ## store previous plus specific labels of ds
@@ -155,14 +156,10 @@ class Validate:
         self.cfg_vldt = cfg_vldt
 
         self.DL = get_testloader(cfg) 
-        #if cfg.dataload.test.dryrun:
-        #    log.warning(f"DBG DRY TEST DL")            
-        #    run_dl(self.DL)
-        #    return
         #log.info(f'Validate w/ DL{self.DL}\n')
         
-        self.metrics = Metrics(cfg_vldt, vis)
-        self.gtfl = GTFL(cfg.data)
+        self.cropasvideo = cfg.dataproc.cropasvideo.test
+        self.ncrops = cfg.dataproc.crops2use.test
         
         ## selects the net forward, as attnomil needs splitting to get SegmLev scores
         ## exprmnt impact of such in different archs
@@ -171,9 +168,14 @@ class Validate:
             self.chuk_size = cfg.vldt.fwd_siz
         else: self.fwd = self._fwd_glob
         
+        
+        self.metrics = Metrics(cfg_vldt, vis)
+        self.gtfl = GTFL(cfg.data)
+        
         if cfg.vldt.match_gtfl not in ['rshpndfill', 'truncate']:
             raise ValueError(f"match_gtfl {cfg.vldt.match_gtfl} not implemented")
         self.match_gtfl = cfg.vldt.match_gtfl
+        self.multi_or_single = cfg.vldt.multi_or_single
         
         ## 
         self.vldt_info = VldtInfo(cfg.data, cfg_vldt.per_what)
@@ -189,9 +191,9 @@ class Validate:
         log.warning(f"TODO ret_att or ret_emb 4 visdom")
         #assert cfg.net.main._cfg.ret_att == self.ret_att
         
-        ## after self.fwd() run, self.sls will have the SL scores acquired from chosen net forward
+        ## after self.fwd() run, sls will have the SL scores acquired from chosen net forward
         ## attws will be populated is set, otherwise empty list are flag
-        self.sls, self.attws = [], [] #None, None
+        #sls, self.attws = [], [] #None, None
     
     def reset(self):
         ## reset the wtch/vldt_info.DATA
@@ -200,7 +202,7 @@ class Validate:
         self.vldt_info.reset()
         self.watch_info.reset()
         
-    #@torch.no_grad()
+    @torch.no_grad()
     def _fwd_attnomil(self, net, inferator, feat):
         '''
         as one score per forward, segment&repeat to get len(scores)=len(feats)
@@ -209,21 +211,22 @@ class Validate:
         #elif self.cfg_frgb.fstep == 16: chuk_size = 9 ## orignal
         '''
         ## snippet-level scores
-        self.sls, self.attws = [], []
+        sls, self.attws = [], []
         
         l = list(range(0,feat.shape[1]))
         splits = list(range(self.chuk_size, feat.shape[1], self.chuk_size))
         chucks = np.split( l, splits, axis=0)
-        #log.debug(f'l: {len(l)} , splits: {splits} , chucks: {chucks}')
+        log.debug(f'l: {len(l)} , splits: {splits} , chucks: {chucks}')
         
         ## compare it might be faster
         #chucks = torch.split(feat, splits, axis=1)
         
         for ci, chuck in enumerate(chucks):
             ndata = net(feat[:,chuck])
-            #log.debug(f'[{ci}] {chuck} {feat[:,chuck].shape} --> {type(ndata["vls"])}')
+            tmp_sls = inferator(ndata)
+            log.debug(f'[{ci}] {chuck} {feat[:,chuck].shape} --> {tmp_sls}')
             
-            self.sls.append( ndata["vls"].repeat( len(chuck)) )
+            sls.append( tmp_sls.repeat( len(chuck)) )
             
             if self.ret_att: ## ndata['attw'].shape (nsegments, 3)
                 assert ndata.get('attw') is not None
@@ -231,47 +234,54 @@ class Validate:
                 #log.debug(f'tmp_attw[{ci}] {tmp_attw.shape} {type(tmp_attw)}')
                 self.attws.append( ndata['attw'].repeat( self.cfg_frgb.fstep, dim=0 ) )
 
-        self.sls = torch.cat((self.sls), dim=0)
+        sls = torch.cat((sls), dim=0)
         
         if self.ret_att: 
             self.attws = torch.cat((self.attws), dim=0)
             log.debug(f"attws: {self.attws.shape} {self.attws.ctx}") 
+        
+        return sls
     
-    #@torch.no_grad()    
+    @torch.no_grad()    
     def _fwd_glob(self, net, inferator, feat):
         ndata = net(feat)
-        self.sls = inferator(ndata)
-        #self.sls = self.sls.view(-1) ## !!!!! take care in infer with a super() on return
-        
-    
+        sls = inferator(ndata)
+        if self.cropasvideo: ## nc, t  (og)
+            assert sls.ndim == 2
+            if self.ncrops:
+                assert sls.shape[0] == self.ncrops
+            sls = sls.mean(0)
+        else: ## 1, t
+            sls = sls.view(-1)
+        return sls
+            
     @torch.no_grad()    
     def start(self, net, inferator):
         net.eval()
         tic = time.time()
+        _gt,_fl = [],[]
         
         log.info(f'$$$$ Validate starting')
         for i, data in enumerate(self.DL):
-            #log.debug(f'[{i}] ********************')
-
-            feat=data[0][0].to(self.dvc); label=data[1][0]; fn=data[2][0]
-            #log.debug(f'[{i}] {feat.shape} , {fn} , {label}')
-            if feat.ndim == 2: 
-                ## ??? dl shouldnt put extra bat dim 
-                feat = feat.unsqueeze(0) 
-            elif feat.ndim == 3: pass ## no crop in ds
+            
+            feat=data[0][0].to(self.dvc); label=data[1]; fn=data[2][0]
+            log.debug(f'[{i}] {"*"*4} {fn} , {label} ')
+            
+            if feat.ndim == 2: feat = feat.unsqueeze(0)  #log.warning("ndim2"); 
+            elif feat.ndim == 3: pass ## 1,t,f no crop in ds
             elif feat.ndim == 4 and feat.shape[0] == 1: 
                 ## 1 crop atleast, atm inferator.infer isnot account this
                 feat = feat.view(-1, feat.shape[2], feat.shape[3]) ## 1*nc, t, f
             else: raise ValueError(f'[{i}] feat.ndim {feat.ndim}')
-            #log.debug(f'[{i}] {feat.shape} , {fn} , {label}')
+            log.debug(f'[{i}] {feat.shape}')
             
-            self.fwd(net, inferator, feat)
-            #log.debug(f'-> sls: {self.sls.shape}')
-            ## self.sls is at segment level 
+            sls = self.fwd(net, inferator, feat)
+            log.debug(f'\t-> sls: {sls.shape}')
+            ## sls is at segment level 
             
             #if '000' not in label[0]:
             #log.warning(f'[{i}] {feat.shape} , {fn} ') #, {label}
-            #log.error(f'-> sls: {self.sls.shape} {self.sls.mean()} {self.sls.max()}')
+            #log.error(f'-> sls: {sls.shape} {sls.mean()} {sls.max()}')
             
             ##############
             ## frame-level
@@ -282,7 +292,7 @@ class Validate:
             tmp_gt = self.gtfl.get(fn)
             log.debug(f'[{i}] gt: {len(tmp_gt)}')
             ## 1 segmnt = self.cfg_frgb.fstep = (64 frames, slowfast mxnet) (32 frames, i3d mxnet) (16, i3dtorchdmil)
-            tmp_fl = self.sls.cpu().detach().numpy()
+            tmp_fl = sls.cpu().detach().numpy()
             tmp_fl = np.repeat(tmp_fl, self.cfg_frgb.fstep)
             log.debug(f'[{i}] fl: {len(tmp_fl)} {tmp_fl.shape}') #{type(tmp_fl)} {type(tmp_fl[0])}
             
@@ -304,10 +314,25 @@ class Validate:
                     tmp_fl = tmp_fl[:len(tmp_gt)]
                     log.debug(f'[{i}]   new_fl: {len(tmp_gt)}')
 
-            assert len(tmp_fl) == len(tmp_gt), f'{self.cfg_frgb.fstep} cfg_frgb.fstep * {self.sls.shape[0]} len  != {len(tmp_gt)} orign video frames'
+            assert len(tmp_fl) == len(tmp_gt), f'{self.cfg_frgb.fstep} cfg_frgb.fstep * {sls.shape[0]} len  != {len(tmp_gt)} orign video frames'
+            
+            ## dirt but dont have time 
+            ## dataloader puts list content as tuples
+            ## label = [('label1'),('label2')]
+            label = [l[0] for l in label] ## ['label1','label2']
+            if self.multi_or_single == 'single' and len(label) > 1: ## xdv and dflt
+                label = [label[0]]  ## ['label1']
+            elif self.multi_or_single == 'multi': pass
             
             self.vldt_info.updt(label, fn, tmp_gt, tmp_fl)
-            self.watch_info.updt(fn, tmp_gt, tmp_fl, self.attws)
+            self.watch_info.updt(fn, tmp_gt, tmp_fl, ) #self.attws
+            
+            _gt.append(tmp_gt); _fl.append(tmp_fl)
+        
+        _fl = np.concatenate(_fl, axis=0)
+        _gt = np.concatenate(_gt, axis=0)
+        app = average_precision_score(_gt, _fl)
+        log.error(app)
         
         self.vldt_info.log()        
         self.vldt_info.upgrade()
@@ -320,7 +345,7 @@ class Validate:
         mtrc_info, curv_info, table_res = self.metrics.get_fl(self.vldt_info)
         
         log.info(f'$$$$ VALIDATE @ {hh_mm_ss(time.time() - tic)}')
-        ## outputs purposes: test / test / train (to save alongside the model state dict)
+        ## outs are 4 -> test / test / train*2 (to save alongside the model state dict) / train to send 
         return self.vldt_info, self.watch_info.DATA, mtrc_info, curv_info, table_res
 
 

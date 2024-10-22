@@ -6,16 +6,20 @@ id: bnwvad
 #wght_init: xavier0 
 
 main:
-  emb_dim: 512
+  ## og 512 w/ i3drocng 1024
+  ## hdim of embedding layer in_dfeat->in_dfeat//emb_ratio
+  ## determines the ratio in relation to input dfeat
+  ## if dfeat//emb_ratio
+  emb_hdim_ratio: 2 #2 
 
   ## transf
   depth: 2
   heads: 4
   head_dim: 128
-  mlp_dim: 512
+  #ff_hdim: 512 ##set internaly to emb_hdim
   do: 0.
 
   ## normal head
-  nh_dimratios: [16, 32] ## mlp_dim/[] control conv dim
+  nh_dimratios: [16, 32] ## emd_dim/[] control conv dim
   nh_ks: [1, 1, 1]
-  #ncrops: ${datatrnsfrm.train.crops2use}
+  moment: 0.1

@@ -2,10 +2,10 @@
 
 defaults:
   - _self_
-  - data: xdv
+  - data: ???
   - data/faud: efat10bse
-  - dataloader: low
-  - path: ion #slarch #   
+  - dataload: low
+  - path: dflt 
   - xtra: dflt
   - hydra: dflt
   
@@ -13,11 +13,11 @@ defaults:
   - debug: null
 
 fext: 1
-name: 'fe_aud-${dyn_name:${data.faud.id},${data.faud.vrs}}'
+name: 'fe_aud-${dyn_join:"-",${data.faud.id},${data.faud.vrs}}'
 task_name: ${data.id}
 tags: [""]
 
-dvc: ${dyn_dvc:-1}
+dvc: ${dyn_dvc:1}
 
 
 modal: aud

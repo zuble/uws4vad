@@ -1,0 +1,5 @@
+_target_: src.model.loss.feat.MPP
+margin: 1
+w_triplet: [5, 20]
+w_mpp: 1.0
+

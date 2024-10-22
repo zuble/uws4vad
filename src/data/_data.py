@@ -1,7 +1,7 @@
 import torch
 import numpy as np, random
 
-import glob , os, os.path as osp, math, time, itertools
+import glob , os, os.path as osp, math, time, itertools, re
 from collections import OrderedDict, Counter, defaultdict
 import matplotlib.pyplot as plt
 
@@ -63,6 +63,23 @@ def run_dl(dl, iters=2, vis=False):
     except ValueError as e: 
         log.error(f'Error unpacking variables in batch {b_idx}: {e}')
 
+def run_dltest(dl, iters=2, vis=False):
+    """
+    """
+    import matplotlib.pyplot as plt
+    try:
+        for ii in range(iters):
+            tic = time.time()
+            log.info(f"Iter {ii + 1} / {iters}")
+            log.info(f"feats , label , fn")
+            epo_counts = []  # Store counts for each class across batches
+            epo_class_counts = [] # Store all the counts in the epoch
+            for b_idx, (feat, label, fn) in enumerate(dl):  # Unpack seqlen here
+                log.debug(f'B[{b_idx}]{feat.shape=} {feat.dtype} | {label=} | {fn=}')
+            log.debug(f'[{ii}] time to load {b_idx} batches {time.time()-tic}')
+    except ValueError as e: 
+        log.error(f'Error unpacking variables in batch {b_idx}: {e}')
+
 
 def debug_cfg_data(cfg):
     """
@@ -113,11 +130,12 @@ def debug_cfg_data(cfg):
             for idx, train_fn in enumerate(train_fns):
                 
                 for crop in range(cfg_frgb.ncrops):
-                    this = f"{train_fn}__{crop}.npy" 
-                    assert osp.exists(f"{root_rgb}/{MODE}/{this}"), f"{this} does not exist"
+                    this = f"{train_fn}__{crop}.npy"
+                    if not osp.exists(f"{root_rgb}/{MODE}/{this}"):
+                        log.warning(f"{root_rgb}/{MODE}/{this} does not exist")
                     
         if cfg.dataproc.crops2use.train == 0: ## aslong as itsused the dyn_crops2use no error here (def in datatrnsfrm._globo)
-            log.error(f"[{ID_DL}] wrong {cfg.dataproc.train.crops2use=}  while {ID_RGB}.NCROPS {cfg_frgb.ncrops}")
+            log.error(f"[{ID_DL}] wrong {cfg.dataproc.crops2use.train=}  while {ID_RGB}.NCROPS {cfg_frgb.ncrops}")
             raise Exception 
         
         #assert len(dbg_train_fns) == (cfg.data.train.normal + cfg.data.train.abnormal) * cfg_frgb.ncrops
@@ -141,8 +159,8 @@ def debug_cfg_data(cfg):
         else: 
             log.debug(f"[{ID_DL}] {ID_RGB} match number of files in {cfg.data.froot}/RGB/{MODE}/{ID_RGB}")
         
-        if cfg.dataproc.train.crops2use > 0: ## aslong as itsused the dyn_crops2use no error here (def in datatrnsfrm._globo)
-            log.error(f"[{ID_DL}] wrong {cfg.dataproc.train.crops2use=} while {ID_RGB}.NCROPS {cfg_frgb.ncrops}")
+        if cfg.dataproc.crops2use.train > 0: ## aslong as itsused the dyn_crops2use no error here (def in datatrnsfrm._globo)
+            log.error(f"[{ID_DL}] wrong {cfg.dataproc.crops2use.train=} while {ID_RGB}.NCROPS {cfg_frgb.ncrops}")
             raise Exception 
         
         ## always used one per now
@@ -150,9 +168,9 @@ def debug_cfg_data(cfg):
         #    log.error(f"[{ID_DL}] wrong {cfg.dataproc.crops2use.test=}  while {ID_RGB}.NCROPS {cfg_frgb.ncrops}")
         #    raise Exception
         
-        if cfg.dataproc.cropasvideo: 
-            log.error(f"[{ID_DL}] {cfg_frgb.ncrops=} while cropasvideo is True")
-            raise Exception 
+        #if cfg.dataproc.cropasvideo.test: 
+        #    log.error(f"[{ID_DL}] {cfg_frgb.ncrops=} while cropasvideo is True")
+        #    raise Exception 
         
         
     ## FEAT LEN ASSERT
@@ -204,7 +222,7 @@ def debug_cfg_data(cfg):
 
 ####################
 ## PATHS AND SUCH
-class FeaturePathListFinder:
+class FeaturePathListFinder: ## dirt as it can gets ffff
     """
         From cfg_data.ds.info.froot/cfg_feat.id/ finds a folder with mode in it (train / test)
         then based on cfg_data procedes to filter the features paths
@@ -216,8 +234,9 @@ class FeaturePathListFinder:
         
         cfg_lbls = cfg.data.lbls
         crops2use = cfg.dataproc.crops2use.get(mode)
+        cropasvideo = cfg.dataproc.cropasvideo.get(mode)
         cfg_feat = cfg.data.get(f"f{modality}")
-
+        
         mode = mode.upper()
         modality = modality.upper()
         
@@ -244,7 +263,7 @@ class FeaturePathListFinder:
 
         if modality == 'RGB' and mode == 'TRAIN':
 
-            if cfg.dataproc.get("cropasvideo"):
+            if cropasvideo: #cfg.dataproc.cropasvideo.train:
                 
                 if crops2use == cfg_feat.ncrops: ## get full list w/o ".npy"
                     flist = [f[:-4] for f in flist] 
@@ -260,7 +279,7 @@ class FeaturePathListFinder:
                 
         elif modality == 'RGB' and mode == 'TEST': 
             
-            if crops2use == 1: ## == 1
+            if crops2use: ## == 1
                 ##feature fn from features crop folder without duplicates (__0, __1...) 
                 flist = list(OrderedDict.fromkeys([osp.splitext(f)[0][:-3] for f in flist]))
                 
@@ -274,7 +293,10 @@ class FeaturePathListFinder:
             log.debug(f"AUD FLIST {len(flist)}  {flist[0]}")
             ## /mnt/t77/FEAT/XDV/AUD/VGGISH/TRAIN/A.Beautiful.Mind.2001__#00-01-45_00-02-50_label_A
             
-            if len(flist) != len(auxrgbflist):
+            if cropasvideo:#cfg.dataproc.get("cropasvideo"):
+                log.warning("not implemented")
+                pass
+            elif len(flist) != len(auxrgbflist) :
                 if not auxrgbflist: raise Exception
                 log.debug(f" auxerrgbflist {len(auxrgbflist)}")
                 ## /mnt/t77/FEAT/XDV/RGB/CLIPTSA/TRAIN/Bad.Boys.1995__#00-26-51_00-27-53_label_B2-0-0
@@ -296,37 +318,66 @@ class FeaturePathListFinder:
         ## filters into anom and norm w/ listNORM and listANOM
         ## filters for watching purposes w/ fn_label_dict
         self.fn_label_dict = {lbl: [] for lbl in cfg_lbls.info[:-1]}
-        fist = list(self.fn_label_dict.keys())[0]  ## 000.NORM
-        last = list(self.fn_label_dict.keys())[-1] ## 111.ANOM
-
+        self.fp_label_dict = {lbl: [] for lbl in cfg_lbls.info[:-1]}
+        self.fist = list(self.fn_label_dict.keys())[0]  ## 000.NORM
+        self.last = list(self.fn_label_dict.keys())[-1] ## 111.ANOM
+        #log.error(self.fn_label_dict)
+        
         for fp in flist:
             fn = osp.basename(fp)
+            #log.warning(fn)
             
-            ## v=Z12t5h2mBJc__#1_label_B1-0-0
-            if 'label_' in fn: xearc = fn[fn.find('label_'):]
-            else: xearc = fn
+            if 'label_' in fn: ## v=Z12t5h2mBJc__#1_label_B1-0-0
+                #xearc = fn[fn.find('label_'):]
+                match = re.search(r'label_(.*)(\__\d+)?', fn) ## B1-0-0 or A
+                xearc = "label_"+match.group(1)  # label_B1-0-0 or label_A
+            else: xearc = fn ## Assault018
             
-            #log.debug(f'{fp} {xearc} ')
+            #log.debug(f' {xearc} ')
             
-            if cfg_lbls.id[0] in xearc: ## Assault018
+            if cfg_lbls.id[0] in xearc: ## 'label_A' 'Normal'
                 self.listNORM.append(fp)
-                self.fn_label_dict[fist].append(fn)
-                #log.debug(f'{xearc} {fn}')
+                self.fn_label_dict[self.fist].append(fn)
+                self.fp_label_dict[self.fist].append(fn)
+                #log.debug(f'NORMAL {fn}')
+                
             else:
                 self.listANOM.append(fp)
-                self.fn_label_dict[last].append(fn)
-
+                self.fn_label_dict[self.last].append(fn)
+                #log.debug(f'ABNORMAL {fn}')
+                
                 for key in self.fn_label_dict.keys():
-                    if key in xearc: 
+                    ## B1.FIGHT  or  1.ABUSE
+                    tmp = key.split('.')
+                    
+                    if tmp[0] in xearc.split("-")[0]: ## B1 
+                        #log.warning(f"{key} \n\n")
                         self.fn_label_dict[key].append(fn)
-                        #log.debug(f'{key} {fn}')
+                        self.fp_label_dict[key].append(fp)
+                        
+                    elif tmp[1].lower() in xearc.lower(): ## abuse
+                        #log.warning(f"{key}\n\n")
+                        self.fn_label_dict[key].append(fn)
+                        self.fp_label_dict[key].append(fn)
                         
         #for label, lst in self.fn_label_dict.items(): 
-        #    log.debug(f'[{label}]: {len(self.fn_label_dict[label])}  ') ##{self.fn_label_dict[label]}
+        #    log.info(f'[{label}]: {len(self.fn_label_dict[label])}  ') ##{self.fn_label_dict[label]}
                 
                 
-    def get(self, mode, watch_list=[]):
-        if mode == 'ANOM': l = self.listANOM
+    def get(self, mode, culum_lbls=[], watch_list=[]):
+        if mode == 'ANOM': 
+            if not culum_lbls: l = self.listANOM
+            else: 
+                log.warning(f"\tCULUM is ON ")
+                if isinstance(culum_lbls, str): culum_lbls = [culum_lbls]
+                #mode.startswith('ANOM-'):  
+                #exclude_labels = mode[5:].split('-')+[self.fist]
+                exclude_labels = culum_lbls + [self.fist]
+                included_keys = [key for key in self.fp_label_dict.keys()
+                                if key not in exclude_labels]
+                log.info(f"{exclude_labels=}  {included_keys=}")
+                l = []
+                for key in included_keys: l.extend(self.fp_label_dict[key])
         elif mode == 'NORM': l = self.listNORM
         elif mode == 'watch': 
             l = []

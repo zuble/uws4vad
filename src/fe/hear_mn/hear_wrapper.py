@@ -42,6 +42,8 @@ class MNHearWrapper(nn.Module):
         self.all_blocks = all_blocks
         self.nr_of_blocks = 15  # mobilenet has always 15 blocks
 
+        print(f"MNHearWrapper.__innit__ {self.timestamp_window=}  {self.max_model_window=}  {self.timestamp_hop=} ")
+        
     def device(self):
         return self.device_proxy.device
 
@@ -51,6 +53,7 @@ class MNHearWrapper(nn.Module):
             specs = self.mel(x)
             mel_avgs = specs.detach().mean(dim=2)
             specs = specs.unsqueeze(1)
+            #print(f"{specs.shape}")
             x, features = self.net(specs)
 
         embed = torch.empty(0).to(x.device)
@@ -128,14 +131,14 @@ class MNHearWrapper(nn.Module):
         padded = F.pad(audio, (pad, pad), mode='reflect')
         padded = padded.unsqueeze(1)  # n_sounds, 1, (n_samples+pad*2)
         segments = F.unfold(padded, kernel_size=(1, window_size), stride=(1, hop)).transpose(-1, -2).transpose(0, 1)
-        
+        #print(f"{padded.shape=}   {segments.shape}")
         timestamps = []
         embeddings = []
         for i, segment in enumerate(segments):
             timestamps.append(i)
             embeddings.append(self.forward(segment.to(self.device())).cpu())
 
-        timestamps = torch.as_tensor(timestamps) * hop * 1000. / self.sample_rate
+        timestamps = torch.as_tensor(timestamps) * hop * 1000. / self.sample_rate ## 
 
         embeddings = torch.stack(embeddings).transpose(0, 1)  # now n_sounds, n_timestamps, timestamp_embedding_size
         timestamps = timestamps.unsqueeze(0).expand(n_sounds, -1)

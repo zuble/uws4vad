@@ -42,7 +42,7 @@ def dyn_vldtmtrc(ds, mtrc):
     return mtrc    
 
 def dyn_vldtfwd(netid, chuksiz):
-    if netid == 'attnmil': return chuksiz
+    if netid == 'anm': return chuksiz
     else: return None
 
 
@@ -80,8 +80,8 @@ def dyn_vadtaskname(ds,dtproc):
     tmp = f"{ds.frgb.id.lower()}"
     if dtproc.crops2use.train: 
         tmp += f"{str(dtproc.crops2use.train)}"
-    if ds.get("aud"): 
-        tmp += f"-{ds.aud.id.lower()}"
+    if ds.get("faud"): 
+        tmp += f"-{ds.faud.id.lower()}"
     return tmp
 
 #def dyn_fetaskname(cfg_faud,cfg_frgb):

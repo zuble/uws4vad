@@ -1,0 +1,37 @@
+# @package _global_
+
+
+defaults:
+  - override /data/frgb: i3drocng
+  - override /model: clas  ## clas anm
+  - override /net: mir   ## mir rtfm anm cmala
+
+#hydra:
+#  mode: MULTIRUN
+#  sweeper:
+#    params:
+#      dataload.balance.bag: 0, 0.5, 0.55, 0.45, 0.7
+
+exp_name: dloadbag
+tags: ["dataload"]
+
+  
+model:
+  epochs: 5  ## 5, 10, 10, 20
+  optima:
+    lr: 0.0001 
+#  loss:
+#    clas:
+#      per_crop: False
+
+dataproc: 
+  seg:
+    sel: itp
+    len: 32
+    #rnd: 1
+    #jit: 1
+
+dataload:
+  bs: 128
+#  balance:
+#    bag: 0.3

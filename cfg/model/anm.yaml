@@ -1,0 +1,13 @@
+defaults:
+  - _dflt
+  - pstfwd: dflt
+  - optima: radam #radam
+  - lrs: null
+  - loss@loss.salient: salient
+  #- _self_
+
+id: anm
+epochs: 10
+optima:
+  lr: 0.001
+  weight_decay: 0.0

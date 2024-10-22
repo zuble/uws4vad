@@ -1,0 +1,40 @@
+# @package _global_
+
+defaults:
+  - override /data/frgb: i3drocng
+#  - override /dataproc mil_intrplt
+#  - override /dataload: low
+  - override /model: anm
+  - override /net: anm
+
+#hydra:
+#  mode: MULTIRUN
+#  sweeper:
+#    #grid_params:
+#    params:
+#      dataload.balance.bag: 0, 0.5, 0.55, 0.45, 0.7, 0.3
+#      #dataproc.seg.len: 32, 200
+#      #dataproc.seg.sel: itp, seq
+#      #dataproc.seg.jit: 0, 1
+#      #net.main.embd_dim: 0, 1, 2
+
+exp_name: dprocsegjit
+tags: ["dataproc"]
+
+model:
+  epochs: 10
+  optima:
+    lr: 0.001
+net:
+  main:
+    embd_dim: 0
+dataproc: 
+  seg:
+    sel: itp
+    #len: 200
+    #jit: 0
+    #rnd: 0
+dataload:
+  balance:
+    bag: 0.5
+  bs: 32

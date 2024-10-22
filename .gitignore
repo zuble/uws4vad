@@ -1,5 +1,14 @@
+aux/
 log/*
+
 data/*
+!data/
+!data/gt
+
+!.gitkeep
+
+# visdom output file 
+vis.out
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -1,0 +1,61 @@
+# @package _global_
+
+defaults:
+  - override /data/frgb: vitamina #i3drocng vadclip cliptsa slowfast slowfast5 vitamina
+  #- override /data/faud: efat10bse
+  - override /model: magn  ## clas anm
+  #- override /model/lrs: step
+  - override /net: rtfm   ## mir rtfm anm cmala
+
+#hydra:
+#  mode: MULTIRUN
+#  sweeper:
+#    params:
+      #dataload.balance.bag: 0, 0.5, 0.55, 0.45, 0.7
+      #dataproc.seg.len: 32, 200
+      #model.loss.rtfm.preproc: og, sbs
+      #dataproc.culum: B1.FIGHT, B2.SHOOT, B4.RIOT, B5.ABUSE, B6.CARACC, G.EXPLOS
+
+#exp_name: OG-SBS-itp32-200-0.0001-64-0.5 #mpcsampler #dloadbag-0.0001-15
+#exp_name: OG-ip32-culum-caracc
+#exp_name: SBS-CULUMCARACC-itp32-bs64-0.00005
+#exp_name: CULUM-CA-EXPLOS-FIGHT-SBS-itp200-bs64-0.0001-bagset1.2
+#exp_name: CULUM-CA-EXPLOS-SBS-itp200-bs64-0.0001-bagset1.2
+tags: ["dataload"]
+
+  
+model:
+  epochs: 15  ## 5, 10, 10, 20
+  optima:
+    lr: 0.0001
+    weight_decay: 0.0005
+  loss:
+    rtfm:
+      preproc: sbs
+
+dataproc: 
+  seg:
+    sel: itp
+    len: 200
+    #jit: 1
+    #rnd: 1
+  cropasvideo: 
+    train: False  
+    test: True
+  #culum: 
+  #  #- B1.FIGHT
+  #  - B2.SHOOT
+  #  #- B4.RIOT
+  #  - B5.ABUSE
+  #  - B6.CARACC
+  #  - G.EXPLOS
+
+dataload:
+  bs: 64
+  balance:
+    bag: 0.5
+    set: 1.2
+
+
+
+## 2751792490 ~ rtfm-magn-xdv/timm__vitamin_base_224.datacomp1b_clip/runs/28-07_19-38-32

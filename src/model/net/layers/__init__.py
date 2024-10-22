@@ -8,7 +8,7 @@ from src.model.net.layers.pdc import PiramidDilatedConv
 
 from src.model.net.layers.gfn import GlanceFocus
 
-
+from src.model.net.layers.glmhsa import Transformer 
 
 
 
@@ -26,6 +26,5 @@ from src.model.net.layers.embdenhc import (
 from src.model.net.layers.scorhead import (
     SMlp,
     SConv,
-    SLstm,
-    SLstm
+    VLstm
 )

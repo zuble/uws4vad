@@ -35,5 +35,6 @@ class Infer():
         self._cfg = _cfg
         self.pfu = pfu
         
-    def __call__(self, ndata):  
-        return ndata['scores'] 
+    def __call__(self, ndata):
+        scores = self.pfu.uncrop(ndata['scores'], 'mean')
+        return scores

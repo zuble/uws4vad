@@ -25,10 +25,12 @@ def get_vid_model(cfg):
         
         log.info("timm model")
         model_names = timm.list_models('*clip*', pretrained=True)
-        for m in model_names:
-            log.info(f"{m}")
-        if cfg_model.vrs not in model_names: raise Exception
-        
+        if cfg_model.vrs is None or cfg_model.vrs not in model_names: 
+            for m in model_names: log.info(f"{m}")
+            log.error(f"{cfg_model.vrs} not in the list")
+            new_vrs = input(f"pick another")
+            if new_vrs not in model_names: raise Exception
+        else: log.info(f"going with {cfg_model.vrs}")
         model = timm.create_model(f"{cfg_model.id}/{cfg_model.vrs}", pretrained=True, num_classes=0)
         model.to(cfg.dvc)
         model.eval()
@@ -40,7 +42,7 @@ def get_vid_model(cfg):
             #lambda x: x.unsqueeze(0)
         ])
         log.debug(f"timm {cfg_trnsfrm=} \n{trnsfrm=}")
-        if cfg.dr: log.warning(model(trnsfrm(torch.randn(224, 224, 3).numpy()).unsqueeze(0)).shape)
+        if cfg.dr: log.warning(f"DRY RUN : {model(trnsfrm(torch.randn(224, 224, 3).numpy()).unsqueeze(0).to(cfg.dvc)).shape}")
         
         return model, trnsfrm, cfg_model
         
@@ -115,18 +117,6 @@ def get_aud_model(cfg):
             embeds, timestamps = model.get_timestamp_embeddings(audio) 
             log.info(f"{embeds.shape=} {timestamps.shape=} {embeds}")
             ## timestamps = [model.timestamp_hop*0, model.timestamp_hop*1, .., secs*1000]
-            
-            ## asert feats so each element corresponds to same fraction as clip_len on rgb feats
-            clip_dur = cfg.data.faud.clip_len / fps
-            samples_per_clip = clip_dur * sr
-            timestamps_per_clip = int(samples_per_clip / model.timestamp_hop)
-            log.info(f"{timestamps_per_clip=}")
-            
-            clip_starts = range(0, timestamps.shape[-1], timestamps_per_clip)
-            tmp = [embeds[0][s:s+timestamps_per_clip].mean(dim=0) for s in clip_starts]
-            sl_embeds = torch.stack(tmp)
-            log.info(f"{sl_embeds.shape=} {sl_embeds}") 
-    
     else: raise NotImplementedError
         
     return model, cfg_model

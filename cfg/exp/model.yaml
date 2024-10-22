@@ -1,8 +1,0 @@
-# @package _global_
-
-hydra:
-  mode: MULTIRUN
-  sweeper:
-    #grid_params:
-    params:
-      model: rtfm, mir

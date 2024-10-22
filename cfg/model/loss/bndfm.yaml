@@ -1,8 +1,0 @@
-mpp:
-  _target_: src.model.loss.feat.MPP
-  w_triplet: [5, 20]
-  w_mpp: 1.0
-
-normal:
-  _target_: src.model.loss.score.Normal
-  w: 1.0

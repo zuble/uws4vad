@@ -1,0 +1,50 @@
+# @package _global_
+
+
+defaults:
+  - override /data/frgb: i3drocng
+  - override /data/faud: vggish
+  
+  - override /model: clas  ## clas clas2
+  #- override /model/optima: adam
+  #- override loss@loss.clas: clas
+  - override /net: cmala   ## 
+
+hydra:
+  mode: MULTIRUN
+  sweeper:
+    params:
+#      dataload.balance.bag: 0, 0.5, 0.55, 0.45, 0.7 #  0, 0.5 , 0.55, 0.45, 0.7
+#      #dataproc.seg.sel: itp, seq
+      #dataproc.cropasvideo: True, False
+
+exp_name: culumriot-seq200-bs128-bal50
+tags: ["dataload"]
+
+  
+model:
+  epochs: 10
+  optima:
+    lr: 0.0005
+    weight_decay: 0.0005
+  #loss:
+  #  bce: 
+  #    _target_: src.model.loss.score.Bce  ## excpets vlscores in ndata
+
+  #  clas:
+  #    per_crop: False
+
+dataproc: 
+  seg:
+    sel: seq
+    len: 200
+  #cropasvideo: True
+  culum: 
+    - B4.RIOT
+
+
+dataload:
+  bs: 128   #128
+  balance:
+    bag: 0.5
+

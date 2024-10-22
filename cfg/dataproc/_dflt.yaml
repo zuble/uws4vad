@@ -5,14 +5,13 @@ seg:
   ## uni (uniformm) -> picks len idxs equally spaced trough linspace 
   ## seq (sequence) -> picks a sequence of len idx
   sel: ??? ## ucf: itp | xdv: seq
-  len: ??? ## ucf: 32 | xdv: 200
+  len: ??? ## ucf: 32  | xdv: 200
   ## ON / OFF 
-  jit: 0 ## jitter selection of adjacent idxs when sel is uni
+  jit: 0 ## jitter selection of adjacent idxs when sel is uni or itp (if feat nclips > len)
   rnd: 0 ## randomizes idxs of segmented features (each crop will have same indexing)
 
 
 ## CROPS
-## set here 
 ## set ncrops acording to data.frgb.ncrops and ds in use
 ## if -1: crops2use set to maximum
 ## 0 : feats in use must have no crops whatsoever, so fn are in format 'fn.npy'  
@@ -20,15 +19,25 @@ seg:
 ## 2 : feats in use have crop augm and center + topright (or wtv) eg. 'fn__0.npy' && 'fn__1.npy'
 ## ...
 ## if data has no crops , aut0set to 0
-## 1 as pc burns
 crops2use: 
   train: ${dyn_crops2use:${data.frgb.ncrops}, -1}
-  test: ${dyn_crops2use:${data.frgb.ncrops}, 1}
+  test: ${dyn_crops2use:${data.frgb.ncrops}, -1}
   
-## disabled for now
-cropasvideo: False ## each crop with be treated as a video it self
+## refer to model/pstfwd/PstFwdUtils
+cropasvideo: ## each crop with be treated as a video it self
+  ## true -> each crop is assigned its VL label, input as bs,t,f
+  ## false -> all video's crops form the input (if any) as bs*nc,t,f
+  train: False
+  ## false -> Network's Infer is responsible for dealing with it
+  ## true -> Validate/fwd avg output of Infer
+  test: True 
 #rgbl2n: 0 ## if 1 l2norm apllied right after load
 #audl2n: 0
 #l2n: 0
 
-
+## Curriculum-ish Learning for XDV
+## a list of entries from lbls.info from data/xdv
+## to be removed from train set based of frist label of files
+## test atm will have all files
+culum: ~ 
+  #- B4.RIOT

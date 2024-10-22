@@ -11,14 +11,14 @@ log = get_log(__name__)
 
 #########################################
 ## PDC + NLnet (RTFM)
-## excepts b, f, t
-## return b, f, t
+## excepts b, t, f
+## return b, t, f
 class Aggregate(nn.Module):
-    def __init__(self, dfeat, rate=4):
-        super(Aggregate, self).__init__()
+    def __init__(self, dfeat, rate=4, do=0.):
+        super().__init__()
         
         self.dfeat = dfeat ## orig in 2048
-        self.dout = dfeat // rate ## 2048/4=512
+        self.dout = dfeat // rate ## 2048/4=512  1024/4=256
         
         self.pdc = PiramidDilatedConv(dfeat, rate)
         
@@ -41,7 +41,9 @@ class Aggregate(nn.Module):
                     nn.BatchNorm1d(self.dfeat),
                     # nn.dropout(0.7)
                 )
+        self.do = nn.Dropout(do)
     def forward(self, x):
+        x = x.permute(0,2,1)
         residual = x ## (b, dfeat, t)
         
         ## local
@@ -54,6 +56,9 @@ class Aggregate(nn.Module):
         out = self.conv_5(out_agg) ## (b, dfeat, t)
         ## enhance
         xe = out + residual ## (b, dfeat, t)
+        
+        xe = self.do(xe)
+        xe = xe.permute(0,2,1)
         
         log.debug(f'Agg/x {x.shape}') 
         log.debug(f'Agg/pdc {out_cat.shape}')

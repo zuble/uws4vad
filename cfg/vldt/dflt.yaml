@@ -12,14 +12,19 @@ fwd_siz: ${dyn_vldtfwd:${net.id},9}
 ## rshpndfill: fill fl w/ last value until len is the same as gt
 ## truncate: truncate gt to len(fl)
 ## this mismatch mainly happens on diff sampling from CLIP
-match_gtfl: rshpndfill
+match_gtfl: truncate
 
+## determines how abnormal sub-labels (xdv) are treated when updating the validation dict handler
+## therefore it influences the metric calculations (auc_roc,auc_pr,ap) for abnormal sublabels
+## as well as the ROC/PR curve plot for the same sublabels
+## for the normal/abnormal (overall) metrics/curves has no impact
+multi_or_single: single
 
 train:
   ## epoch freq to perform validate
   ## if != 0 -> epochs // _
   ## if 0 -> set to 1 epoch
-  freq: ${dyn_vldt:${model.epochs},5}
+  freq: ${dyn_vldt:${model.epochs},0}  #10
   
   ## VDLTINFO + METRICS
   ## per what prespective show metrics
@@ -33,8 +38,8 @@ train:
 
   ## MODELHANDLER
   ## metrc and lbl to watch results for record wghts
-  ## if empty metric: ucf -> AUC_ROC | xdv -> AUC_PR
-  record_mtrc: ${dyn_vldtmtrc:${data.id},''}
+  ## if empty metric: ucf -> AUC_ROC | xdv -> AP (https://dl.acm.org/doi/pdf/10.1145/1143844.1143874 // https://readcache.xyz/api/p?url=https%3A%2F%2Ftowardsdatascience.com%2Fthe-wrong-and-right-way-to-approximate-area-under-precision-recall-curve-auprc-8fd9ca409064)       AUC_PR
+  record_mtrc: ${dyn_per_ds:${data.id}, AUC-ROC, AP} #${dyn_vldtmtrc:${data.id},''}
   record_lbl: 111.ANOM #${cfg.data.ds.info.lbls_info[-2]}
 
   ## TRAINMETER

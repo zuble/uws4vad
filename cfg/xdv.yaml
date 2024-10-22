@@ -6,7 +6,7 @@ defaults:
   - data: xdv
   - data/frgb: vadclip #cliptsa # 
   - data/faud: ~ # vggish
-  - dataload: low
+  - dataload: high
   - dataproc: seq
   - model: clas
   - net: mir
@@ -25,6 +25,8 @@ defaults:
 tmp: 0
 test: 0  
 train: 1   
+
+save: false
 
 load:
   strict_load: false

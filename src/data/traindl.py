@@ -20,6 +20,7 @@ def get_rng(seed):
     ## https://pytorch.org/docs/1.8.1/generated/torch.Generator.html#torch.Generator
     TCRNG = torch.Generator().manual_seed(seed)
 
+
 def get_trainloader(cfg, vis=None):
     from ._data import FeaturePathListFinder, debug_cfg_data
     if cfg.get("debug"): debug_cfg_data(cfg)
@@ -33,39 +34,69 @@ def get_trainloader(cfg, vis=None):
     get_rng(cfg.seed)
     
     rgbfplf = FeaturePathListFinder(cfg, 'train', 'rgb')
-    argbfl, nrgbfl = rgbfplf.get('ANOM'), rgbfplf.get('NORM')
+    argbfl, nrgbfl = rgbfplf.get('ANOM', cfg.dataproc.culum), rgbfplf.get('NORM')
     len_abn = len(argbfl); len_nor = len(nrgbfl)
-    log.info(f'TRAIN: RGB {len_nor} normal, {len_abn} abnormal') 
+    log.info(f'TRAIN: RGB {len_abn} abnormal, {len_nor} normal') 
     
     aaudfl, naudfl = [], []
     if cfg_ds.get('faud'):
+        log.debug("AUD")
         audfplf = FeaturePathListFinder(cfg, 'train', 'aud', auxrgbflist=argbfl+nrgbfl)
-        aaudfl, naudfl = audfplf.get('ANOM'),  audfplf.get('NORM')
-        log.info(f'TRAIN: AUD on {len(naudfl)} normal, {len(aaudfl)} abnormal')    
+        aaudfl, naudfl = audfplf.get('ANOM', cfg.dataproc.culum),  audfplf.get('NORM')
+        log.info(f'TRAIN: AUD ON {len(aaudfl)} abnormal, {len(naudfl)} normal')    
     
     rgbfl = argbfl + nrgbfl
     audfl = aaudfl + naudfl
-    labels = [1]*len_abn + [0]*len_nor
     
     ds = TrainDS(cfg_dload, cfg_ds, cfg_dproc, rgbfl, audfl)  
     
     ## --- Sampler ---
     bal_abn_bag = cfg_dload.balance.bag
     bal_abn_set = cfg_dload.balance.set
-    if bal_abn_bag == 0:
+    
+    if bal_abn_bag == -1:
+        ## https://kevinmusgrave.github.io/pytorch-metric-learning/samplers/
+        from src.data import LBL
+        
+        labels_id = cfg_ds.lbls.info[:-2]
+        log.info(f"MPerClassSampler: {labels_id}") ## len in xdv ~ 7
+        
+        lbl_mng = LBL(ds=cfg_ds.id, cfg_lbls=cfg_ds.lbls)
+        labels=[]
+        for path in rgbfl: ## apeend frist one
+            labels.append( lbl_mng.encod(osp.basename(path))[0] )
+        log.info(f"MPerClassSampler: {len(labels)}")
+        
+        m = cfg_dload.bs // len(labels_id)  
+        ## 128 -> 126 | 64 -> 63 | 32 -> 28
+        bs = cfg_dload.bs - cfg_dload.bs // len(labels_id)
+        niters = len(argbfl) #*2 #len(rgbfl) 
+        log.info(f"MPerClassSampler: {m=} {bs=} {niters=} ")
+        #assert m * len(labels_id) >= cfg_dload.bs
+        #assert cfg_dload.bs % m == 0
+        sampler = MPerClassSampler(
+                    labels=labels, 
+                    m=m, 
+                    #batch_size=cfg_dload.bs, #bs,
+                    length_before_new_iter = niters
+                    )
+    elif bal_abn_bag == 0:
         ## same as batch_size=cfg_dload.bs, shuffle=True, drop_last=True
         sampler = RandomSampler(ds, 
                     #replacement=False,
                     #num_samples=samples_per_epoch, # !!!! set intern to len(ds)
                     generator=TCRNG
                     )
-    else: sampler = AbnormalBatchSampler(
+    else:
+        labels = [1]*len_abn + [0]*len_nor
+        sampler = AbnormalBatchSampler(
                         labels,
                         bal_abn_bag=bal_abn_bag,
                         bs=cfg_dload.bs,
                         bal_abn_set=bal_abn_set,
                         generator=NPRNG
                     )
+
     bsampler = BatchSampler(sampler, cfg_dload.bs, True) #cfg_dload.droplast
     log.info(f"TRAIN: {sampler=} w/ {len(sampler)} -> [{bal_abn_bag=} {bal_abn_set=}]")
     log.info(f"TRAIN: {bsampler=} w/ {len(bsampler)} ")
@@ -88,10 +119,9 @@ def get_trainloader(cfg, vis=None):
                 }
             analyze_sampler(a, labels, cfg_ds.id, iters=1,vis=vis)
             dummy_train_loop(vis)
-    else: 
-        a={ f'abs_{bal_abn_bag}': bsampler}
-        analyze_sampler(a, labels, cfg_ds.id, iters=1,vis=None)
-
+    elif bal_abn_bag > 0:
+        analyze_sampler({f'abs_{bal_abn_bag}': bsampler}, labels, cfg_ds.id, iters=1,vis=None)
+    
     dataloader = DataLoader( ds,
                         batch_sampler=bsampler,
                         #batch_size=cfg_dload.bs, shuffle=True, drop_last=True,
@@ -118,7 +148,7 @@ class TrainDS(Dataset):
         self.trnsfrm = FeatSegm(cfg_dproc.seg)
         log.debug(f'TRAIN TRNSFRM: {self.trnsfrm=}')
         
-        self.cropasvideo = cfg_dproc.cropasvideo
+        self.cropasvideo = cfg_dproc.cropasvideo.train
         self.frgb_ncrops = cfg_dproc.crops2use.train
         self.seg_len = cfg_dproc.seg.len
         #self.l2n = cfg_dproc.l2n
@@ -325,7 +355,6 @@ class FeatSegm():
         self.len = cfg.len
         self.jit = cfg.jit
         self.rnd = cfg.rnd
-        self.rnd = cfg.rnd
         
         self.fx = self.interpolate if cfg.sel == 'itp' else self.sel_or_pad 
         log.info(f"FeatSegm w {self.fx=}")
@@ -386,7 +415,7 @@ class FeatSegm():
                 for i in range(self.len):
                     if i < self.len - 1:
                         if idxx[i] != idxx[i+1]: ## contemple if sel != seq
-                            idxx[i] = self.RNG.choice(range(idxx[i], idxx[i+1]))  
+                            idxx[i] = NPRNG.choice(range(idxx[i], idxx[i+1]))  
                 #log.debug(f'JIT / NEW {idxx=}')
         return idxx
     

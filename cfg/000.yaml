@@ -31,6 +31,9 @@ train: 1
 ## or 
 fext: 0
 
+
+save: False
+
 ## affects both train/test 
 load:
   strict_load: false

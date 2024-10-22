@@ -6,19 +6,45 @@ from src.utils.logger import get_log
 log = get_log(__name__)
 
 
-## this sohuld be here or in model/ since both loss and net make use of it
-## since it a class only maube its better in model/.. ??
-## does this needs to a nn.Module ?
 class PstFwdUtils:
-    """Provides utility functions for preprocesing loss calculations."""
-    def __init__(self, _cfg):
+    """Provides utility functions for preprocesing loss calculations / or inference."""
+    def __init__(self, _cfg, tst=False):
         self.dvc = _cfg.dvc
-        self.ncrops = _cfg.ncrops[0]
-        self.ncrops_tst = _cfg.ncrops[1]
-
+        
+        
+        
+        if not tst:
+            self.bs = _cfg.bs
+            self.cropasvideo = _cfg.cropasvideo[0]
+            if self.cropasvideo: 
+                ## net input is bs, t, f 
+                ## uncrop will have no effect
+                ## and each crop has assigned its vid lbl
+                self.ncrops = 1
+            else: 
+                ## net input is bs*nc, t, f
+                ## uncrop will avg tensors during loss preproc 
+                ## keeping each vid info not disperse
+                self.ncrops = _cfg.ncrops[0]
+            log.info(f"PFU TRAIN{self.ncrops=} {self.cropasvideo=}")
+        else: 
+            self.bs = 1
+            self.cropasvideo = _cfg.cropasvideo[1]
+            ## input is controlled by vldt/Validate/start
+            ## meaning that can either be nc,t,f or 1,t,f
+            if self.cropasvideo: 
+                ## Infer class calls to uncrop have no effect
+                ## therefore Infer outputs nc,t
+                ## in vldt/Validate/fwd crop dim is avg
+                self.ncrops = 1
+            else: 
+                ## uncrop @ Infer will avg
+                ## therefore Infer outputs t
+                self.ncrops = _cfg.ncrops[1]
+            log.info(f"PFU TEST{self.ncrops=} {self.cropasvideo=}")
+        
         ## 4train
         self.abn_bal = _cfg.bal_abn_bag
-        self.bs = _cfg.bs
         self.bat_div = int(self.bs*_cfg.bal_abn_bag)
         self.seg_len = _cfg.seg_len
         self.seg_sel = _cfg.seg_sel
@@ -53,9 +79,12 @@ class PstFwdUtils:
         ## !!! experiment w einops ?
         ## https://forums.fast.ai/t/lesson-24-official-topic/104358/3
         
-        log.debug(f"uncrop pre {list(arr.shape)}")
+        
         if self.ncrops > 1:
-            if arr.ndim == 2:  ## scores: b*nc,_
+            log.debug(f"uncrop pre {list(arr.shape)}")
+            if arr.ndim == 1:
+                arr = arr.view(self.bs,self.ncrops)
+            elif arr.ndim == 2:  ## scores: b*nc,_
                 arr = arr.view(self.bs, self.ncrops, -1)
             elif arr.ndim == 3:  ## features: b*nc*_*_
                 arr = arr.view(self.bs, self.ncrops, arr.shape[-2], arr.shape[-1])
@@ -66,16 +95,17 @@ class PstFwdUtils:
                 arr = arr[:, 0, ...]  # Select the first crop
             elif meth != '':
                 raise ValueError(f"Invalid uncrop method: {meth}")
-        
+            log.debug(f"uncrop pst {list(arr.shape)}")
         elif force: ## expose crop dim
+            log.debug(f"uncrop pre {list(arr.shape)}")
             if arr.ndim == 2: ## sl
                 raise NotImplementedError
             elif arr.ndim == 3: ## fl
                 arr = arr.view(self.bs, 1, arr.shape[-2], arr.shape[-1]) 
-        
+            log.debug(f"uncrop pst {list(arr.shape)}")
         ## tests are a whole nooda lvl
         #assert self.bs == arr.shape[0]    
-        log.debug(f"uncrop pst {list(arr.shape)}")    
+            
         return arr
             
     def unbag(self, arr, labels=None, permute=''):
@@ -97,14 +127,13 @@ class PstFwdUtils:
         else:
             #mask = labels != 0
             #log.error(f"\n{arr.shape}\n {labels}\n {mask}")
+            ## !!! innificient, prefer array index
             abn = arr[labels != 0]
             nor = arr[labels == 0]
             
             #self.is_equal(abn2,abn)
             #self.is_equal(nor2,nor)
-            
-        
-            
+
         ## permute here so indexing operates on right dim
         if permute == '1023':
             assert arr.ndim == 4
@@ -127,15 +156,29 @@ class PstFwdUtils:
         assert features.ndim == anchor.ndim == variance.ndim == 3
         return torch.sqrt(torch.sum((features - anchor) ** 2 / variance, dim=1))
     
-    def _get_mtrcs_dfm(self, feats, anchors, variances, infer=False):
+    def _get_mtrcs_dfm(self, feats, anchors, variances, infer=False, seqlen=None):
         dists, abn_dists, nor_dists = [], [], []
         for feat, anchor, var in zip(feats, anchors, variances):
             assert feat.ndim == 3
             assert anchor.ndim == var.ndim == 1
             
-            #log.debug(f"{feats.shape}&{anchor.shape}&{var.shape} -> {dist.shape}")
-            ## bs*nc,f,t -> bs*nc,t
+            ## calculate the malh_dist in seperate for each sample in batch 
+            ## truncating to seqlen[i]
+            #if seqlen is not None:
+            #    log.error(f"{seqlen.shape}  {seqlen}")
+            #    for i in range(len(seqlen)):
+            #        log.debug(f"FEAT {i + 1} ")
+            #        log.debug(feat[i, :, seqlen[i]:])  # Inspect distances after seqlen[i]
+            
+            ## bs*nc,f,t -> bs*nc,t        
             dist = self.calc_mahalanobis_dist(feat, anchor[None, :, None], var[None, :, None])
+            log.debug(f"{feat.shape}&{anchor.shape}&{var.shape} -> {dist.shape}")
+            # --- Inspection and Truncation ---
+            #if seqlen is not None:
+            #    for i in range(len(seqlen)):
+            #        log.debug(f"DIST1 {i + 1} ")
+            #        log.debug(dist[i, seqlen[i]:])  # Inspect distances after seqlen[i]
+            
             dist = self.uncrop(dist, 'mean') ## bs,t
             dists.append(dist)
             
@@ -182,7 +225,7 @@ class PstFwdUtils:
             blsr = self.blsr
 
         bag, t, f = feats.shape
-        assert self.tlen == t
+        assert self.seg_len == t
         assert feats.shape[:-1] == metric.shape
         
         ## dynamic batch selection
@@ -218,7 +261,8 @@ class PstFwdUtils:
         assert feats.shape[:-1] == metric.shape
         assert metric.ndim == 2, f"metric.ndim {metric.ndim} != 2"
         bag, t, f = feats.shape
-        idx_smpl = torch.topk(metric, k, dim=1)[1]  ## (bag, k)
+        idx_smpl = torch.topk(metric, k, dim=-1)[1]  ## (bag, k)
+        #log.warning(f"{idx_smpl} {metric.shape} ")
         sel_feats = torch.gather(feats, dim=1, index=idx_smpl.unsqueeze(-1).expand(-1, -1, f)) ## bag,k,f
         
         log.debug(f"FEAT SMPL SEL: from {list(feats.shape)} w/ {bag*t} segs -> sel {k=} -> {list(sel_feats.shape)}")
@@ -227,15 +271,17 @@ class PstFwdUtils:
     
     ## Sample-Batch Strategie
     def sel_feats_sbs(self, abn_feats, nor_feats, abn_mtrc, nor_mtrc, slsr=None, blsr=None):
-    
+        ## bag1,t,f / bag0,t,f / bag1,t / bag0,t
+        
         sel_abn_feats = self._sel_feats_by_batx(abn_feats, abn_mtrc, slsr, blsr)
         num_sel_abn = sel_abn_feats.shape[0] ## 2 balanc
         
         k_nor_sample = self._get_k_sample(num_sel=num_sel_abn)
         sel_nor_feats = self._sel_feats_by_smpl(nor_feats, nor_mtrc, k_nor_sample) 
             
-        # Ensure both selections have the same number of samples
-        sel_nor_feats = sel_nor_feats.permute(1, 0, 2).reshape(-1, f) ## k*bag,f 
+        ## Ensure both selections have the same number of samples
+        ## bag0,k,f -> k,bag0,f -> k*bag0,f -> num_sel_abn,f
+        sel_nor_feats = sel_nor_feats.permute(1, 0, 2).reshape(-1, sel_abn_feats.shape[-1])  
         sel_nor_feats = sel_nor_feats[:num_sel_abn]  
         
         return sel_abn_feats, sel_nor_feats     
@@ -243,9 +289,9 @@ class PstFwdUtils:
     
     def _get_k_sample(self, sel_lvl='dyn', num_sel=None, slsr=None, k=None):
         if sel_lvl == 'dyn':
-            if num_sel:
-                k_sample = int(num_sel / bag) + 1
-            else:
+            if num_sel: ## normal , originaly set as bs//2
+                k_sample = int(num_sel / (self.bs - self.bat_div) ) + 1
+            else: ### abnormal select_num_sample
                 if slsr is None: slsr = self.slsr
                 k_sample = int(t * slsr)
                 
@@ -253,7 +299,7 @@ class PstFwdUtils:
             ## selection idoes not take in account any ratio, and uses a static k
             if k is None: k_sample = self.k
             else: k_sample = k
-            
+        
         return k_sample
     
     ##################
@@ -298,7 +344,7 @@ class PstFwdUtils:
             #    
             #    tmp2 = self._sel_feats_by_smpl(abn_feat, abn_mtrc, k_sample)
             #    self.is_equal(tmp, tmp2)
-            sel_abn_feats, idx_abn = self._gather_feats_per_crop(abn_feats, abn_mtrc, avg)
+            sel_abn_feats, idx_abn = self.gather_feats_per_crop(abn_feats, abn_mtrc, avg)
             #self.is_equal(sel_abn_feats2, sel_abn_feats)
             
             ## nor    
@@ -310,7 +356,7 @@ class PstFwdUtils:
             #    
             #    tmp2 = self._sel_feats_by_smpl(nor_feat, nor_mtrc, k_sample)
             #    self.is_equal(tmp, tmp2)
-            sel_nor_feats, idx_nor = self._gather_feats_per_crop(nor_feats, nor_mtrc, avg)
+            sel_nor_feats, idx_nor = self.gather_feats_per_crop(nor_feats, nor_mtrc, avg)
             #self.is_equal(sel_nor_feats, sel_nor_feats2)
             
         else: ## bag,t,f -> bag,k,f
@@ -326,8 +372,7 @@ class PstFwdUtils:
             
             self.is_equal(sel_abn_feats, sel_abn_feats2)
             self.is_equal(sel_nor_feats, sel_nor_feats2)
-            
-            
+        
         log.debug(f"{k_sample=}")
         log.debug(f"{abn_mtrc.shape=} {nor_mtrc.shape=}")
         #log.debug(f"{abn_mtrc}\n{nor_mtrc}")

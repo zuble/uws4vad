@@ -2,10 +2,10 @@
 
 defaults:
   - _self_
-  - data: ucf
+  - data: ???
   - data/frgb: timm
-  - dataloader: low
-  - path: ion #slarch #   
+  - dataload: low
+  - path: dflt   
   - xtra: dflt
   - hydra: dflt
   
@@ -13,15 +13,15 @@ defaults:
   - debug: null
 
 fext: 1  
-name: 'fe_rgb-${dyn_name:${data.frgb.id},${data.frgb.vrs}}'
+name: 'fe_rgb-${dyn_join:"-",${data.frgb.id},${data.frgb.vrs}}'
 task_name: ${data.id}
 tags: [""]
 
-dvc: ${dyn_dvc:-1}
+dvc: ${dyn_dvc:1}
 
 
 modal: rgb
-dr: False ## dry-run
+dr: True ## dry-run
 ## full: feed (nclips,3,_,_)
 ## iter: feed (1,3,_,_)
 fwd_feed: full #iter

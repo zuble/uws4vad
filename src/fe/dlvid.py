@@ -12,15 +12,17 @@ import os, os.path as osp, glob, time, random
 from src.utils import get_log
 log = get_log(__name__)
 
+## it might come handy
+## https://github.com/OpenGVLab/InternVideo/blob/main/InternVideo2/multi_modality/preprocess/compress.py
 
 
 def get_vidloader(cfg, trnsfrm, cfg_model, vpaths):
-    cfg_loader = cfg.dataloader.test
+    cfg_loader = cfg.dataload.test
     return DataLoader(  
                     VideoDS(cfg, trnsfrm, cfg_model, vpaths), 
                     batch_size=1, 
                     shuffle=False,
-                    num_workers=0,#cfg_loader.nworkers, 
+                    num_workers=5,#cfg_loader.nworkers, 
                     pin_memory=False, 
                     )
 
@@ -34,11 +36,11 @@ class VideoDS(Dataset):
         assert len(self.vpaths) > 0, "No video found in the provided paths"
         log.info(f"{len(self.vpaths)=}")
         
-        self.records = [VideoRecord(vp, self.cfg_model) for vp in self.vpaths]
-        log.info(f"{len(self.records)=}")
+        #self.records = [VideoRecord(vp, self.cfg_model) for vp in self.vpaths]
+        #log.info(f"{len(self.records)=}")
         
     def _get(self, vrec):
-        
+        ## actually decodes frames
         clips = []
         for k, cidx in enumerate(vrec.cidxs_bat):
             #log.warning(f"clip[{k}] frame[{cidx}]")
@@ -64,45 +66,64 @@ class VideoDS(Dataset):
                 
         return torch.stack(clips,dim=0) 
         #return clips
+    '''
+    ## missin files : 
+    v=8cTqh9tMz_I__#1_label_A 
     
+    v=9eME1y6V-T4__#01-12-00_01-18-00_label_A
+        https://github.com/dmlc/decord/issues/145
+        decord._ffi.base.DECORDError: 
+        [02:55:19] /github/workspace/src/video/ffmpeg/threaded_decoder.cc:292: 
+        [02:55:19] /github/workspace/src/video/ffmpeg/threaded_decoder.cc:218: 
+            Check failed: avcodec_send_packet(dec_ctx_.get(), pkt.get()) >= 0 (-1094995529 vs. 0) 
+            Thread worker: Error sending packet
+    '''
     def __getitem__(self, idx):
-        log.debug( self.vpaths[idx] )
-        vrec = self.records[idx]
-        clips = self._get(vrec)
-        return clips, vrec.vname
+        p = self.vpaths[idx]
+        log.debug( p )
+        
+        #vrec = self.records[idx]
+        vrec = VideoRecord( self.vpaths[idx], self.cfg_model)
+        if vrec.vid is None or 'v=9eME1y6V-T4__#01-12-00_01-18-00_label_A' in p: 
+            clips = -1; safe=0
+        else: clips = self._get(vrec); safe=1
+        
+        return clips, vrec.vname, safe
     
     def __len__(self):
         return len(self.vpaths)
     
-    
-
 
 class VideoRecord:
     def __init__(self, vpath, cfg_model):
         self.vpath = vpath
         self.vname = osp.splitext(osp.basename(vpath))[0]
+        log.info(f'{"*"*4} {self.vname} {"*"*4}')
         
         ###############
-        vid2 = cv2.VideoCapture(vpath)
-        if not vid2.isOpened(): raise ValueError(f"Failed to open video {vpath}")
-        self.fps = int(vid2.get(cv2.CAP_PROP_FPS))
-        self.tframes = int(vid2.get(cv2.CAP_PROP_FRAME_COUNT))
-        self.w = vid2.get(cv2.CAP_PROP_FRAME_WIDTH)
-        self.h = vid2.get(cv2.CAP_PROP_FRAME_HEIGHT)
-        vid2.release()
-        log.info(f'{self.vname}  {str(self.fps)} fps | {str(self.tframes)} frames {self.h}*{self.w}')
+        #vid2 = cv2.VideoCapture(vpath)
+        #if not vid2.isOpened(): raise ValueError(f"Failed to open video {vpath}")
+        #self.fps = int(vid2.get(cv2.CAP_PROP_FPS))
+        #self.tframes = int(vid2.get(cv2.CAP_PROP_FRAME_COUNT))
+        #self.w = vid2.get(cv2.CAP_PROP_FRAME_WIDTH)
+        #self.h = vid2.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        #vid2.release()
+        #log.info(f'{str(self.fps)} fps | {str(self.tframes)} frames {self.h}*{self.w}')
         ##############
-        
-        #self.vid = VideoReader(vpath, width=self.w, height=self.h, num_threads=1, ctx=cpu(0))
-        self.vid = VideoReader(vpath, num_threads=1, ctx=cpu(0))
-        self.vid_len = len(self.vid)
-        assert self.vid_len == self.tframes, f'{self.vid_len} != {self.tframes}'
-        
-        self.frame_step = cfg_model.frame_step
-        self.clip_len = cfg_model.clip_len
-        self.frame_sel = cfg_model.frame_sel ## CLIP only
-        
-        self.get_vidxs()
+        try :
+            #self.vid = VideoReader(vpath, width=self.w, height=self.h, num_threads=1, ctx=cpu(0))
+            self.vid = VideoReader(vpath, num_threads=1, ctx=cpu(0))  #
+            #log.warning(self.vid.get_avg_fps())
+            #log.warning(len(self.vid))
+            self.vid_len = len(self.vid)
+            #assert self.vid_len == self.tframes, f'{self.vid_len} != {self.tframes}'
+            
+            self.frame_step = cfg_model.frame_step
+            self.clip_len = cfg_model.clip_len
+            self.frame_sel = cfg_model.frame_sel ## CLIP only
+            
+            self.get_vidxs()
+        except: self.vid = None
     
     
     def get_vidxs(self):
