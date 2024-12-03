@@ -86,8 +86,6 @@ def get_vid_model(cfg):
         
 
 
-
-
 ## ----------------------- ##
 def get_aud_model(cfg):
     cfg_model = cfg.data.faud

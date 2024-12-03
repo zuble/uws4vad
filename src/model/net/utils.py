@@ -57,7 +57,7 @@ def build_net(cfg):
     ## how to have a feature modulator variable network
     ## without relying on instantiate in individuals Network classes 
     ## while having a robust builder in order to lock a Network design
-    ## still delving into this and its blocking me to experiment
+    ## still delving into this 
 
     log.info(f"{cfg.net.main=}")
     #cfg_net_main = cfg.net.main

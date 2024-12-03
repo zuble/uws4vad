@@ -1,7 +1,8 @@
 # @package _global_
 
-# https://github.com/idejie/PyTorch-Hydra-Template
-  
+# inspired from https://github.com/idejie/PyTorch-Hydra-Template
+## sets the base cfg which ucf/xdv utilizes
+
 ###############
 ## determines path of log @ hydra/dflt.yaml
 ## ${path.log_dir}/${name}/${task_name}
@@ -24,14 +25,14 @@ seed: 0
 deterministic: 0
 
 ## what file to run in src
-## follows this order, without repeating
+## follows this order, without repeating (refeer to main)
 tmp: 0
 test: 0  
 train: 1  
 ## or 
 fext: 0
 
-
+## saves high_state if min reached at EOEpo (ref2 model/handler.py)
 save: False
 
 ## affects both train/test 

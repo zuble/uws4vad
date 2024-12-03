@@ -32,7 +32,7 @@ dryrun: False
 
 
 ## both validate and test reuse this values
-## as the dataloader is created from same point
+## as the dataloader is created from same point/data
 test:
   in2mem: False
   itersepo: ~ ## assigned in runtime @ get_testloader 

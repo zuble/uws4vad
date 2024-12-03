@@ -305,6 +305,7 @@ class AudFeatExtract():
         confirmation = input(f"all good ? (y) ")
         if confirmation.lower() != 'y': return
         
+        ## pass 2 try/except
         for aidx, data in enumerate(dataloader):
             audio = data[0][0]; vn = data[1][0]; fps = data[2].item(); tframes = data[3].item() 
             log.info(f"{'*'*33}")

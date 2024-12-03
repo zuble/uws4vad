@@ -21,7 +21,7 @@ root = pyrootutils.setup_root(
 _HYDRA_PARAMS = {
     "version_base": None,
     "config_path": str(root / "cfg"),
-    "config_name": "ucf.yaml",
+    "config_name": "xdv.yaml",
 }
 
 
@@ -34,7 +34,8 @@ def main(cfg: DictConfig) -> None:
     #log.debug(f"Original dir : {hydra.utils.get_original_cwd()}")
 
     #log.debug(utils.collect_random_states())
-    #utils.xtra(cfg)
+    utils.xtra(cfg)
+    return
     if cfg.get("tmp"):
         from src import tmp
         utils.xtra(cfg)
@@ -49,7 +50,7 @@ def main(cfg: DictConfig) -> None:
         #tmp.aud_emb(cfg)
         #tmp.aud_len_mat()
 
-
+    ## feature extraction
     elif cfg.get("fext"):
         if cfg.modal == 'rgb':
             from src.fext import VisFeatExtract
@@ -61,10 +62,10 @@ def main(cfg: DictConfig) -> None:
             utils.xtra(cfg)
             AudFeatExtract(cfg)
 
-            
+    ## train/test.py    
     else:
         ## ----------------------------------
-        ## move out
+        ## configure vis based on hydra params
         #vis=None
         #if not cfg.get("debug", False):
         vis_name = f"{cfg.name}_{cfg.task_name}"

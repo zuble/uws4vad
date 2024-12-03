@@ -18,8 +18,9 @@ defaults:
   - exp: null #model
   - debug: null
 
-#name: ${dyn_name:${model.net.id},${model.net.vrs}}
-#task_name: ${dyn_vadtaskname:${data},${dataproc}} 
+## all set automat in 000.yaml
+#name: 
+#task_name:
 #tags: [""]
 
 tmp: 0

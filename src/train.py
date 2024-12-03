@@ -149,7 +149,7 @@ def trainer(cfg, vis):
             #progress.update(task1, advance=1)
             
         log.info(f"$$$$ train done in {hh_mm_ss(time.time() - trn_inf['ttic'])}")
-        if not cfg.get("debug"): ## move                                                    <<<<<<<<<
+        if not cfg.get("debug"): ## move       <<<<<<<<<
             if cfg.get("save"): MH.save_state()
             if MH.high_info['rec_val'] > 0.5:
                 pltr = Plotter(vis)

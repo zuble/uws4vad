@@ -26,7 +26,8 @@ lbls:
     test:
       multi:  [300, 126, 104, 101, 11, 106, 103, 500, 800]
       single: [300, 120, 84,  101, 8,  91,  96,  500, 800]
-  
+
+
 gt: ${hydra:runtime.cwd}/data/gt/xdv.txt
 tframes: '${hydra:runtime.cwd}/data/gt/xdv_tframes.txt'
 froot: ${path.xdv_froot}

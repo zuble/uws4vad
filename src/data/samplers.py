@@ -149,11 +149,11 @@ class AbnormalBatchSampler(Sampler):
         idx_list = []
         total_yielded = 0 
         
-        # Shuffle indices within each class beforehand
+        ## Shuffle indices within each class beforehand
         for label in self.labels: 
             self.GEN.shuffle(self.labels_to_indices[label]) ## !!!! how can i check the seed here
             
-        # Pointers to track the current position within each class's indices
+        ## Pointers to track the current position within each class's indices
         class_pointers = {label: 0 for label in self.labels}
         for batch in range(self.num_batches):
             batch_indices = []
@@ -168,7 +168,7 @@ class AbnormalBatchSampler(Sampler):
                     if pointer >= len(t):
                         pointer = 0
                         class_pointers[label] = 0
-                        self.GEN.shuffle(t)  # Reshuffle the indices for this class
+                        self.GEN.shuffle(t)  ## Reshuffle the indices for this class
                         #log.info(f"\tReshuffling indices for label {label}")
                     batch_indices.append(t[pointer])
                     pointer += 1

@@ -7,11 +7,9 @@ log = get_log(__name__)
 
 
 class PstFwdUtils:
-    """Provides utility functions for preprocesing loss calculations / or inference."""
+    """Provides utility functions for preprocesing loss calculations or inference."""
     def __init__(self, _cfg, tst=False):
         self.dvc = _cfg.dvc
-        
-        
         
         if not tst:
             self.bs = _cfg.bs
@@ -44,11 +42,14 @@ class PstFwdUtils:
             log.info(f"PFU TEST{self.ncrops=} {self.cropasvideo=}")
         
         ## 4train
+        ## batch sampler
         self.abn_bal = _cfg.bal_abn_bag
         self.bat_div = int(self.bs*_cfg.bal_abn_bag)
+        ## segmentation
         self.seg_len = _cfg.seg_len
         self.seg_sel = _cfg.seg_sel
         
+        ## segment selection
         ## static sel
         self.k = _cfg.k
         self.do = nn.Dropout(_cfg.do)
@@ -448,7 +449,7 @@ class PstFwdUtils:
                 
         log.info(log_string)
 
-    ## agg return
+    ## aggregatio on return
     def merge(self, *dicts):
         res = {}
         for d in dicts: res.update(d)

@@ -22,17 +22,17 @@ fext:
 
 ##########
 root_ion: /mnt/t77
-root_slarch: /run/media/zuble/T77
+root_slarch: /mnt/T77 #/run/media/zuble/T77 
 root_feup: /media/jtstudents/T77
 ## since run from usb and dif mach
 data_root: ${dyn_dataroot:${path.root_ion},${path.root_slarch},${path.root_feup}}
 
-## each dl/ds/info has both gt/vroot/froot point to these
-ucf_froot: '${path.data_root}/FEAT/UCF'
-ucf_vroot: '${path.data_root}/DS/UCF'
+## each data.(ucf/xdv.yaml).(vroot/froot) point to these
+ucf_froot: '${path.data_root}/FEAT/UCF'  ## features
+ucf_vroot: '${path.data_root}/DS/UCF'    ## videos
 
-xdv_froot: '${path.data_root}/FEAT/XDV'
-xdv_vroot: '${path.data_root}/DS/XDV'
+xdv_froot: '${path.data_root}/FEAT/XDV'  ## features
+xdv_vroot: '${path.data_root}/DS/XDV'    ## videos
 #/raid/DATASETS/anomaly/XD_Violence/testing_copy
 #/raid/DATASETS/anomaly/XD_Violence/features/
 #########

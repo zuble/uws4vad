@@ -64,10 +64,10 @@ len: ## 950A 950N
 ## data.frgb/faud.id represents folder name
 ## froot
 ## └── RGB
-##     ├── CLIPTSA
-##     │   ├── TEST
-##     │   └── TRAIN
-##     └── I3DROCNG
+##     ├── CLIPTSA (data.frgb.cliptsa.id)
+##     │   ├── TEST
+##     │   └── TRAIN
+##     └── I3DROCNG (data.frgb.i3drocng.id)
 ##         ├── TEST
 ##         └── TRAIN
 gt: '${hydra:runtime.cwd}/data/gt/ucf.txt' ## del normal lines

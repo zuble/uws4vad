@@ -18,8 +18,9 @@ defaults:
   - exp: null
   - debug: null
 
-#name: ${dyn_underscore:${model.id},${net.id},${net.vrs}}  ## -> {}_{}
-#task_name: ${dyn_vadtaskname:${data},${dataproc}}
+## all set automat in 000.yaml
+#name: 
+#task_name: 
 #tags: [""]
 
 tmp: 0
