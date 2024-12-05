@@ -1,0 +1,1 @@
+<embed src="docs/img/vadpipe4.pdf" type="application/pdf">
