@@ -13,7 +13,7 @@ concurrency:
 permissions:
   contents: write
 jobs:
-  publish-wiki:
+  wiki-sync:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
