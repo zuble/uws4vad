@@ -1,7 +1,9 @@
 name: wiki-sync
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - docs-updt
     paths:
       - docs/**
       - .github/workflows/wiki-sync.yml
