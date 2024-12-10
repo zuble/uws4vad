@@ -21,13 +21,14 @@ fext:
   out_dir: ${path.work_dir}/data/ftmp/
 
 ##########
-root_ion: /mnt/t77
-root_slarch: /mnt/T77 #/run/media/zuble/T77 
-root_feup: /media/jtstudents/T77
 ## since run from usb and dif mach
+root_ion: /mnt/t77
+root_slarch: /mnt/T77
+root_feup: /media/jtstudents/T77
 data_root: ${dyn_dataroot:${path.root_ion},${path.root_slarch},${path.root_feup}}
+## data_root: set your data_root accordingly, refer to wiki for more info
 
-## each data.(ucf/xdv.yaml).(vroot/froot) point to these
+## each data.(ucf/xdv).(vroot/froot) point to these
 ucf_froot: '${path.data_root}/FEAT/UCF'  ## features
 ucf_vroot: '${path.data_root}/DS/UCF'    ## videos
 

@@ -4,11 +4,10 @@ defaults:
   #- optima: 
   #- lrs: 
   #- pstfwd: dflt
-  #- loss: ??? ## better to have expose in each model_cfg
+  #- loss@loss.{custom name}: {target .yml in loss/.. }  
 
 dryfwd: False
 
 id: ???
 epochs: ???
 optima: ???
-#loss: ???

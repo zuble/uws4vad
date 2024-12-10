@@ -2,7 +2,7 @@
 ## timm
 # https://github.com/huggingface/pytorch-image-models
 id: timm
-## if no vrs, a input prompt appears
+## if no vrs, a input prompt appears with all models available
 vrs: vitamin_base_224.datacomp1b_clip
 #vrs: vitamin_small_224.datacomp1b_clip
 #vrs: vitamin_base_224.datacomp1b_clip

@@ -1,6 +1,6 @@
 # Common parameters for the PstFwdUtils
 ## ths class is used for for Infer class in each netwrk
-## as well as for each Loss class
+## as well as an additional parameter for each Loss class
 _target_: src.model.pstfwd.PstFwdUtils
 _cfg:
   dvc: ${dvc}
@@ -16,10 +16,10 @@ _cfg:
   seg_sel: ${dataproc.seg.sel}
   seg_len: ${dataproc.seg.len}
 
-  ## 
+  ## static selection 
   k: 3
   do: 0.7
   
-  ## sbs sel strat train
+  ## SBS (SampleBatchSelection)
   sls_ratio: ${dyn_per_ds:${data.id}, 0.1, 0.2} ## ucf, xdv
   bls_ratio: ${dyn_per_ds:${data.id}, 0.2, 0.4} ## ucf, xdv

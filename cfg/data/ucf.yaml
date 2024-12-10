@@ -61,7 +61,7 @@ len: ## 950A 950N
     normal: 150
     abnormal: 140
 
-## data.frgb/faud.id represents folder name
+## data.(frgb/faud).id represents folder name
 ## froot
 ## └── RGB
 ##     ├── CLIPTSA (data.frgb.cliptsa.id)
@@ -70,6 +70,7 @@ len: ## 950A 950N
 ##     └── I3DROCNG (data.frgb.i3drocng.id)
 ##         ├── TEST
 ##         └── TRAIN
+
 gt: '${hydra:runtime.cwd}/data/gt/ucf.txt' ## del normal lines
 tframes: '${hydra:runtime.cwd}/data/gt/ucf_tframes.txt'
 froot: ${path.ucf_froot}

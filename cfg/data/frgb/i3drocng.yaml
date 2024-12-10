@@ -1,5 +1,4 @@
 ## https://github.com/Roc-Ng/DeepMIL
-## features will be searched in froot/id set in each ds.info set dl/.yaml
 id: I3DROCNG
 ds: 
   - ucf

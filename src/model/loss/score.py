@@ -121,7 +121,6 @@ class Ranking(nn.Module):
         self.lambda2 = _cfg["lambda12"][1] 
         self.use_tcn = False
         
-    ## MotionAware found it harmfull
     def smooth(self, arr):
         '''
         slides arr one index in negative direction
@@ -147,7 +146,7 @@ class Ranking(nn.Module):
         loss = torch.tensor(0., requires_grad=True, device=scores.device)
         
         abn_scores, nor_scores = self.pfu.unbag(scores, labels)
-        for i in range(self.pfu.bat_div): ## bs//2
+        for i in range(self.pfu.bat_div): 
             maxn = torch.max( nor_scores[i][:seqlen[i]] ) 
             maxa = torch.max( abn_scores[i][:seqlen[i]] )
             #maxa = torch.mean( torch.topk( abn_scores[i][:seqlen[i]], k=self.pfu.seg_len//4)[0] )

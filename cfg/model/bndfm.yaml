@@ -5,7 +5,6 @@ defaults:
   - lrs: null
   - loss@loss.normal: bn-score
   - loss@loss.mpp: bn-mpp
-  #- _self_
 
 id: bndfm
 epochs: 10

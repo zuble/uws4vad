@@ -18,7 +18,7 @@ defaults:
 #      #dataproc.seg.jit: 0, 1
 #      #dataproc.seg.rnd: 0, 1
 #      #model.loss.mpp.margin: 2,3,4,5,6,7,8,9,10
-      #dataproc.culum: B1.FIGHT, B2.SHOOT, B4.RIOT, B5.ABUSE, B6.CARACC, G.EXPLOS
+#      #dataproc.culum: B1.FIGHT, B2.SHOOT, B4.RIOT, B5.ABUSE, B6.CARACC, G.EXPLOS
 
 
 #exp_name: dloadbag-itp200-bs128-bagbal50-0.0001-CAS #dloadbag-itp32-12300-bs128-bagbal50-fast0.001

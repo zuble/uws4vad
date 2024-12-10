@@ -1,24 +1,25 @@
-So (almost) everything is configured trough [hydra](https://hydra.cc/docs/intro/). It follows a hierarchical configuration by composition and can be overrided through config files and the command line. 
+The config is managed trough [hydra](https://hydra.cc/docs/intro/), following a hierarchical configuration by composition and can be overrided through config files and the command line. 
 
 To get a view of the config and hydra-related arguments.
  
-    python main.py --help
-    python main.py --hydra-help
+```bash
+python main.py --help
+python main.py --hydra-help'
+```
 
-
-The final config follows the order provided in the entry cfg, which is stated in main.py decorator. One can override with ```-cn ucf/xdv```
+The final config follows the order provided in the entry cfg file, which is stated in main.py decorator. One can override with ```-cn ucf/xdv```
 
 ### Structure Overview
 
-Refer to *000.yaml*, (which serves as base for both) and mostly to *ucf/xdv.yaml* as they are the entry, the configs are fairly commented
+Refer to *ucf/xdv.yaml* as they are the entry and *000.yaml* (which serves as base for both), to better understand the parameters and its use. The same applies for others, as the files are fairly commented.
 
 ```bash
 cfg/
 ├── 000.yaml                # Default base configuration
-├── _feaud.yaml             # Audio feature extraction config
-├── _fergb.yaml             # RGB feature extraction config
-├── ucf.yaml                # UCF dataset specific config
-├── xdv.yaml                # XD-Violence dataset specific config
+├── _feaud.yaml             # Audio feature extraction 
+├── _fergb.yaml             # RGB feature extraction 
+├── ucf.yaml                # UCF dataset specific 
+├── xdv.yaml                # XD-Violence dataset specific 
 │
 ├── data/                   # Dataset 
 │   ├── faud/              # Audio feature
@@ -37,10 +38,10 @@ cfg/
 │   ├── seq.yaml           # Sequence processing
 │   └── uni.yaml           # Uniform sampling
 │
-├── debug/                 # Debug 
+├── debug/                 
 ├── exp/                   # Experiment 
 │
-├── model/                 # Model 
+├── model/                 
 │   └── 
 │
 ├── net/                   # Network 
