@@ -16,8 +16,6 @@ hydra:
   verbose: True  ## sets hydra loggers to debug
   
 
-
-
 ## sets log lvl 2 dbg when each entrie in module __name__
 debug:
   id: debug
@@ -36,7 +34,7 @@ dataload:
     nworkers: 0
     pinmem: False
     prstwrk: false
-#
+
 #model:
 #  epochs: 1
 

@@ -4,7 +4,7 @@ defaults:
   #- optima: 
   #- lrs: 
   #- pstfwd: dflt
-  #- loss@loss.{custom name}: {target .yml in loss/.. }  
+  #- loss@loss.{custom name}: {target .yml in loss/.. }
 
 dryfwd: False
 

@@ -12,7 +12,5 @@ debug:
     - "src.data.traindl"
     - "src.data._data"
 
-
-
 dataload:
   dryrun: True

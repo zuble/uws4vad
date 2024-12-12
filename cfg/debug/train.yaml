@@ -11,8 +11,6 @@ debug:
     - src.model.pstfwd
     - src.model.loss
 
-
-
 model:
   epoch: 1
 

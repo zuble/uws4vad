@@ -1,7 +1,7 @@
 defaults:
   - _self_
 
-id: ??? 
+id: ???
 vrs: ""
 wght_init: xavier0 
 
@@ -14,7 +14,7 @@ main:
 fm: ~
 cls: ~
 
-## every network def has its one inference fx
+## every network has its one inference class
 infer:
   _target_: "src.model.net.${net.id}.Infer"
   _cfg: ~
