@@ -20,7 +20,7 @@ def get_log(module_name, cfg=None):
         #else: lvl
         
         os.environ['UWS4VAD_LOGP'] = cfg.path.out_dir
-        log.error(cfg.path.out_dir)
+        log.info(f"{cfg.path.out_dir=}")
             
     else:
         lvl = logging.INFO
@@ -33,7 +33,6 @@ def get_log(module_name, cfg=None):
                 lvl = logging.DEBUG
                 log.warning(f"dbg[{dbgp}] set {module_name}")
                 break
-    
                 
     log.setLevel( lvl )
     return log

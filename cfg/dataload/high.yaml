@@ -5,7 +5,7 @@ defaults:
 
 in2mem: False
 
-nworkers: ${dyn_nworkers:10}  ## 0 -> cpu//4 ;; -1 -> all cores
+nworkers: ${dyn_nworkers:-1}
 pinmem: True
 pftch_fctr: 4
 prstwrk: True
@@ -14,7 +14,7 @@ prstwrk: True
 test:
   in2mem: False
   ## slowing cause usb troughput max out, better use low
-  nworkers: ${dyn_nworkers:10}  ## 0 -> cpu//4 ;; -1 -> all cores  
+  nworkers: ${dyn_nworkers:-1}
   pinmem: True
   pftch_fctr: 4
   prstwrk: True

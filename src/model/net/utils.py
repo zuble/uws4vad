@@ -54,10 +54,11 @@ def build_net(cfg):
     log.info(f"{dfeat=}")
     
     ## !!!!!!!!!!!!!!
-    ## how to have a feature modulator variable network
+    ## a robust builder in order to lock a Network design 
+    ## having multiple variable networks,
     ## without relying on instantiate in individuals Network classes 
-    ## while having a robust builder in order to lock a Network design
-    ## still delving into this 
+    ## still delving into this, for now take care of cls here only
+    ## if need do it under the Network class
 
     log.info(f"{cfg.net.main=}")
     #cfg_net_main = cfg.net.main

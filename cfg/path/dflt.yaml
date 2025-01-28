@@ -1,11 +1,10 @@
 # path to root directory
 # this requires PROJECT_ROOT environment variable to exist
 # PROJECT_ROOT is inferred and set by pyrootutils package in `main.py`
-#root_dir: ${oc.env:PROJECT_ROOT}
-
-
+work_dir: ${oc.env:PROJECT_ROOT}
 ## always start from main
-work_dir: ${hydra:runtime.cwd}
+#work_dir: ${hydra:runtime.cwd}
+
 ## where to store small data gt,..
 data_dir: ${path.work_dir}/data/
 ## where hydra creates stuff
@@ -23,12 +22,12 @@ fext:
 ##########
 ## since run from usb and dif mach
 root_ion: /mnt/t77
-root_slarch: /mnt/T77
-root_feup: /media/jtstudents/T77
-data_root: ${dyn_dataroot:${path.root_ion},${path.root_slarch},${path.root_feup}}
+root_slarch: /mnt/mp34/soleng-vad
+root_4wd: /media/jtstudents/T77
+data_root: ${dyn_dataroot:${path.root_slarch},${path.root_4wd},${path.root_ion}}
 ## data_root: set your data_root accordingly, refer to wiki for more info
 
-## each data.(ucf/xdv).(vroot/froot) point to these
+## each data.(ucf/xdv).(vroot/froot) point to these accordingly
 ucf_froot: '${path.data_root}/FEAT/UCF'  ## features
 ucf_vroot: '${path.data_root}/DS/UCF'    ## videos
 

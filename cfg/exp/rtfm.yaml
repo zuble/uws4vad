@@ -7,14 +7,14 @@ defaults:
   #- override /model/lrs: step
   - override /net: rtfm   ## mir rtfm anm cmala
 
-#hydra:
-#  mode: MULTIRUN
-#  sweeper:
-#    params:
-      #dataload.balance.bag: 0, 0.5, 0.55, 0.45, 0.7
-      #dataproc.seg.len: 32, 200
-      #model.loss.rtfm.preproc: og, sbs
-      #dataproc.culum: B1.FIGHT, B2.SHOOT, B4.RIOT, B5.ABUSE, B6.CARACC, G.EXPLOS
+# hydra:
+#   mode: MULTIRUN
+#   sweeper:
+#     params:
+#       dataload.balance.bag: 0, 0.5, 0.55, 0.45, 0.7
+#       #dataproc.seg.len: 32, 200
+#       #model.loss.rtfm.preproc: og, sbs
+#       #dataproc.culum: B1.FIGHT, B2.SHOOT, B4.RIOT, B5.ABUSE, B6.CARACC, G.EXPLOS
 
 #exp_name: OG-SBS-itp32-200-0.0001-64-0.5 #mpcsampler #dloadbag-0.0001-15
 #exp_name: OG-ip32-culum-caracc

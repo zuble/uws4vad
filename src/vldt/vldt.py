@@ -126,7 +126,7 @@ class VldtInfo:
         
     def upgrade(self):
         if self.per_what != 'vid': 
-            ## flattens the list into numpy array 
+            ## flattens the list into numpy array cause of append in _updt_..
             for lbl, metrics in self.DATA.items():
                 metrics['GT'] = np.concatenate((metrics['GT']), axis=0)
                 metrics['FL'] = np.concatenate((metrics['FL']), axis=0)
@@ -192,7 +192,7 @@ class Validate:
         #assert cfg.net.main._cfg.ret_att == self.ret_att
         
         ## after self.fwd() run, sls will have the SL scores acquired from chosen net forward
-        ## attws will be populated is set, otherwise empty list are flag
+        ## attws will be populated if set, otherwise empty list is flag
         #sls, self.attws = [], [] #None, None
     
     def reset(self):
@@ -210,7 +210,7 @@ class Validate:
         #elif self.cfg_frgb.fstep == 32: chuk_size = 16 
         #elif self.cfg_frgb.fstep == 16: chuk_size = 9 ## orignal
         '''
-        ## snippet-level scores
+        ## segment-level scores
         sls, self.attws = [], []
         
         l = list(range(0,feat.shape[1]))
@@ -270,14 +270,13 @@ class Validate:
             if feat.ndim == 2: feat = feat.unsqueeze(0)  #log.warning("ndim2"); 
             elif feat.ndim == 3: pass ## 1,t,f no crop in ds
             elif feat.ndim == 4 and feat.shape[0] == 1: 
-                ## 1 crop atleast, atm inferator.infer isnot account this
+                ## 1 crop atleast, atm inferator.infer expects one dim=3
                 feat = feat.view(-1, feat.shape[2], feat.shape[3]) ## 1*nc, t, f
             else: raise ValueError(f'[{i}] feat.ndim {feat.ndim}')
             log.debug(f'[{i}] {feat.shape}')
             
             sls = self.fwd(net, inferator, feat)
-            log.debug(f'\t-> sls: {sls.shape}')
-            ## sls is at segment level 
+            log.debug(f'\t\t-> sls: {sls.shape}')
             
             #if '000' not in label[0]:
             #log.warning(f'[{i}] {feat.shape} , {fn} ') #, {label}
@@ -317,8 +316,7 @@ class Validate:
             assert len(tmp_fl) == len(tmp_gt), f'{self.cfg_frgb.fstep} cfg_frgb.fstep * {sls.shape[0]} len  != {len(tmp_gt)} orign video frames'
             
             ## dirt but dont have time 
-            ## dataloader puts list content as tuples
-            ## label = [('label1'),('label2')]
+            ## dataloader puts list elements as tuples [('label1'),('label2')]
             label = [l[0] for l in label] ## ['label1','label2']
             if self.multi_or_single == 'single' and len(label) > 1: ## xdv and dflt
                 label = [label[0]]  ## ['label1']
@@ -354,8 +352,8 @@ class GTFL:
     '''
         Retrieves the Ground Truth Frame Level for the specified video
         either for the XDV or UCF dataset
-        based on total frames to generate initial sequence
-        and from annotations set 1's
+        based on total frames to generate initial 0's sequence
+        and from annotations sets 1's
     '''
     def __init__(self, cfg_ds):
         #log.debug(f'GTFL:\n{cfg_ds}')

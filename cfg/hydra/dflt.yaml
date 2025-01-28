@@ -7,19 +7,17 @@ defaults:
 run:
   dir: ${path.log_dir}/${name}/${task_name}/runs/${now:%d-%m}_${now:%H-%M-%S}
 sweep:
-  #dir: ${path.log_dir}/{name}/${task_name}/multiruns/${now:%d-%m}_${now:%H-%M-%S}
-  #dir: ${hydra:runtime.cwd}/log/multiruns/${now:%d-%m}_${now:%H-%M-%S}
-  dir: /media/jtstudents/T77/TH/vad/zutc_vad/log/   #/mnt/t77   #/run/media/zuble/T77
-  subdir: ${name}/${task_name}/multirun/${now:%d-%m}_${now:%H-%M-%S}/${hydra.job.num}
+  dir: log
+  ## https://github.com/facebookresearch/hydra/issues/1786 interpolation should be done in subdir
+  subdir: ${path.log_dir}/${name}/${task_name}/multiruns/${now:%d-%m}_${now:%H-%M-%S}/${hydra.job.num}
 
 
 job_logging:
   level: debug
   formatters:
     simple: 
-      format: '[%(asctime)s][${name}--${task_name}][%(levelname)s] - %(message)s'
-      datefmt: '%H:%M:%S'
-
+      format: '[%(asctime)s][${name}--${task_name}][%(name)s:%(lineno)s][%(levelname)s] - %(message)s'
+      datefmt: '%d/%m-%H:%M:%S'
     colorlog:
       format: '[%(purple)s${name}--${task_name}%(reset)s:%(blue)s%(name)s%(reset)s:%(cyan)s%(lineno)s%(reset)s][%(log_color)s%(levelname)s%(reset)s] - %(message)s'
 
@@ -29,6 +27,8 @@ job_logging:
 #      formatter: simple
 #      filename: ${path.out_dir}/run.log  #${hydra.job.name}.log
 #      #mode: 'a'
+#    root:
+#    handlers: [console]
 
 ## https://github.com/facebookresearch/hydra/issues/1903
 ## https://github.com/facebookresearch/hydra/discussions/2804

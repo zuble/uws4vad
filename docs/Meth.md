@@ -1,3 +1,7 @@
+## Methods
+
+Below are the collected works under the WVAD paradigm, for both UCF and XDV, divided by the evaluated test set *o(verall)/a(nomaly)*.
+
 | Year | Method | Feature | UCF (AUCo,AUCa,FAR) | XDV (APo,APa,FAR) |
 |------|---------|----------|-------------------|------------------|
 | 2018 | [MIR](https://github.com/Roc-Ng/DeepMIL) [:newspaper:](#) | C3D <br> I3D | 0.7541,-,- <br> 0.7792,-,- | -,-,- <br> -,-,- |

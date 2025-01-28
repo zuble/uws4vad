@@ -127,7 +127,7 @@ def trainer(cfg, vis):
                 
                 #if bi % 20 == 0:
                 #    log.warning(f"{bi} ")
-                #    _, _, _, _, _ = vldt.start(net, inferator)
+                #    *_ = vldt.start(net, inferator)
                 #    vldt.reset()
                 
             if lrs is not None: lrs.step()

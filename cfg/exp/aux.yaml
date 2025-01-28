@@ -1,6 +1,5 @@
 # @package _global_
 
-
 defaults:
   - override /data/frgb: cliptsa #i3drocng
   - override /model: magn  ## clas anm

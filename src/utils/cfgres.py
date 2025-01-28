@@ -25,7 +25,7 @@ def dyn_dvc(dvc):
     #    os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, range(gpus))) ## '0,...,gpus-1'
     #log.info(f"{cfg.dvc=} , torch acess to {torch.cuda.device_count()} gpu")
 
-def dyn_workers(nwkrs):
+def dyn_nworkers(nwkrs):
     if nwkrs > 0: return nwkrs
     elif nwkrs == 0: return int(cpu_count() / 4)
     elif nwkrs == -1: return cpu_count()
@@ -93,10 +93,12 @@ def dyn_vadtaskname(ds,dtproc):
 #    if ds.get("aud"): 
 #        tmp += f"_{ds.aud.id.lower()}"
 #    return tmp
-def dyn_dataroot(p1, p2, p3):
-    if osp.isdir(p1): return p1
-    elif osp.isdir(p2): return p2
-    elif osp.isdir(p3): return p3
+
+def dyn_dataroot(*paths):
+    valid_paths = [p for p in paths if osp.isdir(p)]
+    if len(valid_paths) > 1:
+        raise ValueError(f"Multiple valid directories found: {valid_paths}")
+    return valid_paths[0] if valid_paths else None
 
 
 def reg_custom_resolvers(version_base: str, config_path: str, config_name: str) -> Callable:
@@ -106,7 +108,7 @@ def reg_custom_resolvers(version_base: str, config_path: str, config_name: str) 
     GlobalHydra.instance().clear()
 
     new_res = {
-        'dyn_nworkers': dyn_workers,
+        'dyn_nworkers': dyn_nworkers,
         'dyn_dvc': dyn_dvc,
         'dyn_vldt': dyn_vldt,
         'dyn_vldtmtrc': dyn_vldtmtrc,

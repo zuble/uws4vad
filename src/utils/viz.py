@@ -1,51 +1,72 @@
-import visdom, json, numpy, subprocess, time
+import visdom, json, numpy, subprocess, time, sys
+import os, os.path as osp
 from omegaconf import DictConfig, OmegaConf
+from hydra.core.hydra_config import HydraConfig
 
 from src.utils import get_log
 log = get_log(__name__)
 
 
+helper = """
+    https://github.com/fossasia/visdom 
+    prior to start a session of experiments run under main.py dir:
+        nohup python -m visdom.server > vis.out &
+    
+    visdom server will be avaiable at
+        http://127.0.0.1:8097
+    
+    if in ssh add to .ssh/config
+        LocalForward 127.0.0.1:8097 127.0.0.1:8097
+    
+    if something wrong:
+        ps aux | grep 'visdom.server'
+        kill -? pid    ?:(2SIGINT) (15 SIGTERM) (9 SIGKILL)
+        or 
+        ps -ef | grep 'python -m visdom.server' | grep -v grep | awk '{print $2}' | xargs -r kill -9 
+"""
+            
 #########################
 ## visdom helper methods
 class Visualizer:
-    '''
-        https://github.com/fossasia/visdom
-        http://127.0.0.1:8097
-        if in ssh add to .ssh/config
-            LocalForward 127.0.0.1:8097 127.0.0.1:8097
-        
-        prior to start a session of experiments run at main dir:
-            nohup python -m visdom.server > vis.out
-        if something wrong:
-            ps aux | grep "visdom.server"
-            kill -2 pid    (SIGINT)
-            kill -15 pid    (SIGTERM)
-            kill -9 pid     (SIGKILL)
-    '''  
-    def __init__(self, env, restart, delete, **kwargs):
+
+    def __init__(self, cfg, **kwargs):
         self.check_server()
-        self.vis = visdom.Visdom(env=env, **kwargs)
-        self.env_name = env
+        self.nameit(cfg)
+        self.vis = visdom.Visdom(env=self.env_name, **kwargs)
         self.index = {}
         self.mtrc_win = {}
         
-        log.info(f"vis envs: {self.vis.get_env_list()}")
-        log.info(f"vis created for {env = }")
+        log.info(f"vis envs: \n\n{self.vis.get_env_list()}\n")
+        log.info(f"vis created for {self.env_name = }")
         log.debug(f'vis connection check {self.vis.check_connection()}')
-        if delete:
-            self.delete(needle=delete)
-        if restart:
-            log.info(f"vis restarted {env = }")
-            self.close()
-            
+        
+        if cfg.xtra.vis.delete: 
+            self.delete(needle=cfg.xtra.vis.delete)
+            self.delete(envn=self.env_name)
+        if cfg.xtra.vis.restart:
+            log.info(f"vis restarted {self.env_name = }");self.close()
+        
+    def nameit(self, cfg):
+        ## ----------------------------------
+        ## configure vis based on hydra params
+        #vis=None
+        #if not cfg.get("debug", False):
+        self.env_name = f"{cfg.name}_{cfg.task_name}"
+        if cfg.exp_name: self.env_name += f"__{cfg.exp_name}"
+        if 'MULTIRUN' in str(HydraConfig.get().mode):
+            path_parts = cfg.path.out_dir.split("/")
+            self.env_name += f"__{path_parts[-2]}__{path_parts[-1]}" ## date_jobnum
+        else: 
+            self.env_name += f"___{osp.basename(cfg.path.out_dir)}"
+        #log.info(f"{self.env_name=}")
+        ## ------------------------------
+
     def check_server(self):
         #up = subprocess.check_output("ps aux | grep 'visdom.server'| grep -v grep ", shell=True)
         up = subprocess.Popen("ps aux | grep 'visdom.server'| grep -v grep", shell=True, stdout=subprocess.PIPE).stdout.read().decode()
         #log.info(up)
-        if not up: 
-            log.error("\nnohup python -m visdom.server > vis.out &\n"); 
-            raise Exception("")
-
+        if not up: log.error(helper); sys.exit() 
+        
         
     def plot_lines(self, wname, y, **kwargs):
         #self.plot('loss', 1.00)
@@ -112,6 +133,7 @@ class Visualizer:
     def vid(self, vid, wtitle):
         self.vis.video(vid, win=wtitle)
     
+    
     def close(self, wtitle=None):
         ''' either a window or all windows off self.env_name '''
         #if not wtitle:
@@ -130,14 +152,18 @@ class Visualizer:
     def exists(self, wtitle): return self.vis.win_exists(win=wtitle,env=self.env_name)
     
     def delete(self, envn=None, needle=''):
-        ''' Delete envn if provided, else finds envs with need in its name
+        ''' Delete envn if provided, else finds envs with needle in its name
             'all' and others strings expect 'debug' ask for confirmation
             a delay of 7 seconds in the end for cancel time '''
         if envn:
-            confirmation = input(f"delete {envn=}?  (y to continue) ")
+            if envn == self.env_name: confirmation = input(f"delete running {envn=}?  (y to continue) ")
+            else: confirmation = input(f"delete {envn=}?  (y to continue) ")
             if confirmation.lower() == 'y':
                 log.warning(f"Deleting {envn}")
                 visdom.Visdom(env=envn).delete_env(envn)
+                ## if envn to del match current env, exit program
+                if envn == self.env_name: sys.exit(1)
+                
             else:log.info("all safe.")
             
         elif needle:
@@ -173,7 +199,7 @@ class Visualizer:
             else: 
                 log.info("nothing to be deleted")            
         
-        log.info(f"vis envs_name: {self.vis.get_env_list()}")
+        log.info(f"vis envs: \n\n{self.vis.get_env_list()}\n")
         
     '''
     def plot_vldt_mtrc(self, data, epo):

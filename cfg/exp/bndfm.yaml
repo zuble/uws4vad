@@ -1,7 +1,5 @@
 # @package _global_
 
-# extend the vitamin with morre epochs since there are no crops
-
 defaults:
   - override /data/frgb: vitamina  #i3drocng vadclip cliptsa slowfast slowfast5 vitamina
   - override /model: bndfm

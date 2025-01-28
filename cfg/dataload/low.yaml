@@ -5,7 +5,7 @@ defaults:
 
 in2mem: False
 
-nworkers: ${dyn_nworkers:1}  ## 0 -> cpu//4 ;; -1 -> all cores
+nworkers: ${dyn_nworkers:1} 
 pinmem: False
 #pftch_fctr: 1
 prstwrk: False
@@ -14,7 +14,7 @@ prstwrk: False
 test:
   in2mem: False
 
-  nworkers: ${dyn_nworkers:1}  ## 0 -> cpu//4 ;; -1 -> all cores  
+  nworkers: ${dyn_nworkers:1}  
   pinmem: False
   #pftch_fctr: 0
   prstwrk: False

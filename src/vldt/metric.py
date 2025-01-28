@@ -11,13 +11,10 @@ import matplotlib.pyplot as plt
 logging.getLogger('PIL').setLevel(logging.WARNING)
 #from PIL import Image
 
-
 #from prettytable import PrettyTable
 from tabulate import tabulate, SEPARATING_LINE
 import plotly.graph_objs as go, plotly.express as px
 from plotly.subplots import make_subplots
-
-
 
 from src.utils import get_log
 log = get_log(__name__)

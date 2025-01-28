@@ -1,6 +1,6 @@
 ## runs a fwd validation pass on start of either train/test
 ## set to true when debug=vldt
-## curious results of how predetermined feats are or pure rndmes
+## curious results of how predetermined feats are on pure rndmes
 dryrun: False 
 
 ## VALIDATE
@@ -56,7 +56,6 @@ test:
   savepkl: 0
   ## jumps Validate and uses vldt_info.pkl if already generated
   frompkl: ""
-
 
   ## per_what perspectives to show validation results
   per_what: vid ## lbl , vid

@@ -101,6 +101,7 @@ def get_trainloader(cfg, vis=None):
     log.info(f"TRAIN: {sampler=} w/ {len(sampler)} -> [{bal_abn_bag=} {bal_abn_set=}]")
     log.info(f"TRAIN: {bsampler=} w/ {len(bsampler)} ")
     
+    #sampler_debug(bal_abn_bag, bsampler, ds, )
     if cfg.get("debug"):
         if cfg.debug.id == 'smplr':
             a={ f'abs_{bal_abn_bag}': bsampler, 
@@ -344,11 +345,9 @@ class TrainDS(Dataset):
         return len(self.rgbflst)
 
 
-################################
+##############
 ## PREP / FRMT 
-## preprocessing of train input
-
-## 1) FeatSegm prepares the features matrix for each .npy
+## 1) Segmentation prepares the features matrix for each .npy
 class FeatSegm():
     def __init__(self, cfg, seed=None):
         assert cfg.sel in ['itp','uni','seq']
@@ -409,7 +408,7 @@ class FeatSegm():
     def rnd_jit(self, idxx, feat_len):
         ## jitter betwen adjacent chosen idxx
         ## only when theres no repetead idxs
-        ## taken from MIST random_petrub
+        ## taken from MIST random_peturb
         if self.jit:
             if feat_len > self.len:
                 #log.debug(f'JIT / OLD {idxx=}')
@@ -463,7 +462,6 @@ class FeatSegm():
 
             return f    
 
-
 ## 2) pass to collate_fn
 class DataCollator:
     def __init__(self, bs, seg_sel, ncrops):
@@ -489,192 +487,3 @@ class DataCollator:
         log.debug(f"E[{trn_inf['epo']}]B[{trn_inf['bat']}][{self.seg_sel}] feat: {cfeat.shape} ,seqlen: {seqlen.shape} {seqlen}, lbl: {label} {label.shape} {label.device}")
         return self._rshp_in(cfeat).to(trn_inf['dvc']), ldata
 
-
-
-################################
-#ads = TrainDS(cfg_dload, cfg_ds, cfg_dproc, argbfl, aaudfl, 'ABNORMAL')
-#nds = TrainDS(cfg_dload, cfg_ds, cfg_dproc, nrgbfl, naudfl, 'NORMAL')
-#
-#max_len = max(len(ads), len(nds))
-#log.debug(f'TRAIN: {max_len=} {bs=}') #iterations_per_epoch {max_len // (bs // 2)=}
-### as abnormal/normal not balanced set replacement True for smaller ds
-### handled in TrainDS/_get_item_
-###is_oversampling = len(ds) < max_len
-#samplers = [
-#    RandomSampler(ds, 
-#                replacement=len(ds) < max_len, 
-#                num_samples=max_len if len(ds) < max_len else None, 
-#                generator=TCRNG) 
-#    for ds in [ads, nds]  # Abnormal, then Normal
-#]
-#
-#dataloaders = [
-#    DataLoader(
-#        ds, 
-#        batch_sampler=BatchSampler(sampler, batch_size=cfg_dload.bs//2, drop_last=cfg_dload.droplast),
-#        num_workers=cfg_dload.nworkers,
-#        worker_init_fn=seed_sade,
-#        #prefetch_factor=cfg_dload.pftch_fctr,
-#        pin_memory=cfg_dload.pinmem, 
-#        persistent_workers=cfg_dload.prstwrk 
-#    )
-#    for ds, sampler in [(ads, samplers[0]), (nds, samplers[1])]  # Abnormal then Normal  
-#]
-#cfg.dataload.itersepo = max( len(dataloaders[0]), len(dataloaders[1]))
-#log.debug(f'TRAIN: iterations_per_epoch {cfg.dataload.itersepo}')
-'''
-def sequencial(self, feat, crop=0, fn=''):
-        
-    def unfrm_extrt(feat):
-        idxs = np.linspace(0, len(feat)-1, self.len, dtype=np.int32)
-        #idxs = np.linspace(0, len(feat)-1, SLEN+1 , dtype=np.int32)
-        #if 'jit' in self.rnd: idxs = self.rnd_jit(idxs, len(feat))
-        #idxs = idxs[:-1]            
-        return feat[idxs, :]
-    
-    def rnd_extrt(feat):
-        #start = np.random.randint(len(feat)-self.len)
-        start = self.RNG.integers(len(feat)-self.len)
-        return feat[start:start+self.len]
-
-    def pad(feat):
-        if np.shape(feat)[0] <= self.len:
-            return np.pad(feat, ((0, self.len-np.shape(feat)[0]), (0, 0)), mode='constant', constant_values=0)
-        else: return feat
-
-    if len(feat) > self.len:
-        
-        if self.rnd[0] == 'uni': f = unfrm_extrt(feat)
-        elif self.rnd[0] == 'rnd': f = rnd_extrt(feat)
-        
-        ## assert the irrgularity betwen crops of rnd
-        ## and make it chossable
-        ## maybe trough a dict
-        #if 'glob' in self.rnd: f = self.rnd_glob(f)
-        
-        return f    
-            
-    else: return pad(feat)
-
-
-def segment_feat_crop(feat, length ):
-    """
-        segments (ncrops,ts,feats) into (ncrops,length,feats)
-    """
-    nc, t, f = feat.shape
-    divided_features = []        
-    for idxf, f in enumerate(feat): 
-        new_f = np.zeros((length, f.shape[1]) , dtype=np.float32)
-        print(f'{idxf} {new_f.shape}')
-        ## len(f) = t
-        r = numpy.linspace(0, len(f), length+1, dtype=numpy.int32)
-        for i in range(length):
-            if r[i]!=r[i+1]:
-                new_f[i,:] = np.mean(f[r[i]:r[i+1],:], 0)
-            else:
-                new_f[i,:] = f[r[i],:]
-        divided_features.append(new_f)
-    return np.array(divided_features, dtype=np.float32)
-
-    new_feat = np.zeros((self.len, feat.shape[1]), dtype=np.float32)
-    idxs = np.linspace(0, len(feat), self.len+1, dtype=np.int32)
-    
-    #if 'jit' in self.rnd:
-    #    if crop == 1: ## atual vid calling frist time, store jit_idxxs
-    #        log.error(f"{fn} {crop}")
-    #        self.jit_idxx = idxs = self.rnd_jit(idxs, len(feat))
-    #        log.error(f'{idxs=}')
-    #    elif crop != 0: ## consequent
-    #        idxs = self.jit_idxx
-    #        log.warning(f"{fn} {crop}")
-    #        log.warning(f'{idxs=}')
-    #    else: ## only call for vid in question, no need to store
-    #        idxs = self.rnd_jit(idxs, len(feat))    
-        
-        
-    for i in range(self.len):
-        #log.debug(f"{fn} {crop}")
-        if idxs[i] != idxs[i+1]:
-            new_feat[i, :] = np.mean(feat[idxs[i]:idxs[i+1], :], axis=0)
-        else:
-            new_feat[i, :] = feat[idxs[i], :]
-    
-    #if 'glob' in self.rnd: new_feat = self.rnd_glob(new_feat)
-        
-    return new_feat
-'''
-
-
-'''
-
-    def get_feat_wcrop(self,idx):
-        log.debug(f"**** {idx} ****")
-        
-        ## Determine unified length from crop0
-        
-        crop0_len = np.load(f"{self.rgbflst[int(idx)]}__0.npy").astype(np.float32).shape[0]
-        
-        feats = np.zeros((self.frgb_ncrops, self.len, self.dfeat), dtype=np.float32)
-        for i in range(self.frgb_ncrops):
-            
-            ## RGB
-            rgb_fp_crop = f"{self.rgbflst[int(idx)]}__{i}.npy"
-            frgb_crop = np.load(rgb_fp_crop).astype(np.float32)
-            log.debug(f'vid[{idx}][{i}][RGB] {frgb_crop.shape} {frgb_crop.dtype}  {osp.basename(rgb_fp_crop)}')
-            
-            if not i: ## crop 0
-                ## peakaboo next
-                lens.append(frgb_crop.shape[0])
-                len_next = np.load(f"{self.rgbflst[int(idx)]}__{i+1}.npy").astype(np.float32).shape[0]
-                if lens[0] != len_next:
-                    frgb_crop = frgb_crop[:len_next]
-                idxs_trnsf = self.trnsfrm.get_idxs( len(frgb_crop) )
-            
-            ## control the indexing in selorpad
-            ## as interpolate impact will be low (ithink)
-            elif lens[0] != frgb_crop.shape[0]:
-                log.warning(f"crop[{i}] w dif len")
-            
-            #if self.rgbl2n: frgb_crop = self.l2normfx(frgb_crop)
-            #if idx == 0: view_feat(feat_crop.asnumpy())
-                
-            ## segment prior to hstack
-            frgb_crop_seg = self.trnsfrm.fx(frgb_crop, idxs_trnsf['idxs']) 
-            log.debug(f'vid[{idx}][{i}][RGB]: PST-SEG {frgb_crop_seg.shape}')
-            
-            ## AUD
-            if self.audflst:
-                if not i: ## load
-                    aud_fp = f"{self.audflst[int(idx)]}.npy"
-                    faud = np.load(aud_fp).astype(np.float32)
-                    log.debug(f'vid[{idx}][AUD] {faud.shape} {faud.dtype}  {osp.basename(aud_fp)}')
-                    
-                    ## there can be some mismatch betwehn both, if aud fext got diff window
-                    ## mainly from CLIP feats
-                    if 1 <= abs(faud.shape[0]-frgb_crop.shape[0]) <= 2:
-                        ## as long as its only 2, leave as is, as let trnsfrm deal with it
-                        log.debug(f'vid[{idx}][{i}][AUD] : seg in2 {faud.shape}')
-                    elif faud.shape[0] != frgb_crop.shape[0]:
-                        raise ValueError(f'vid[{idx}][{i}][AUD] : seg mismatch {faud.shape} {frgb_crop.shape}')
-                    
-                    faud_seg = self.trnsfrm.fx(faud, idxs_trnsf['idxs']) 
-                    log.debug(f'vid[{idx}][{i}][AUD] PST-SEG {faud_seg.shape}')
-                    #if self.audl2n: faud = self.l2normfx(faud)
-                    
-                try: feat_crop = np.hstack((frgb_crop_seg, faud_seg))
-                except: log.error(f'{frgb_crop_seg.shape} {faud_seg.shape}')
-                log.debug(f'vid[{idx}][{i}][MIX] {feat_crop.shape} {feat_crop.dtype}')
-                
-            else: feat_crop = frgb_crop_seg
-
-            feats[i] = feat_crop
-            
-            ## rndmiz temporal order
-            #if len(idxs_trnsf['rnd_glob']) != 0:
-            if idxs_trnsf['rnd_glob'] is not None:
-                ## rnd ovre same idxs per crop
-                feats[i] = feats[i, idxs_trnsf['rnd_glob']]
-            
-        log.debug(f'vid[{idx}] {feats.shape} {feats.dtype}')
-        return feats
-'''
