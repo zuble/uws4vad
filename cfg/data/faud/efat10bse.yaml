@@ -5,7 +5,7 @@ defaults:
 ## https://github.com/fschmid56/EfficientAT_HEAR
 ## https://github.com/fschmid56/EfficientAT
 id: EFAT_10BSE
-#vrs: 10bse
+vrs: ''
 ds: 
   - xdv
 dfeat: 1032

@@ -76,6 +76,7 @@ dependencies:
       - cycler==0.12.1
       - decord==0.6.0
       - einops==0.8.0
+      - essentia==2.1b6.dev1110
       - filelock==3.17.0
       - fonttools==4.55.7
       - fsspec==2024.12.0

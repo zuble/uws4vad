@@ -13,25 +13,25 @@ The final config follows the order provided in the entry *.yamls* files, under t
 
 ## Structure Overview
 
-It tries to mimic much as possible the src code in terms of levels/folders and its main use. Although some logic is separated, whenever its needed for both trian and test, for example the model
-Some aditional ones (path, )
+It tries to mimic as possible the src code in terms of levels/folders and its main use. Although some logic is separated, whenever its needed for both train and test, for example model/net, dataload & dataproc, 
+Some aditional ones are path, debug, xtra and specially exp(eriments)
 
-Refer to *ucf/xdv.yaml* as they are the entry configs under  folder and *000.yaml* (which serves as base for both, with some shared/sane defaults), to better understand the parameters and its use.
-The same applies for others, as the .yml's are fairly commented, especially the *_dflt/dflt.yaml* in each folder.
+Refer to the entry configs under cfg folder *ucf/xdv.yaml* and *000.yaml* (which serves as frist default in both, for shared/sane start), to better understand the parameters and its use.
+
+The same applies for others .yml's, especially the *_dflt/dflt.yaml* in each folder, as are fairly commented. 
 
 - **data:** metadata for each dataset
-**data/faud:** defaults parameters used for each audio feature extractor
-**data/frgb:** defaults parameters used for each visual feature extractor
-**dataload:** controls the batchloader and dataloader settings 
-**dataproc:** controls segmentation and crops
+    - **faud & frgb:** defaults parameters used for each audio/visual feature extractor which features are available to use, either downloaded or self-extracted (frgb/timm and faud/hear)
+- **dataload:** controls the batchloader and dataloader settings 
+- **dataproc:** controls segmentation and crops manipulation
 - **model:** constructs the modelling using all the below 
-**model/loss:** necessaire params to contruct each available loss function under src.model.loss.feat/score.py (targetting both scores & features)
-**model/lrs:** learning rate schedulers
-**model/optima:** optimizer
-**model/pstfwd:** post-forward reference parameters
+    - **loss:** necessaire params to contruct each available loss function under src.model.loss.feat/score.py (targetting both scores & features)
+    - **lrs:** learning rate schedulers
+    - **optima:** optimizer
+    - **pstfwd:** post-forward reference parameters
 - **net:** each network can be construced using the predifined modules
-**net/cls:** classifier (regressor)
-**net/fm:** feature modulator
+    - **cls:** classifier (regressor)
+    - **fm:** feature modulator
 - **vldt:** validation parameters for both train/test, as both use the same class
 - **path:** dflt
 - **xtra:** controls cfg logging and visdom env 
@@ -58,3 +58,7 @@ TODO: add valuable examples
 
 - Custom experiment setup:
 `python main.py exp=cmala dataload=high`
+
+
+- Extract visual features from xdv using any model under timm
+`python main.py -cn=_fergb data=xdv data.frgb=timm data.frgb.vrs=''`

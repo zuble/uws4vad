@@ -1,7 +1,7 @@
 ## SEGMENTATION
 seg: 
   ## itp (interpolate) -> avg adj sel snippet feats
-  ## the two form the selorpad from xdv
+  ## the following two form the selorpad from XDV
   ## uni (uniformm) -> picks len idxs equally spaced trough linspace 
   ## seq (sequence) -> picks a sequence of len idx
   sel: ??? ## ucf: itp | xdv: seq
@@ -36,8 +36,8 @@ cropasvideo: ## each crop with be treated as a video it self
 #l2n: 0
 
 ## Curriculum-ish Learning for XDV
-## a list of entries from lbls.info from data/xdv
-## to be removed from train set based of frist label of files
-## test atm will have all files
+## a list of entries from lbls.info under data/xdv
+## to be removed from train set, based on the frist label of filenames
+## test atm has all set
 culum: ~ 
   #- B4.RIOT

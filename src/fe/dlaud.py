@@ -17,12 +17,12 @@ log = get_log(__name__)
 def get_audloader(cfg, cfg_model, vpaths):
     cfg_loader = cfg.dataload.test
     return DataLoader(  
-                    AudioDS(cfg, cfg_model, vpaths), 
-                    batch_size=1, 
-                    shuffle=False,
-                    num_workers=5, ##cfg_loader.nworkers, 
-                    pin_memory=False, 
-                    )
+            AudioDS(cfg, cfg_model, vpaths), 
+            batch_size=1, 
+            shuffle=False,
+            num_workers=cfg_loader.nworkers, 
+            pin_memory=False, 
+            )
     
 class AudioDS(Dataset):
     def __init__(self, cfg, cfg_model, vpaths):
