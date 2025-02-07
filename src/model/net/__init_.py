@@ -1,6 +1,5 @@
 ###################
 ## NETWORKS
-
 from src.model.net.bnwvad import (
     Network,
     Infer

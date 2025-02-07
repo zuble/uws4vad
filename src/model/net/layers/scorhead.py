@@ -9,8 +9,8 @@ log = get_log(__name__)
 #####################
 ## every classifier :
 # excepts (b,t,f)
-# outputs at SL, (b,t)
-# without sigmoid 
+# outputs at Segment Level, (b,t)
+# without sigmoid
     
 class SMlp(nn.Module):
     def __init__(self, dfeat, hdim_ratio=[4,4], do=0.7):

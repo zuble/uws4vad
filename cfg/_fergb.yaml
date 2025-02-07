@@ -21,7 +21,11 @@ dvc: ${dyn_dvc:1}
 
 
 modal: rgb
-dr: True ## dry-run 
+
+dryrun: true
+info: true
+profile: true
+
 ## full: feed (nclips,3,_,_)
 ## iter: feed (1,3,_,_)
 fwd_feed: full #iter

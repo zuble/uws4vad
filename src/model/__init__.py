@@ -4,6 +4,7 @@ from src.model.loss.utils import (
 )
 
 from src.model.net.utils import (
+    prof,
     build_net
 )
 from src.model.handler import (

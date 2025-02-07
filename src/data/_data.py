@@ -5,6 +5,7 @@ import glob , os, os.path as osp, math, time, itertools, re
 from collections import OrderedDict, Counter, defaultdict
 import matplotlib.pyplot as plt
 
+from src.data import LBL
 from src.utils import mp4_rgb_info, logger
 log = logger.get_log(__name__)
 
@@ -393,31 +394,78 @@ class FeaturePathListFinder: ## dirt as it can gets ffff
 
 ##############
 ## XDV/UCF DS
-def get_testxdv_info(txt_path):
-    txt = open(txt_path,'r')
-    txt_data = txt.read()
-    txt.close()
+def get_testxdv_info(cfg):
 
-    video_list = [line.split() for line in txt_data.split("\n") if line]
-    total_anom_frame_count = 0
-    for vidx in range(len(video_list)):
-        log.info(video_list[vidx])
-        video_anom_frame_count = 0
-        for nota_i in range(len(video_list[vidx])):
-            if not nota_i % 2 and nota_i != 0: #i=2,4,6...
-                aux2 = int(video_list[vidx][nota_i])
-                dif_aux = aux2-int(video_list[vidx][nota_i-1])
-                total_anom_frame_count += dif_aux 
-                video_anom_frame_count += dif_aux
-        log.info(video_anom_frame_count,'frames | ', "%.2f"%(video_anom_frame_count/24) ,'secs | ', int(video_list[vidx][-1]),'max anom frame\n')
+    with open(cfg.data.gt, 'r') as txt: data = txt.read()
+    gtlines = [line.split() for line in data.split('\n') if line]
+    with open(cfg.data.tframes, 'r') as txt: data = txt.read()
+    tflines = [line.split('@') for line in data.split('\n') if line]
     
-    total_secs = total_anom_frame_count/24
-    mean_secs = total_secs / len(video_list)
-    mean_frames = total_anom_frame_count / len(video_list)
-    log.info("TOTAL OF ", "%.2f"%(total_anom_frame_count),"frames  "\
-            "%.2f"%(total_secs), "secs\n"\
-            "MEAN OF", "%.2f"%(mean_frames),"frames  "\
-            "%.2f"%(mean_secs), "secs per video\n")
+    total_anom_frame_count = 0
+    total_anom = 0
+    
+    ratios = {}
+    for lbl in cfg.data.lbls.info[1:-2]:
+        ratios[lbl]=[]
+    print(ratios)
+    
+    lbl_mng = LBL(ds=cfg.data.id, cfg_lbls=cfg.data.lbls)
+    
+    for vidx in range(len(gtlines)):
+        #log.info(f"{gtlines[vidx]}")
+        
+        vn = gtlines[vidx][0]
+        
+        label = lbl_mng.encod(vn)[0]
+        tframes = next(( int(item[1]) for item in tflines if str(item[0]) == vn), None)
+        pairs = list(zip(gtlines[vidx][1::2], gtlines[vidx][2::2]))
+        log.info(f"{vn}  {label}  {tframes}  {pairs}")
+        
+        video_anom_frame_count = 0
+        total_anom += 1
+        for anomi,(start, end) in enumerate(pairs):
+            start_anom, end_anom = int(start), int(end)
+            wind_anom = end_anom - start_anom
+            total_anom_frame_count += wind_anom
+            video_anom_frame_count += wind_anom
+        log.info(f"{video_anom_frame_count} anom frames | {video_anom_frame_count / 24:.2f} secs \n") # | {int(gtlines[vidx][-1])} max anom frame
+
+        ratio_anom = video_anom_frame_count/tframes
+        log.info(f"{ratio_anom}")
+        
+        ratios[label].append(ratio_anom)
+        
+    #print(ratios)
+    # Prepare data for the box plot
+    labels = list(ratios.keys())
+    data = [ratios[lbl] for lbl in labels]
+    
+    # Plotting the box plot using matplotlib
+    plt.figure(figsize=(10, 6))
+    plt.boxplot(data, labels=labels, patch_artist=True, boxprops=dict(facecolor="lightblue"))
+    plt.xticks(rotation=45)  # Rotate x-axis labels for better readability
+    plt.xlabel("Class")
+    plt.ylabel("Abnormality Ratio")
+    plt.title("Abnormality Ratio Distribution per Class")
+    plt.grid(True)
+    plt.show()
+    
+    # Calculate mean and standard deviation for each class
+    for lbl in ratios:
+        mean_ratio = np.mean(ratios[lbl])
+        std_ratio = np.std(ratios[lbl])
+        print(f"Class {lbl}: Mean = {mean_ratio:.4f}, Std = {std_ratio:.4f}")
+        
+    total_secs = total_anom_frame_count / 24
+    ## per video
+    #mean_secs = total_secs / len(gtlines)
+    #mean_frames = total_anom_frame_count / len(gtlines)
+    ## per anom
+    mean_secs = total_secs / total_anom
+    mean_frames = total_anom_frame_count / total_anom
+    
+    log.info(f"TOTAL OF {total_anom_frame_count:.2f} frames  {total_secs:.2f} secs\n"
+            f"ANOM MEAN WINDOW: {mean_frames:.2f} frames  {mean_secs:.2f} secs per video\n")
 
 def get_xdv_stats():
     folders = {"train":"/raid/DATASETS/anomaly/XD_Violence/training_copy", "test":"/raid/DATASETS/anomaly/XD_Violence/testing_copy"}

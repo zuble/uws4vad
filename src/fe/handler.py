@@ -15,7 +15,6 @@ from src.utils import get_log
 log = get_log(__name__)
 
 
-
 def get_vid_model(cfg):
     model_dir = cfg.path.fext.models_dir
     cfg_model = cfg.data.frgb
@@ -24,7 +23,7 @@ def get_vid_model(cfg):
         # https://github.com/huggingface/pytorch-image-models/discussions/2069
         
         log.info("timm model")
-        model_names = timm.list_models('*clip*', pretrained=True)
+        model_names = timm.list_models(filter='*clip*', pretrained=True)
         if cfg_model.vrs is None or cfg_model.vrs not in model_names: 
             for m in model_names: log.info(f"{m}")
             log.error(f"{cfg_model.vrs} not in the list")
@@ -42,8 +41,36 @@ def get_vid_model(cfg):
             #lambda x: x.unsqueeze(0)
         ])
         log.debug(f"timm {cfg_trnsfrm=} \n{trnsfrm=}")
-        if cfg.dr: log.warning(f"DRY RUN : {model(trnsfrm(torch.randn(224, 224, 3).numpy()).unsqueeze(0).to(cfg.dvc)).shape}")
         
+        ## XTRA
+        if cfg.dryrun: 
+            inp = trnsfrm(torch.randn(224, 224, 3).numpy()).unsqueeze(0).to(cfg.dvc)
+            out = model( inp )            
+            log.warning(f"DRY RUN : {inp.shape} -> {out.shape} {out.dtype}")
+                        
+        if cfg.profile or cfg.info: 
+            bs = 2; t = 16; clip = []
+            for i in range(0, t):
+                frame = trnsfrm( torch.randn(3, 224, 224).numpy() ) 
+                log.debug(f'trnsfrm {frame.shape} {frame.dtype} {type(frame)}')
+                clip.append(frame)    
+            clip = torch.stack(clip,dim=0)
+            #print(f"{clip.shape=}") ## t,c,h,w   
+            #clip = trnsfrm(torch.randn(t, 3, 224, 224).numpy()).to(cfg.dvc)
+            
+            if cfg.profile:
+                from src.model.net.utils import prof
+                clips = clip.repeat(bs, 1, 1, 1, 1)  ## bs,t,c,h,w
+                log.warning(f"PROFILING: Simulating {bs}x{t}frames {clips.shape=}")
+                prof(model, inpt=clips)
+        
+            if cfg.info:
+                from torchinfo import summary
+                summary(model, 
+                    input_data=clip,
+                    col_names=["input_size","output_size", "num_params", "trainable", "mult_adds"],
+                    #verbose=2
+                ) 
         return model, trnsfrm, cfg_model
         
     

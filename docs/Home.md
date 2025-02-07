@@ -2,7 +2,7 @@
 
 ## Pipeline 
 
-The overall pipeline adapts most commom blocks used in WVAD methods, as well defined class/fx's to enable combination and experimentation.
+The overall pipeline adapts most commom blocks used in WVAD methods as well defined class/fx's to enable combination and experimentation.
  
 <p align="center"><img src="img/vadpipe4.png" width="100%" alt='vadpipe'> </p>
 
@@ -50,3 +50,4 @@ FEAT ## features
 ```
 
 
+## Installation

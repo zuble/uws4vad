@@ -6,7 +6,7 @@
 ###############
 ## determines path of log @ hydra/dflt.yaml
 ## ${path.log_dir}/${name}/${task_name}
-name: ${dyn_join:"-",${net.id},${net.vrs},${model.id},${data.id}} # "${net.id}${net.vrs}-${model.id}-${data.id}"   # bndfm-rank-xdv
+name: ${dyn_join:"-",${net.id}${net.vrs},${model.id},${data.id}} # "${net.id}${net.vrs}-${model.id}-${data.id}"   # bndfm-rank-xdv
 task_name: ${dyn_vadtaskname:${data},${dataproc}}
 exp_name: ~ ## 4 exp_id 
 

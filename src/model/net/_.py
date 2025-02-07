@@ -17,6 +17,7 @@ class Network(nn.Module):
     def forward(self, x):
         return 
 
+## UPDATE 
 class NetPstFwd(BasePstFwd):
     def __init__(self, bs, ncrops):
         super().__init__(bs, ncrops)

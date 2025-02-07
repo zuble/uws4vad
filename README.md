@@ -4,7 +4,7 @@
 
 ---
 
-UWS4VAD is an attempt to unify common pratices in VAD methods, with support for both UCFC and XDV datasets, configured trough [hydra](https://hydra.cc/docs/intro/) for a modular and experimental pipeline. Includes feature extraction for both visual (trough [timm]() models) and audio (trough HEAR-based models).~
+UWS4VAD is an attempt to unify common pratices in VAD methods, with support for both UCFC and XDV datasets, configured trough [hydra](https://hydra.cc/docs/intro/), in a modular and experimental pipeline, setting ground for a future benchmark. Includes feature extraction for both visual (trough [timm]() models) and audio (trough HEAR-based models).~
 
 
 > [!important]
@@ -13,6 +13,7 @@ UWS4VAD is an attempt to unify common pratices in VAD methods, with support for 
 
 ---
 ### Installation
+
 ```bash
 conda env create -f environment.yml && conda activate uws4vad
 ```
@@ -25,13 +26,13 @@ Basic overview of configuration setup
 ```bash
 python main.py --help
 ```
-
+Refer to [config](https://github.com/zuble/uws4vad/wiki/Config) for a broader view of both configuration and usage.
 
 
 ---
 ### Acknowledgments
 
-Gratzie to author's works that are either part of this project, served as inspiration or contributed to VAD. Refer to [methods](file://docs/meth.md) for a complete and updated list. 
+Gratzie to author's works that are either part of this project, served as inspiration or contributed to VAD. Refer to [methods](https://github.com/zuble/uws4vad/wiki/Meth) for a complete and updated list. 
 
 
 --- 

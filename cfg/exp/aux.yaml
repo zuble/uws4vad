@@ -12,11 +12,11 @@ defaults:
 #      dataload.balance.bag: 0, 0.5, 0.55, 0.45, 0.7
 
 exp_name: aux
-tags: ["dataload"]
+tags: [""]
 
   
 model:
-  epochs: 50  ## 5, 10, 10, 20
+  epochs: 1  ## 5, 10, 10, 20
   optima:
     lr: 0.001 
     weight_decay: 0.005

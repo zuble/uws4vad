@@ -8,17 +8,16 @@ python main.py --hydra-help ## while on it add tab completation (bash/zsh/fish s
 python main.py -c=job/hydra/all 
 ```
 
-The final config follows the order provided in the entry *.yamls* files, under the cfg folder, which can be stated in main.py decorator. One can override with --config-name / -cn parameter.
+The final config follows the order provided in the entry *.yamls* files, under the cfg folder, which can be stated in main.py decorator. One can override with `--config-name` / `-cn` parameter.
 
 
 ## Structure Overview
 
-It tries to mimic as possible the src code in terms of levels/folders and its main use. Although some logic is separated, whenever its needed for both train and test, for example model/net, dataload & dataproc, 
-Some aditional ones are path, debug, xtra and specially exp(eriments)
+It tries to mimic as possible the src code in terms of levels/folders and its main use. Although some logic is separated, whenever its needed for both train and test, for example model/net, dataload & dataproc. Some aditional ones are path, debug, xtra and specially exp(eriments)
 
 Refer to the entry configs under cfg folder *ucf/xdv.yaml* and *000.yaml* (which serves as frist default in both, for shared/sane start), to better understand the parameters and its use.
 
-The same applies for others .yml's, especially the *_dflt/dflt.yaml* in each folder, as are fairly commented. 
+The same applies for others .yaml's, especially the *_dflt/dflt.yaml* in each folder, as they are fairly commented. 
 
 - **data:** metadata for each dataset
     - **faud & frgb:** defaults parameters used for each audio/visual feature extractor which features are available to use, either downloaded or self-extracted (frgb/timm and faud/hear)

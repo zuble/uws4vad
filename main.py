@@ -20,44 +20,43 @@ root = pyrootutils.setup_root(
 _HYDRA_PARAMS = {
     "version_base": None,
     "config_path": str(root / "cfg"),
-    "config_name": "xdv.yaml",
+    "config_name": "xdv.yaml", ## -> override w/ -cn=
 }
-
-
+        
 @utils.reg_custom_resolvers(**_HYDRA_PARAMS)  ## @src/utils/cfgres.py
 @hydra.main(**_HYDRA_PARAMS)
 def main(cfg: DictConfig) -> None:
-    #log = utils.get_log(__name__, cfg)
-    #log.debug(f"Working dir : {os.getcwd()},\nOriginal dir : {hydra.utils.get_original_cwd()} ")
-    #log.debug(utils.collect_random_states())
-    #utils.xtra(cfg)
-    #return
-
+    log = utils.get_log(__name__, cfg) ## -> runs once 2 set right lvl's per module
+    
     if cfg.get("tmp"):
         from src import tmp
         utils.xtra(cfg)
         
-        func_name = cfg.get("tmp")  
-        target_func = getattr(tmp, func_name) 
-        target_func(cfg)
+        #func_name = cfg.get("tmp")  
+        #target_func = getattr(tmp, func_name) 
+        #target_func(cfg)
         ## or
         #instance = target_func()  
         
+        tmp.Debug(cfg).testset()
         #tmp.Debug(cfg)
         #tmp.aud_emb(cfg)
         #tmp.aud_len_mat()
 
     ## feature extraction
     elif cfg.get("fext"):
-        if cfg.modal == 'rgb':
-            from src.fext import VisFeatExtract
-            utils.xtra(cfg)
-            VisFeatExtract(cfg)     
+        utils.xtra(cfg)
+        
+        modal_handler = {
+            'rgb': ('src.fext', 'VisFeatExtract'),
+            'aud': ('src.fext', 'AudFeatExtract')
+        }.get(cfg.modal)
+        if not modal_handler:
+            raise ValueError(f"Unsupported modality: {cfg.modal}")
 
-        elif cfg.modal == 'aud':
-            from src.fext import AudFeatExtract
-            utils.xtra(cfg)
-            AudFeatExtract(cfg)
+        module = __import__(modal_handler[0], fromlist=[modal_handler[1]])
+        extractor = getattr(module, modal_handler[1])
+        extractor(cfg)
 
     ## train/test.py    
     else:
@@ -89,7 +88,7 @@ def main(cfg: DictConfig) -> None:
         
         else: log.error("任选其一 fext / tmp / train / test")
 
-
+    
 if __name__ == "__main__":
     ## tf32
     ## https://pytorch.org/docs/1.8.1/notes/cuda.html#tf32-on-ampere

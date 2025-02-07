@@ -45,7 +45,7 @@ class VisFeatExtract():
             raise ValueError("Invalid cfg.ext_dir type. Must be list, str, or None.")
         
         ## MODEL
-        model, trnsfrm, cfg_model = get_vid_model(self.cfg)
+        model, trnsfrm, cfg_model = get_vid_model(self.cfg)        
         try: assert model.training == False
         except: pass ## openai
         

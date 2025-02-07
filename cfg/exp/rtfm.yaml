@@ -51,7 +51,7 @@ dataproc:
   #  - G.EXPLOS
 
 dataload:
-  bs: 64
+  bs: 16
   balance:
     bag: 0.5
     set: 1.2

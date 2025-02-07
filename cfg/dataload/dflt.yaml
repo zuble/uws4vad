@@ -5,9 +5,9 @@
 balance:
   ## the distribution of each batch can be set differently by taking a sampler in BatchSampler
   ## 0: uses RandomSampler, similiar to shuffle (auto batch torch)
-  ## else ]0:1[: indicates the abn balance per bag in AbnormalBatchSammpler
-  ## if bs:32 (batch is (16A,16N)) and bag:0.55 -> ABS will yield (int(32*0.55),32-abn_bag)->(17A,15N)
-  ## if 0.5: both bags are equally balanced , standard MIR setup
+  ## elif ]0:1[: indicates the abn balance per bag in AbnormalBatchSammpler
+  ##    e.g. bs:32 (batch is (16A,16N)) and bag:0.55 -> ABS will yield (int(32*0.55),32-abn_bag)->(17A,15N)
+  ## elif 0.5: both bags are equally balanced , standard MIR setup
   ## run with debug=sampler to inspect (adjust vis in dataloader/_data)
   ## ucf: 0.5 | xdv: 0
   bag: ${dyn_per_ds:${data.id},0.5,0}

@@ -5,6 +5,10 @@ id: ??? ## must be specified as the main._target_ depends on
 vrs: ""
 wght_init: xavier0 
 
+dryfwd: true
+info: true
+profile: false
+
 main:
   _target_: "src.model.net.${net.id}.Network${net.vrs}" 
   ## defaults this even if network dont have this option

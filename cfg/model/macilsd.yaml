@@ -1,0 +1,14 @@
+defaults:
+  - _dflt
+  - pstfwd: dflt
+  - optima: adam
+  - lrs: null
+  - loss@loss.bce: clas ## SA/visual stream
+  #- loss@loss.cil: cil
+
+id: macilsd
+epochs: 1
+
+optima:
+  lr: 0.0001
+  weight_decay: 0.00005

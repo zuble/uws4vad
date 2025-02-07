@@ -34,7 +34,7 @@ def trainer(cfg, vis):
     net.to(cfg.dvc)
     optima = instantiate(cfg.model.optima, params=net.parameters() , _convert_="partial") #;log.info(f"{optima=}")
     _, loss_computer = build_loss(cfg)
-    
+    return
     ## LOAD
     MH = ModelHandler(cfg, True)
     if cfg.load.get("chkpt_path"): 

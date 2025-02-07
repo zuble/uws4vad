@@ -9,9 +9,6 @@ enforce_tags: True
 ## >1 -> print all blocks
 cfg: 11
 
-## prints network layers
-net: 1
-
 vis:
   restart: False
   ## needle string to delete visdom env names

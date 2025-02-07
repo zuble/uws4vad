@@ -53,13 +53,13 @@ def get_testloader(cfg):
     
     ds = TestDS(cfg_dload, cfg_ds, cfg_dproc, rgbfl, audfl)
     loader = DataLoader( ds , 
-                        batch_size=cfg_dload.bs , 
-                        shuffle=cfg_dload.shuffle, 
-                        num_workers=cfg_dload.nworkers, 
-                        #prefetch_factor=cfg_dload.pftch_fctr if cfg_dload.pftch_fctr != 0 else None,
-                        pin_memory=cfg_dload.pinmem, 
-                        persistent_workers=cfg_dload.prstwrk 
-                        )
+        batch_size=cfg_dload.bs , 
+        shuffle=cfg_dload.shuffle, 
+        num_workers=cfg_dload.nworkers, 
+        #prefetch_factor=cfg_dload.pftch_fctr if cfg_dload.pftch_fctr != 0 else None,
+        pin_memory=cfg_dload.pinmem, 
+        persistent_workers=cfg_dload.prstwrk 
+    )
     
     if cfg_dload.dryrun:
         log.warning(f"DBG DRY TEST DL")            

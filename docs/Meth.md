@@ -1,4 +1,3 @@
-## Methods
 
 Below are the collected works under the WVAD paradigm, for both UCF and XDV, divided by the evaluated test set *o(verall)/a(nomaly)*.
 

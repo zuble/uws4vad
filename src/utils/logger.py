@@ -6,7 +6,7 @@ def get_log(module_name, cfg=None):
 
     log = logging.getLogger(module_name)
     
-    if cfg is not None: 
+    if cfg is not None:
         if cfg.get("debug"):
             # Convert list of debug paths into a comma-separated string
             dbgps_var = ','.join(cfg["debug"]["path"])
@@ -17,6 +17,7 @@ def get_log(module_name, cfg=None):
         else: 
             os.environ['UWS4VAD_DBG'] = ""
             lvl = logging.INFO
+            
         #else: lvl
         
         os.environ['UWS4VAD_LOGP'] = cfg.path.out_dir
@@ -24,7 +25,7 @@ def get_log(module_name, cfg=None):
             
     else:
         lvl = logging.INFO
-    
+        
         dbgps_var = os.environ.get('UWS4VAD_DBG', '')
         dbgps = dbgps_var.split(',') if dbgps_var else []
         for dbgp in dbgps:

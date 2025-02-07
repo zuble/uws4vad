@@ -6,7 +6,7 @@ import numpy as np
 import glob , os, os.path as osp, time
 from hydra.utils import instantiate as instantiate
 
-from src.data import get_trainloader, run_dl, get_testloader
+from src.data import *
 from src.utils import get_log, Visualizer
 log = get_log(__name__)
 
@@ -50,7 +50,6 @@ def mpcs(cfg):
     #analyze_sampler(a, lbls, cfg.data.id, iters=1,vis=None)
     
     
-
 def embeds(cfg):
     vis = Visualizer('TMP_EMBEDS', 
             restart=cfg.xtra.vis.restart, 
@@ -83,20 +82,29 @@ def embeds(cfg):
     #label = ldata["label"].repeat_interleave(cfg.dataproc.crops2use.train)
     #vis.embeddings()
     
-class Debug():
     
+    
+class Debug():
     def __init__(self, cfg):
         self.cfg = cfg
-        self.debug_data()
+    
+    def hydra(self):
+        log = utils.get_log(__name__, self.cfg)
+        log.debug(f"Working dir : {os.getcwd()},\nOriginal dir : {hydra.utils.get_original_cwd()} ")
+        log.debug(utils.collect_random_states())
+        utils.xtra(self.cfg)
+    
+    def testset(self):
+        get_testxdv_info(self.cfg)
         
-        
-    def debug_data(self):
+    def data(self):
         traindl, trainfrmt = get_trainloader(self.cfg) 
         run_dl(traindl)
         
+        #testdl = get_testoader(self.cfg) 
+        #run_dl()
         
-    
-    def debug_loss(self):
+    def loss(self):
         ## set debug.model=1
         from src.model.loss.mgnt import Rtfm
         
@@ -128,7 +136,7 @@ class Debug():
             }
         )
 
-    def debug_net(self, cfg):
+    def net(self, cfg):
         from src.model.net.rtfm import Network
         net_cfg = {
             '_target_': 'src.model.net.rtfm.Network',
@@ -165,6 +173,7 @@ def aud_len_mat():
     log.warning(f'idxs2 {idxs2.shape} \n {idxs2}')
     log.warning(f'idxs3 {idxs3.shape} \n {idxs3}')
     log.warning(f'idxs4 {idxs4.shape} \n {idxs4}')
+
 def aud_emb(cfg):
     from src.fe.hear_mn import mn10_all_b as mn10_MB
     from src.fe.hear_mn import mn10_all_b_all_se as mn10_MB_MSE

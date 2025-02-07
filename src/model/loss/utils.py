@@ -124,7 +124,7 @@ class LossComputer(nn.Module):
             if log.isEnabledFor(logging.DEBUG):
                 self.pfu.logdat(loss_output)
             
-            ## this ugly !!!!!!!!!!!!!
+            ## this ugly !!!!!!
             for component_name, component_value in loss_output.items():
                 #log.debug(f"{component_name}  {component_value}")
                 print_grad_fn_info(component_value,component_name)

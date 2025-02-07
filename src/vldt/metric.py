@@ -216,11 +216,21 @@ class Tabler:
             if self.send2visdom: ## send table_img to vis
                 #self.vis.close(name) ## starts fresh
                 fig.canvas.draw()
-                table_img = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-                table_img = table_img.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-                #plt.imsave(osp.join(self.cfg.path.out_dir,'table_np.png'), table_img)
-                opts=dict(title=name, caption=name, store_history=False)
-                self.vis.disp_image(table_img.transpose((2, 0, 1)), name, opts)
+                buffer = fig.canvas.tostring_argb()
+                width, height = fig.canvas.get_width_height()
+                table_img = np.frombuffer(buffer, dtype=np.uint8)
+                table_img = table_img.reshape((height, width, 4)) # Reshape for ARGB
+                table_img = table_img[..., 1:]  # Drops alpha (first channel in ARGB)
+                table_img = table_img.transpose((2, 0, 1))  # Transpose to (C, H, W) for Visdom
+                opts = dict(title=name, caption=name, store_history=False)
+                self.vis.disp_image(table_img, name, opts)
+                ## working w/ matplotlib 3.7.0
+                # fig.canvas.draw()
+                # table_img = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8)
+                # table_img = table_img.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+                # #plt.imsave(osp.join(self.cfg.path.out_dir,'table_np.png'), table_img)
+                # opts=dict(title=name, caption=name, store_history=False)
+                # self.vis.disp_image(table_img.transpose((2, 0, 1)), name, opts)
         finally:
             plt.close(fig)    
 
