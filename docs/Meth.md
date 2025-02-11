@@ -1,5 +1,7 @@
 
-Below are the collected works under the WVAD paradigm, for both UCF and XDV, divided by the evaluated test set *o(verall)/a(nomaly)*.
+Below are the collected works under WVAD paradigm.
+
+Results refer to the test subset which methods were evaluated, *o(verall)/a(nomaly)*, when provided.
 
 | Year | Method | Feature | UCF (AUCo,AUCa,FAR) | XDV (APo,APa,FAR) |
 |------|---------|----------|-------------------|------------------|
@@ -41,15 +43,23 @@ Below are the collected works under the WVAD paradigm, for both UCF and XDV, div
 | 2023 | [LSTC](https://github.com/shengyangsun/LSTC_VAD) [:newspaper:](#) | C3D <br> I3D | 0.8347,-,- <br> 0.8588,-,- | -,-,- <br> -,-,- |
 | 2023 | [BERTMIL](https://github.com/wjtan99/BERT_Anomaly_Video_Classification) [:newspaper:](#) | I3D+FLOW <br> I3D | 0.8671,-,- <br> -,-,- | -,-,- <br> 0.8210,-,- |
 | 2023 | [SLAMBS](#) [:newspaper:](#) | I3D | 0.8619,-,- | 0.8423,-,- |
-| 2023 | [ANOMCLIP](#) [:newspaper:](#) | ViT-B/16 | 0.8636,-,- | 0.7851,-,- |
+| 2023 | TEVAD [:newspaper:](#) | | | |
 | 2023 | [HYPERVD](https://github.com/xiaogangpeng/HyperVD) [:newspaper:](#) | I3D+VGG | -,-,- | 0.8567,-,- |
 | 2023 | [PEL4VAD](https://github.com/yujiangpu20/PEL4VAD) [:newspaper:](#) | I3D | 0.8676,0.7224,0.43 | 0.8559,0.7026,0.57 |
+| 2023 | [VAR](https://github.com/Roc-Ng/VAR) [:newspaper:](#) | | | |
 | 2023 | [CNN-VIT](#) [:newspaper:](#) | C3D <br> I3D <br> CLIP <br> C3D+CLIP <br> I3D+CLIP | 0.8578,-,- <br> 0.8650,-,- <br> 0.8763,-,- <br> 0.8802,-,- <br> 0.8897,-,- | -,-,- <br> -,-,- <br> -,-,- <br> -,-,- <br> -,-,- |
+| 2023 | UCFA [:newspaper:](#) | | | |
 | 2023 | [SAA](https://github.com/2023-MindSpore-4/Code4/tree/main/WS-VAD-mindspore-main) [:newspaper:](#) | I3D <br> I3D+VGG | 0.8619,0.6877,- <br> -,-,- | 0.8359,0.8419,- <br> 0.8423,-,- |
+| 2023 | [ANOMCLIP](#) [:newspaper:](#) | ViT-B/16 | 0.8636,-,- | 0.7851,-,- |
 | 2023 | [MTDA](#) [:newspaper:](#) | I3D+VGG | -,-,- | 0.8444,-,- |
 | 2023 | [BNWVAD](https://github.com/cool-xuan/BN-WVAD) [:newspaper:](#) | I3D <br> I3D+VGG | 0.8724,0.7171,- <br> -,-,- | 0.8493,0.8545,- <br> 0.8526,-,- |
 | 2023 | [DEN](https://github.com/ArielZc/DE-Net) [:newspaper:](#) | I3D <br> I3D+VGG | 0.8633,-,- <br> -,-,- | 0.8166,-,- <br> 0.8313,-,- |
 | 2023 | [VADCLIP](https://github.com/nwpu-zxr/VadCLIP) [:newspaper:](#) | I3D+CLIP | 0.8802,-,- | 0.8451,-,- |
-| 2024 | [VAR](https://github.com/Roc-Ng/VAR) [:newspaper:](#) | | | |
-| 2024 | [MSBT](https://github.com/shengyangsun/MSBT) [:newspaper:](#) | | | |
-
+| 2024 | VAD-LLaAMa [:newspaper:](http://arxiv.org/abs/2401.05702) | | | |
+| 2024 | [GlanceVAD](https://github.com/pipixin321/GlanceVAD) [:newspaper:](http://arxiv.org/abs/2403.06154) | | | |
+| 2024 | [LAVAD](https://github.com/lucazanella/lavad) [:newspaper:](http://arxiv.org/abs/2404.01014) | | | |
+| 2024 | [MSBT](https://github.com/shengyangsun/MSBT) [:newspaper:](http://arxiv.org/abs/2405.05130) | | | |
+| 2024 | HAWK [:newspaper:](http://arxiv.org/abs/2405.16886) | | | |
+| 2024 | PEMIL [:newspaper:](https://ieeexplore.ieee.org/document/10657732/) | | | |
+| 2024 | [Holmes-VAD](https://github.com/pipixin321/HolmesVAD)[:newspaper:](http://arxiv.org/abs/2406.12235) | | | |
+| 2024 | [Holmes-VAU](https://github.com/pipixin321/HolmesVAU)[:newspaper:](https://arxiv.org/abs/2412.06171) | | | |

@@ -6,8 +6,7 @@ from timm.data import resolve_data_config, create_transform
 from torchvision.transforms import Compose, Resize, TenCrop, FiveCrop, CenterCrop, ToTensor, Normalize, ToPILImage, Lambda
 from PIL import Image
 
-import os, os.path as osp, glob, time, random
-import hydra
+import os, os.path as osp, glob, time, random, hydra
 from hydra.utils import instantiate as instantiate
 
 from src.fe.dlvid import get_vidloader
@@ -30,7 +29,9 @@ def get_vid_model(cfg):
             new_vrs = input(f"pick another")
             if new_vrs not in model_names: raise Exception
         else: log.info(f"going with {cfg_model.vrs}")
+        
         model = timm.create_model(f"{cfg_model.id}/{cfg_model.vrs}", pretrained=True, num_classes=0)
+        #print(dir(model))
         model.to(cfg.dvc)
         model.eval()
         
@@ -41,45 +42,15 @@ def get_vid_model(cfg):
             #lambda x: x.unsqueeze(0)
         ])
         log.debug(f"timm {cfg_trnsfrm=} \n{trnsfrm=}")
+
+        frame = trnsfrm(torch.randn(224, 224, 3).numpy()).unsqueeze(0)
+        log.debug(f'trnsfrm {frame.shape} {frame.dtype} {type(frame)}')
         
-        ## XTRA
-        if cfg.dryrun: 
-            inp = trnsfrm(torch.randn(224, 224, 3).numpy()).unsqueeze(0).to(cfg.dvc)
-            out = model( inp )            
-            log.warning(f"DRY RUN : {inp.shape} -> {out.shape} {out.dtype}")
-                        
-        if cfg.profile or cfg.info: 
-            bs = 2; t = 16; clip = []
-            for i in range(0, t):
-                frame = trnsfrm( torch.randn(3, 224, 224).numpy() ) 
-                log.debug(f'trnsfrm {frame.shape} {frame.dtype} {type(frame)}')
-                clip.append(frame)    
-            clip = torch.stack(clip,dim=0)
-            #print(f"{clip.shape=}") ## t,c,h,w   
-            #clip = trnsfrm(torch.randn(t, 3, 224, 224).numpy()).to(cfg.dvc)
-            
-            if cfg.profile:
-                from src.model.net.utils import prof
-                clips = clip.repeat(bs, 1, 1, 1, 1)  ## bs,t,c,h,w
-                log.warning(f"PROFILING: Simulating {bs}x{t}frames {clips.shape=}")
-                prof(model, inpt=clips)
-        
-            if cfg.info:
-                from torchinfo import summary
-                summary(model, 
-                    input_data=clip,
-                    col_names=["input_size","output_size", "num_params", "trainable", "mult_adds"],
-                    #verbose=2
-                ) 
-        return model, trnsfrm, cfg_model
-        
-    
-    elif cfg_model.id == "clip":
+    elif cfg_model.id == "clipai":
         import clip
         log.info("OAICLIP model")
         models = clip.available_models()
-        for m in models:
-            log.info(f"{m}")
+        for m in models: log.info(f"{m}")
         version = {
             'vitb16': "ViT-B/16",
             'vitb32': "ViT-B/32"
@@ -92,9 +63,10 @@ def get_vid_model(cfg):
             model_path = version
         else: log.info(f"loading from {model_path}")
         
-        model, prepfx = clip.load(model_path, device=cfg.dvc, download_root=model_dir)  
-        model.eval()
-        
+        _model, prepfx = clip.load(model_path, device=cfg.dvc, download_root=model_dir)  
+        _model.eval()
+        model = _model.encode_image
+    
         assert cfg_model.inpt_size == model.visual.input_resolution, f"{cfg_model.inpt_size} != {model.visual.input_resolution}"
 
         #https://pc-pillow.readthedocs.io/en/latest/Image_class/Image_fromarray.html
@@ -108,9 +80,34 @@ def get_vid_model(cfg):
         ])
         log.error(f"{trnsfrm=} {prepfx=}")
         
-        return model.encode_image, trnsfrm, cfg_model
-        #model.encode_text
+        frame = transfrm(torch.randn(3, 224, 224).numpy()).unsqueeze(0)
+        log.debug(f'trnsfrm {frame.shape} {frame.dtype} {type(frame)}')
         
+        #model.encode_text
+    
+    else: raise NotImplementedError
+    
+    ############
+    ## PROFILING
+    if cfg.dryrun:
+        out = model(frame)       
+        log.warning(f"DRY RUN: {frame.shape} -> {out.shape} {out.dtype}")
+    
+    if cfg.profile:
+        from src.utils import prof
+        bs = 2; t = 16; clip = []
+        for i in range(0, t): clip.extend(frame)   
+        clip = torch.stack(clip,dim=0)
+        clips = clip.repeat(bs, 1, 1, 1, 1)  ## bs,t,c,h,w        
+        log.warning(f"PROFILING: Simulating {bs}x{t}frames {clips.shape=}")
+        prof(model, inpt_data=clips)    
+    
+    if cfg.summary: 
+        from src.utils import info, flops
+        flops(model, inpt_data=frame)
+        #info(model, inpt_size=None, inpt_data=frame )
+    
+    return model, trnsfrm, cfg_model
 
 
 ## ----------------------- ##
@@ -134,7 +131,7 @@ def get_aud_model(cfg):
         #    model = mn10_MB_MSE.load_model()
         #else: raise NotImplementedError
         
-        if cfg.dr:
+        if cfg.dry_run:
             vids=1; secs=32; sr=cfg_model.sr; fps=cfg.data.fps
             ## n_sounds * n_samples
             audio = torch.ones((vids, int(sr * secs)))

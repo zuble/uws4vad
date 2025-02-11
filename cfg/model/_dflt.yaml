@@ -6,8 +6,6 @@ defaults:
   #- pstfwd: dflt
   #- loss@loss.{custom name}: {target .yml in loss/.. }
 
-dryfwd: False
-
 id: ???
 epochs: ???
 optima: ???

@@ -1,8 +1,9 @@
-id: clipai
+## openai
+id: clipai 
 vrs: vitb16
 ncrops: 0
 
-inpt_size: 224
+input_size: 224
 mean: [0.48145466, 0.4578275, 0.40821073]
 std: [0.26862954, 0.26130258, 0.27577711]
 

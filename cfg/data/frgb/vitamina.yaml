@@ -1,6 +1,7 @@
 id: TIMM__VITAMIN_BASE_224.DATACOMP1B_CLIP
 ds: 
   - xdv
+input_size: (2, 224, 224)
 fstep: 16
 dfeat: 768
 ncrops: 0

@@ -5,70 +5,10 @@ import torch.nn.init as tc_init
 from hydra.utils import instantiate as instantiate
 from omegaconf import OmegaConf, DictConfig
 
-from src.utils import get_log
+from src.utils import prof, flops, info, get_log
 log = get_log(__name__)
 
 
-def prof(model, inpt=None, inpt_size=None):
-    
-    from torch.profiler import profile, record_function, ProfilerActivity
-    
-    if inpt is None:
-        assert inpt_size is not None
-        inpt = torch.randn( inpt_size )       
-    
-    # Warmup runs (not profiled)
-    #with torch.no_grad():
-    #    for i in range(int(len(inpt)/2)):
-    #        _ = model(inpt[i])
-    #        #torch.cuda.synchronize()  # For accurate CUDA timing
-    
-    def trace_handler(prof):
-        print(prof.key_averages().table(
-            sort_by="self_cpu_memory_usage", #excludes time spent in children operator calls
-            #sort_by="cpu_memory_usage",
-            row_limit=-1))
-
-    with profile(
-        activities=[
-            ProfilerActivity.CPU, 
-            #ProfilerActivity.CUDA
-            ],
-        profile_memory=True, 
-        #group_by_input_shape=True  #finer granularity of results and include operator input shapes
-        record_shapes=True,
-        with_stack=True,
-        with_flops=True,
-        # schedule=torch.profiler.schedule(
-        #     wait=1,
-        #     warmup=1,
-        #     active=2,
-        #     repeat=2),
-        # on_trace_ready=trace_handler
-        ) as prof:
-            with record_function("infer"):
-                for x in inpt:
-                    _ = model(x)
-            # for i in range(0, 2):
-            #     _ = model(x)
-            #     torch.cuda.synchronize()  # Sync CUDA ops
-            #     prof.step()
-    
-    #print("CPU/GPU Time Analysis:")
-    #print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=15))
-    #print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=15))
-    
-    print("\nMemory Analysis:")
-    #print(prof.key_averages().table(sort_by="self_cuda_memory_usage", row_limit=10))
-    print(prof.key_averages().table(sort_by="self_cpu_memory_usage", row_limit=-1))
-
-def count_params(net):
-    t = sum(p.numel() for p in model.parameters())
-    log.info(f'{t/1e6:.3f}M parameters')
-    t = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    log.info(f'{t/1e6:.3f}M trainable parameters')   
-
-    
 def wght_init(m):
     #classname = m.__class__.__name__
     #if classname.find('Conv') != -1 or classname.find('Linear') != -1:
@@ -148,13 +88,11 @@ def build_net(cfg):
     #if cfg.get("debug"):
     #    for name, param in net.named_parameters():
     #        log.info(f"Layer: {name} | Size: {param.size()} | DVC: {param.device} Values : {param[:2]} \n")
-    if cfg.net.info:
-        from torchinfo import summary
-        summary(net, 
-            input_size=(cfg.dataload.bs, cfg.dataproc.seg.len, sum(dfeat)),
-            col_names=["input_size","output_size", "num_params", "trainable", "mult_adds"],
-            #verbose=2
-        ) 
+    if cfg.summary: 
+        from src.utils import info, flops
+        sz = (cfg.dataload.bs, cfg.dataproc.seg.len, sum(dfeat))
+        flops(model, inpt_size=sz )
+        #info(model, inpt_size=sz, inpt_data=frame )
         log.info(f"\n\n{net=}\n")
         log.info(f"INFER\n\t{cfg_infer=}\n\t{inferator=}")
     
@@ -162,6 +100,8 @@ def build_net(cfg):
         dry_run(net, cfg, dfeat, inferator)
     
     if cfg.net.profile:
-        prof(net, inpt_size=(32, cfg.dataproc.seg.len, sum(dfeat)) )
+        nb = 2
+        log.warning(f"PROFILING: {nb}x{cfg.dataload.bs}x{cfg.dataproc.seg.len}segments")
+        prof(net, inpt_size=(nb,  cfg.dataload.bs, cfg.dataproc.seg.len, sum(dfeat)))
     
     return net, inferator

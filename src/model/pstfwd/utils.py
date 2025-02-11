@@ -80,7 +80,6 @@ class PstFwdUtils:
         ## !!! experiment w einops ?
         ## https://forums.fast.ai/t/lesson-24-official-topic/104358/3
         
-        
         if self.ncrops > 1:
             log.debug(f"uncrop pre {list(arr.shape)}")
             if arr.ndim == 1:
@@ -193,6 +192,7 @@ class PstFwdUtils:
         
         if infer: return dists
         return abn_dists, nor_dists
+    
     ############
     ## magnitude
     def calc_l2_norm(self, tensor, dim):

@@ -21,7 +21,13 @@ dvc: ${dyn_dvc:1}
 
 
 modal: aud
-dr: False ## dry-run
+
+## TODO 
+dryrun: true
+summary: true ## params/flops/actvs
+profile: false
+##
+
 ## folder path with .mp4's
 ## if ~ , all folders in data.vroot are extracted
 ext_dir: ~ 

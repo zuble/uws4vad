@@ -8,8 +8,6 @@ from src.utils.logger import get_log
 log = get_log(__name__)
 
 
-
-
 def hh_mm_ss(seconds):
     return time.strftime('%H:%M:%S', time.gmtime(seconds))
 

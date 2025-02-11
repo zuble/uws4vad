@@ -11,45 +11,6 @@ from src.utils import get_log, hh_mm_ss
 log = get_log(__name__)
 
 
-def count_parms(net):
-    t = sum(p.numel() for p in net.parameters())
-    log.info(f'{t/1e6:.3f}M parameters')
-    t = sum(p.numel() for p in net.parameters() if p.requires_grad)
-    log.info(f'{t/1e6:.3f}M trainable parameters')
-    
-
-'''
-## https://github.com/facebookresearch/fvcore
-## https://github.com/MzeroMiko/VMamba/blob/main/classification/models/vmamba.py
-from fvcore.nn import FlopCountAnalysis, flop_count_str, flop_count, parameter_count
-def flops(self, shape=(3, 224, 224), verbose=True):
-    # shape = self.__input_shape__[1:]
-    supported_ops={
-        "aten::silu": None, # as relu is in _IGNORED_OPS
-        "aten::neg": None, # as relu is in _IGNORED_OPS
-        "aten::exp": None, # as relu is in _IGNORED_OPS
-        "aten::flip": None, # as permute is in _IGNORED_OPS
-        # "prim::PythonOp.CrossScan": None,
-        # "prim::PythonOp.CrossMerge": None,
-        "prim::PythonOp.SelectiveScanMamba": partial(selective_scan_flop_jit, flops_fn=flops_selective_scan_fn, verbose=verbose),
-        "prim::PythonOp.SelectiveScanOflex": partial(selective_scan_flop_jit, flops_fn=flops_selective_scan_fn, verbose=verbose),
-        "prim::PythonOp.SelectiveScanCore": partial(selective_scan_flop_jit, flops_fn=flops_selective_scan_fn, verbose=verbose),
-        "prim::PythonOp.SelectiveScanNRow": partial(selective_scan_flop_jit, flops_fn=flops_selective_scan_fn, verbose=verbose),
-    }
-
-    model = copy.deepcopy(self)
-    model.cuda().eval()
-
-    input = torch.randn((1, *shape), device=next(model.parameters()).device)
-    params = parameter_count(model)[""]
-    Gflops, unsupported = flop_count(model=model, inputs=(input,), supported_ops=supported_ops)
-
-    del model, input
-    return sum(Gflops.values()) * 1e9
-    return f"params {params} GFLOPs {sum(Gflops.values())}"
-'''
-
-
 class ModelHandler:
     def __init__(self, cfg, istrain=False):
         self.cfg = cfg
