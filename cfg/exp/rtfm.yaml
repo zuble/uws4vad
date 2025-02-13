@@ -25,7 +25,7 @@ tags: ["dataload"]
 
   
 model:
-  epochs: 15  ## 5, 10, 10, 20
+  epochs: 10  ## 5, 10, 10, 20
   optima:
     lr: 0.0001
     weight_decay: 0.0005
@@ -42,20 +42,19 @@ dataproc:
   cropasvideo: 
     train: False  
     test: True
-  #culum: 
-  #  #- B1.FIGHT
-  #  - B2.SHOOT
-  #  #- B4.RIOT
-  #  - B5.ABUSE
-  #  - B6.CARACC
-  #  - G.EXPLOS
+  culum: 
+    #- B1.FIGHT
+    #- B2.SHOOT
+    #- B4.RIOT
+    #- B5.ABUSE
+    - B6.CARACC
+    #- G.EXPLOS
 
 dataload:
   bs: 16
   balance:
     bag: 0.5
     set: 1.2
-
 
 
 ## 2751792490 ~ rtfm-magn-xdv/timm__vitamin_base_224.datacomp1b_clip/runs/28-07_19-38-32

@@ -89,7 +89,7 @@ def get_vid_model(cfg):
     
     ############
     ## PROFILING
-    if cfg.dryrun:
+    if cfg.dryfwd:
         out = model(frame)       
         log.warning(f"DRY RUN: {frame.shape} -> {out.shape} {out.dtype}")
     

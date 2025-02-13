@@ -1,3 +1,4 @@
+import torch
 from torch.profiler import profile, record_function, ProfilerActivity
 from torchinfo import summary
 from fvcore.nn import FlopCountAnalysis, flop_count_str, flop_count, flop_count_table, parameter_count, activation_count, ActivationCountAnalysis
@@ -27,11 +28,11 @@ log = get_log(__name__)
 ## https://github.com/facebookresearch/fvcore/blob/main/docs/flop_count.md
 ## https://github.com/MzeroMiko/VMamba/blob/main/classification/models/vmamba.py
 
-def flops(model, inpt_shape=None, inpt_data=None, verbose=True):
+def flops(model, inpt_size=None, inpt_data=None, verbose=True):
     from collections import Counter
     
     if inpt_data is None:
-        inpt_data = torch.randn((1, *inpt_shape), device=next(model.parameters()).device)
+        inpt_data = torch.randn(inpt_size, device=next(model.parameters()).device) #(1, *inpt_size)
     
     flops = FlopCountAnalysis(model, inpt_data)
     flops.tracer_warnings(mode='all')

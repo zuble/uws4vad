@@ -61,7 +61,7 @@ def build_net(cfg):
     ## otherwise import from layers.classifier or construct
     if cfg.net.get("cls"):
         log.debug(f"{cfg.net.cls=}")
-        rgs = instantiate(cfg.net.cls, dfeat=dfeat).to(cfg.dvc)
+        rgs = instantiate(cfg.net.cls, dfeat=dfeat)
         log.debug(f"{rgs=}")
         net = instantiate(cfg_net_main, dfeat=dfeat, rgs=rgs)
     else:
@@ -88,10 +88,10 @@ def build_net(cfg):
     #if cfg.get("debug"):
     #    for name, param in net.named_parameters():
     #        log.info(f"Layer: {name} | Size: {param.size()} | DVC: {param.device} Values : {param[:2]} \n")
-    if cfg.summary: 
+    if cfg.net.summary: 
         from src.utils import info, flops
         sz = (cfg.dataload.bs, cfg.dataproc.seg.len, sum(dfeat))
-        flops(model, inpt_size=sz )
+        flops(net, inpt_size=sz)
         #info(model, inpt_size=sz, inpt_data=frame )
         log.info(f"\n\n{net=}\n")
         log.info(f"INFER\n\t{cfg_infer=}\n\t{inferator=}")

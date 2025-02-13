@@ -3,10 +3,9 @@ import numpy as np
 import math 
 
 import cv2
-import av ## priot ro decord otehrwise vis.video gives segment fault
+import av ## prior 2 decord, or vis.video gives seg fault
 import decord
-#decord.bridge.set_bridge('')
-
+#decord.bridge.set_bridge('torch')
 
 from hydra.utils import instantiate as instantiate
 import os, os.path as osp, time, glob 
@@ -18,7 +17,6 @@ from plotly.subplots import make_subplots
 import matplotlib 
 #matplotlib.use('TkAgg') # Qt5Agg
 import matplotlib.pyplot as plt
-
 
 from src.model import ModelHandler, build_net
 from src.vldt import Validate, Metrics, Plotter
@@ -47,7 +45,7 @@ def tester(cfg, vis):
         log.info(f'$$$$ Watching from pkl')
         raise NotImplementedError
         #watch_info = load_pkl(cfg.EXPERIMENTPATH,'watch')
-        #Watch(cfg, watch_info, vis)
+        #Watcher(cfg, watch_info, vis)
         #log.info(f'$$$$ watched 4 {hh_mm_ss(time.time() - tic)}')
         return
     
@@ -57,6 +55,7 @@ def tester(cfg, vis):
 
     ## MODEL
     net, inferator = build_net(cfg)
+    net.to(cfg.dvc)
 
     ##########
     watching = cfg_vldt.watch.frmt
@@ -78,22 +77,25 @@ def tester(cfg, vis):
     ## if coming from train loads best saved state
     ## if not cfg.load.ckpt_path must be given
     net.load_state_dict( ModelHandler(cfg).get_test_state() )
-    log.error(net)
     #net.to(cfg.dvc) ## AttributeError: '_IncompatibleKeys' object has no attribute 'to'
 
-    vldt_info, watch_info, mtrc_info, curv_info, table_res = VLDT.start(net, netpstfwd) ## class, dict, _
-    pltr = Plotter(vis); pltr.metrics(mtrc_info); pltr.curves(curv_info)
+    vldt_info, watch_info, mtrc_info, curv_info, table_res = VLDT.start(net, inferator) ## class, dict, _
+    if cfg_vldt.per_what == 'lbl':
+        pltr = Plotter(vis)
+        pltr.metrics(mtrc_info)
+        pltr.curves(curv_info)
 
-        
-    #if cfg_vldt.savepkl: save_pkl(cfg.EXPERIMENTPATH, vldt_info, 'vldt')
-    #if cfg_vldt.watch.savepkl: save_pkl(cfg.EXPERIMENTPATH, watch_info, 'watch')
-    if watching: Watch(cfg, cfg_vldt.watch, watch_info, vis)
+    ## save into same folder as parameters file
+    if cfg_vldt.savepkl: save_pkl(cfg.load.ckpt_path, vldt_info, 'vldt')
+    #if cfg_vldt.watch.savepkl: save_pkl(cfg.load.ckpt_path, watch_info, 'watch')
+    
+    if watching: Watcher(cfg, cfg_vldt.watch, watch_info, vis)
 
     log.info(f'$$$$ Test Completed in {hh_mm_ss(time.time() - tic)}')
+    sys.exit()
 
 
-
-class Watch:
+class Watcher:
     def __init__(self, cfg, cfg_wtc, watch_info, vis):
         self.cfg = cfg
         self.cfg_dsinf = cfg.data
@@ -105,13 +107,13 @@ class Watch:
         ## anomaly score player
         if 'asp' in cfg_wtc.frmt: self.asp = ASPlayer(cfg_wtc, vis).play
         else: self.asp = lambda *args, **kwargs: None
-        log.info(f"Watch.asp {self.asp}")
+        log.info(f"Watcher.asp {self.asp}")
         
         ## gtfl(grount-truth frame-level) ( /attws) viewer
         if any(x in cfg_wtc.frmt for x in ['gtfl', 'attws']):
-            self.plot = Plotter(cfg_wtc.frtend, vis, 'asp' in cfg_wtc.frmt).fx
+            self.plot = ASPlotter(cfg_wtc.frtend, vis, 'asp' in cfg_wtc.frmt).fx
         else: self.plot = lambda *args, **kwargs: None
-        log.info(f"Watch.plot {self.plot}")
+        log.info(f"Watcher.plot {self.plot}")
         
         self.init_gui() if cfg_wtc.guividsel else self.init_lst()    
 
@@ -122,8 +124,13 @@ class Watch:
         gt = self.data['ALL']['GT'][idx]
         fl = self.data['ALL']['FL'][idx]
         attw = self.data['ALL']['ATTWS'][idx]
-        log.info(f'watch {fn} , gt {len(gt)} {type(gt)} | fl {len(fl)} {type(fl)} | attw {type(attw)} {len(attw)} ')
-        
+        log.info(
+            f'watch {fn}, '
+            f'gt {len(gt)} {type(gt).__name__} | '
+            f'fl {len(fl)} {type(fl).__name__} | '
+            f'attw {type(attw).__name__ if attw is not None else "None"} '
+            f'{len(attw) if attw is not None else 0}'
+        )
         self.plot(fn, gt, fl, attw) ## plot with full lenght of vframes
         vpath = osp.join(self.cfg_dsinf.vroot , f"TEST/{fn}")+'.mp4'
         stop = self.asp(vpath, gt, fl) ## play with frame_skip
@@ -138,13 +145,13 @@ class Watch:
             log.info(f'Watching lst init in {self.cfg_wtc.frmt} formats for {self.cfg_wtc.label} w/ {len(fnlist)} vids')
             for fn in fnlist: 
                 stop = self.process(fn)
-                if stop: log.warning(f"watch.init_lst just broke"); break
+                if stop: log.warning(f"watch.init_lst just broke"); return
         
         else:            
             ## Continuously process filenames input by the user
             while True:
                 fns = input("1 or + fns 'fn1,fn2' (double-click+(ctrl+v)) | empty enter -> stop: ")
-                if fns.strip() == '': break
+                if fns.strip() == '': return
                 
                 fnlist = fns.split(',')
                 for fn in fnlist:
@@ -176,7 +183,7 @@ class Watch:
     
 #######################
 ## gtfl / attws plotter
-class Plotter:
+class ASPlotter:
     def __init__(self, mode, vis, overwrite):
         #plt.ion()
         self.fx = {
@@ -382,11 +389,11 @@ class ASPlayer:
         ## generates gt/fl overlayed vid tensor
         dvr = decord.VideoReader(vpath)
         vframes = len(dvr)
-        assert vframes == len(gt) == len(fl), f'{vframes = } , {len(gt) = } , {len(fl) = } '
+        assert vframes == len(gt) == len(fl), f'{vframes = } , {len(gt) = } , {len(fl) = } ' ## when match_gtfl == truncate, this fails
 
         flist = list(range(0, vframes, self.frame_skip)) ##vframes+1
         log.debug(f"{len(flist)=} {self.frame_skip=}")
-        vdata = dvr.get_batch(flist).numpy()
+        vdata = dvr.get_batch(flist).asnumpy()
         #self.vis.vid(vdata, "vid"); return
         
         self.init_cv(vpath)    

@@ -22,7 +22,7 @@ dvc: ${dyn_dvc:1}
 
 modal: rgb
 
-dryrun: true
+dryfwd: true
 summary: true ## params/flops/actvs
 profile: false
 

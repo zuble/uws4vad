@@ -5,7 +5,7 @@ id: ??? ## must be specified as the main._target_ depends on
 vrs: ""
 wght_init: xavier0 
 
-dryrun: true
+dryfwd: true
 summary: true ## params/flops/actvs
 profile: false
 

@@ -32,9 +32,11 @@ def trainer(cfg, vis):
     ## MODEL
     net, inferator = build_net(cfg)
     net.to(cfg.dvc)
+    
     optima = instantiate(cfg.model.optima, params=net.parameters() , _convert_="partial") #;log.info(f"{optima=}")
     _, loss_computer = build_loss(cfg)
-    return
+    #return
+    
     ## LOAD
     MH = ModelHandler(cfg, True)
     if cfg.load.get("chkpt_path"): 
@@ -119,11 +121,13 @@ def trainer(cfg, vis):
                 tmeter.log_bat(trn_inf)
                 
                 abn_bag_len = torch.sum(ldata["label"] == 1).item()
-                vis.plot_lines('abn/nor bag ratio', abn_bag_len / ldata["label"].shape[0],
-                            opts=dict(
-                                title=f"Batch vs. abn/nor bag ratio",  #Abnormal Bag Ratio
-                                ylabel='Abn Bag Tatio'
-                        ))
+                vis.plot_lines('abn/nor bag ratio', 
+                    abn_bag_len / ldata["label"].shape[0],
+                    opts=dict(
+                        title=f"Batch vs. abn/nor bag ratio",  #Abnormal Bag Ratio
+                        ylabel='Abn Bag Tatio'
+                    )
+                )
                 
                 #if bi % 20 == 0:
                 #    log.warning(f"{bi} ")

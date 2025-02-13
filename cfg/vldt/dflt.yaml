@@ -10,14 +10,15 @@ dryrun: False
 fwd_siz: ${dyn_vldtfwd:${net.id},9}
 
 ## rshpndfill: fill fl w/ last value until len is the same as gt
-## truncate: truncate gt to len(fl)
+## truncate: truncate gt to len(fl) 
 ## this mismatch mainly happens on diff sampling from CLIP
-match_gtfl: truncate
+match_gtfl: rshpndfill
 
 ## determines how abnormal sub-labels (xdv) are treated when updating the validation dict handler
 ## therefore it influences the metric calculations (auc_roc,auc_pr,ap) for abnormal sublabels
 ## as well as the ROC/PR curve plot for the same sublabels
 ## for the normal/abnormal (overall) metrics/curves has no impact
+## multi will overlap videos into more than 1 label
 multi_or_single: single
 
 train:
@@ -63,7 +64,7 @@ test:
   ## METRICS ( atm only working in "vid" )
   ## makes this variables global per vldt, to serve high_state and this
   ## sorted results in descending order according to this
-  record_mtrc: ${dyn_vldtmtrc:${data.id},''}
+  record_mtrc: ${dyn_per_ds:${data.id}, AUC-ROC, AP}
 
   ## send barplot per metric to visdom server (xaxis is labels)
   ## useful for compare same metrics per multiples experiments in visdom
@@ -84,6 +85,7 @@ test:
     savepkl: 0
     ## jumps Validate and uses watch_info.pkl if already generated
     frompkl: ""
+    
     ## FORMAT to watch the results
     ## []: disabled
     ## asp (anomaly score player): 
@@ -96,6 +98,7 @@ test:
     frmt: 
       - asp
       - gtfl
+
     ## vizualitation frontend
     ## how are the seleted formats watched
     ## wnshow:  uses opencv.imshow for asp | matplt.show for gtfl/attws

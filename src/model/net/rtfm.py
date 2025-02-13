@@ -63,8 +63,6 @@ class Infer():
         scores = self.pfu.uncrop(ndata['scores'], 'mean')
         return scores
     
-
-
         ## magnitudes
         ## 1
         ##feat_magn = torch.norm(feats, p=2, dim=2)  ## bs*nc, t

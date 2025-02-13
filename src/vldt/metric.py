@@ -90,7 +90,7 @@ class DataHandler:
 
     def proc_by_video(self, dict_data):
         """Organizes data for video-wise analysis."""
-        self.lbls4plot = list(vldt_info.DATA.keys())
+        self.lbls4plot = list(dict_data.keys())
         log.debug(f"{self.lbls4plot=}")
         
         self.mtrc_info = {self.lbls4plot[0]: {'FN': [], 'FAR': []} }
@@ -102,13 +102,13 @@ class DataHandler:
             for fn, gt, fl in zip( data['FN'] , data['GT'] , data['FL']):
                 #log.warning(f"*****")
                 #log.warning(f"get_fl_vid/vldt_info.DATA/{lbl} {fn}")
-                ##log.debug(f"get_fl_vid/vldt_info.DATA/GT: {len(gt)} ") #{type(gt)} {type(gt[0])}
-                ##log.debug(f"get_fl_vid/vldt_info.DATA/FL: {len(fl)} ") #{type(fl)} {type(fl[0])}
+                #log.debug(f"get_fl_vid/vldt_info.DATA/GT: {len(gt)} ") #{type(gt)} {type(gt[0])}
+                #log.debug(f"get_fl_vid/vldt_info.DATA/FL: {len(fl)} ") #{type(fl)} {type(fl[0])}
                 self.mtrc_info[lbl]['FN'].append(fn) ## same indexs of keys arrays belong to metrics of same video
                 ## 000.NORM
-                if not i:  self.calculator.calc_far(data['GT'], data['FL'], lbl, self.mtrc_info)
+                if not i:  self.calculator.calc_far(gt, fl, lbl, self.mtrc_info)
                 ## populate same idx with mtrc values
-                else: self.calculator.calc_metrics(data['GT'], data['FL'], lbl, self.mtrc_info, self.curv_info, self.xtra_mtrcs) 
+                else: self.calculator.calc_metrics(gt, fl, lbl, self.mtrc_info, self.curv_info, self.xtra_mtrcs) 
         
         for lbl_name, metrics in self.mtrc_info.items():
             log.debug(f"*****")
@@ -142,10 +142,12 @@ class DataHandler:
 
 
 class Tabler:
-    def __init__(self, save=False, send2visdom=False, vis=None):
+    def __init__(self, sort_mtrc, save=False, send2visdom=False, vis=None):
+        self.sort_mtrc = sort_mtrc
         self.save = save
         self.send2visdom = send2visdom
         self.vis = vis
+        
     def log_per_lbl(self, mtrc_info): 
         ## AU ROC/PR(single table lbls/metrics) and sends always 2 log , nd in test can send 2 visdom depending on cfg.TEST.VLDT
         mtrc_names = list(next(iter( list(mtrc_info.values())[1:] )).keys()) ## AP AUC-PR AUC-ROC
@@ -169,7 +171,7 @@ class Tabler:
         return table
         
     def log_per_vid(self, mtrc_info): 
-        ## table-it, 1 per lbl with all videos metrics ordered by AP high to low
+        ## table-it, 1 per lbl with all videos metrics ordered by sort_mtrc provided high to low
         for i, (lbl_name, metrics) in enumerate(mtrc_info.items()):
             if lbl_name != "000.NORM":
                 ## metrics: {'FN': ['Abuse028', 'Abuse030'], 'AP': [0.040333334281393796, 0.23268166089965397], 'AUC-PR': [0.03263809909950772, 0.19132147623132323], 'AUC-ROC': [0.2375417601595612, 0.8626980607184614]}
@@ -187,7 +189,7 @@ class Tabler:
                 
                 table = tabulate(rows, headers, tablefmt="pretty")
                 log.info(f'\n{table}')
-                self.table2img(table, lbl_name)
+                #self.table2img(table, lbl_name)
             
             else:
                 headers = [lbl_name, 'FAR'] ; rows = []
@@ -202,8 +204,10 @@ class Tabler:
                 
                 table = tabulate(rows, headers, tablefmt="pretty")
                 log.info(f'\n{table}')
-                self.table2img(table, lbl_name)
-                
+                #self.table2img(table, lbl_name)
+        
+        return None
+    
     def table2img(self, table, name):
         ## transforms table into img
         fig, ax = plt.subplots(figsize=(7,3))
@@ -246,10 +250,9 @@ class Metrics:
         self.mtrc_save_table = cfg_vldt.get('mtrc_savetable', False) ## train/tst
         
         self.vis = vis
-        self.sort_mtrc = cfg_vldt.record_mtrc
         
         self.data_handler = DataHandler( cfg_vldt.get('extra_metrics', False) )
-        self.tabler = Tabler(self.mtrc_save_table, self.mtrc_vis_table)
+        self.tabler = Tabler(cfg_vldt.record_mtrc, self.mtrc_save_table, self.mtrc_vis_table)
         self.plotter = Plotter(vis)
         
         #self.net_name = cfg.model.net.id
@@ -265,9 +268,11 @@ class Metrics:
         if vldt_info.per_what == 'vid': ## only4test
             ## lbl: 000.NORM | B1.FIGHT | B2.SHOOT | B4.RIOT | B5.ABUSE | B6.CARACC | G.EXPLOS | 111.ANOM | ALL
             self.data_handler.proc_by_video(vldt_info.DATA)
-            self.tabler.log_per_vid( self.data_handler.mtrc_info )
+            table = self.tabler.log_per_vid( self.data_handler.mtrc_info )
             
-            if self.mtrc_vis_plot: raise NotImplementedError
+            if self.mtrc_vis_plot: 
+                log.error("mtrc_visplot not implemented")
+                #raise NotImplementedError
 
         else: ## glob && lbl
             ## glob: 000.NORM | 111.ANOM | ALL
@@ -280,15 +285,16 @@ class Metrics:
                 self.plotter.metrics_all_labels_per_epo( self.data_handler.mtrc_info  )
             
             ## better iterate outside of here
-            ## neertheless differetn from testplotter
+            ## nevertheless differetn from testplotter
             ## this works as bulk
             for i, (lbl, data) in enumerate(vldt_info.DATA.items()):
                 if lbl != 'ALL' and self.gtfl_vis_plot:
                     self.plotter.allflgt(data['GT'], data['FL'], lbl)
                     
-            log.debug(self.data_handler.mtrc_info)    
-            #log.debug(self.data_handler.curv_info)
-            return self.data_handler.mtrc_info, self.data_handler.curv_info, table
+            #log.debug(f"{self.data_handler.mtrc_info=}")    
+            #log.debug(f"{self.data_handler.curv_info=}")
+        
+        return self.data_handler.mtrc_info, self.data_handler.curv_info, table
 ######################################################################
 
 

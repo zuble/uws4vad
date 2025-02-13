@@ -39,7 +39,7 @@ class WatchInfo:
         for lbl, metrics in self.DATA.items():
             for key, _ in metrics.items():
                 if self.DATA[lbl][key]:
-                    log.debug(f'[{lbl}][{key}]: {len(self.DATA[lbl][key])} {type(self.DATA[lbl][key])} {type(self.DATA[lbl][key][0])}')
+                    log.info(f'[{lbl}][{key}]: {len(self.DATA[lbl][key])} {type(self.DATA[lbl][key])} {type(self.DATA[lbl][key][0])}')
             log.info("")
     
     def reset(self):
@@ -141,7 +141,6 @@ class VldtInfo:
     def reset(self):
         for lbl, metrics in self.DATA.items():
             for key, _ in metrics.items(): metrics[key] = []
-
 
 
 
@@ -336,9 +335,9 @@ class Validate:
         self.vldt_info.upgrade()
         self.vldt_info.log()
         
-        #self.watch_info.log()        
+        self.watch_info.log()        
         self.watch_info.upgrade()
-        #self.watch_info.log()
+        self.watch_info.log()
 
         mtrc_info, curv_info, table_res = self.metrics.get_fl(self.vldt_info)
         
