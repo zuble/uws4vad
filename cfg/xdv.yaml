@@ -27,7 +27,7 @@ tmp: 0
 test: 0  
 train: 1   
 
-save: false
+save: true
 
 load:
   strict_load: false

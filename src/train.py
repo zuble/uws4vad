@@ -54,10 +54,10 @@ def trainer(cfg, vis):
     
     ## VALIDATE
     cfg_vldt = cfg.vldt.train
-    vldt = Validate(cfg, cfg_vldt, cfg.data.frgb, vis)
+    VLDT = Validate(cfg, cfg_vldt, cfg.data.frgb, vis=vis)
     if cfg.vldt.dryrun:
         log.info("DBG DRY VLDT RUN")
-        vldt.start(net, inferator); vldt.reset() ;return    
+        VLDT.start(net, inferator); VLDT.reset() ;return    
     tmeter = TrainMeter( cfg.dataload, cfg_vldt, vis)
     
     #progress = Progress(
@@ -131,8 +131,8 @@ def trainer(cfg, vis):
                 
                 #if bi % 20 == 0:
                 #    log.warning(f"{bi} ")
-                #    *_ = vldt.start(net, inferator)
-                #    vldt.reset()
+                #    *_ = VLDT.start(net, inferator)
+                #    VLDT.reset()
                 
             if lrs is not None: lrs.step()
                 
@@ -144,8 +144,8 @@ def trainer(cfg, vis):
             if (epo + 1) % cfg_vldt.freq == 0:
                 log.info(f'$$$ Validation at epo {epo+1}')
                 #torch.backends.cudnn.benchmark = False
-                _, _, mtrc_info, curv_info, table_res = vldt.start(net, inferator)
-                vldt.reset()
+                _, _, mtrc_info, curv_info, table_res = VLDT.start(net, inferator)
+                VLDT.reset()
                 #torch.backends.cudnn.benchmark = True
                 if not cfg.get("debug"): 
                     MH.record( mtrc_info, curv_info, table_res, net, optima, trn_inf)
@@ -159,7 +159,7 @@ def trainer(cfg, vis):
                 pltr = Plotter(vis)
                 pltr.metrics(MH.high_state['mtrc_info'])
                 pltr.curves(MH.high_state['curv_info'])
-                Tabler(False,True,vis).table2img(MH.high_table,'high_res_table')
+                Tabler(send2visdom=True,vis=vis).table2img(MH.high_table,'high_res_table')
         
     except Exception as e:
         log.error(traceback.format_exc())

@@ -79,7 +79,6 @@ def main(cfg: DictConfig) -> None:
                 from src.test import tester
                 tester(cfg, vis)
         
-        
         elif cfg.get("test"):
                 from src.test import tester
                 utils.init_seed(cfg, False)

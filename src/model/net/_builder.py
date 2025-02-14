@@ -26,16 +26,17 @@ def dry_run(net, cfg, dfeat, inferator=None,):
     t = cfg.dataproc.seg.len
     feat = torch.randn( (nc*bs, t, sum(dfeat) ))
     ndata = net(feat)
-    for k, v in ndata.items(): print(f"{k}: {list(v.shape)}")
+    for k, v in ndata.items(): log.info(f"{k}: {list(v.shape)}")
     if inferator:
         sls = inferator(ndata)
-        print(f"sls {list(sls.shape)}")
+        log.info(f"sls {list(sls.shape)}")
     
 def build_net(cfg):
     ## ARCH
     ## in Network.innit sum or ..
     dfeat = [ cfg.data.frgb.dfeat, (cfg.data.faud.dfeat if cfg.data.get("faud") else 0)]
     log.info(f"{dfeat=}")
+    
     
     ## !!!!!!!!!!!!!!
     ## a robust builder in order to lock a Network design 

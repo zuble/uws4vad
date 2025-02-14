@@ -142,7 +142,7 @@ class DataHandler:
 
 
 class Tabler:
-    def __init__(self, sort_mtrc, save=False, send2visdom=False, vis=None):
+    def __init__(self, sort_mtrc='', save=False, send2visdom=False, vis=None):
         self.sort_mtrc = sort_mtrc
         self.save = save
         self.send2visdom = send2visdom
@@ -170,29 +170,12 @@ class Tabler:
         #self.table2img(table, 'FL')
         return table
         
-    def log_per_vid(self, mtrc_info): 
+    def log_per_vid(self, mtrc_info, full_lbls=False): 
         ## table-it, 1 per lbl with all videos metrics ordered by sort_mtrc provided high to low
         for i, (lbl_name, metrics) in enumerate(mtrc_info.items()):
-            if lbl_name != "000.NORM":
-                ## metrics: {'FN': ['Abuse028', 'Abuse030'], 'AP': [0.040333334281393796, 0.23268166089965397], 'AUC-PR': [0.03263809909950772, 0.19132147623132323], 'AUC-ROC': [0.2375417601595612, 0.8626980607184614]}
-                tmp = list(zip(metrics['FN'], metrics['AP'], metrics['AUC-PR'], metrics['AUC-ROC']))
-                
-                sort_index = list(metrics.keys()).index(self.sort_mtrc)
-                tmp = sorted(tmp, key=lambda x: x[sort_index], reverse=True)
-                metrics['FN'], metrics['AP'], metrics['AUC-PR'], metrics['AUC-ROC'] = zip(*tmp) 
-                
-                headers = [lbl_name] + list(metrics.keys())[1:] ; rows = []
-                for i in range(len(metrics['FN'])):
-                    row_metrics = {k: f"{metrics[k][i]:.4f}" for k in headers[1:]}  
-                    row = [metrics['FN'][i]] + list(row_metrics.values())  
-                    rows.append(row)
-                
-                table = tabulate(rows, headers, tablefmt="pretty")
-                log.info(f'\n{table}')
-                #self.table2img(table, lbl_name)
-            
-            else:
-                headers = [lbl_name, 'FAR'] ; rows = []
+            if lbl_name == "000.NORM":
+                # Always process and print 000.NORM
+                headers = [lbl_name, 'FAR']; rows = []
                 # Sort by FAR in ascending order for "000.NORM"
                 tmp = list(zip(metrics['FN'], metrics['FAR']))
                 tmp.sort(key=lambda x: x[1])
@@ -200,6 +183,28 @@ class Tabler:
                 
                 for i in range(len(metrics['FN'])):
                     row = [metrics['FN'][i], f"{metrics['FAR'][i]:.4f}"]
+                    rows.append(row)
+                
+                table = tabulate(rows, headers, tablefmt="pretty")
+                log.info(f'\n{table}')
+                #self.table2img(table, lbl_name)
+            else:
+                # For other labels, check if we should process them
+                if not full_lbls and lbl_name != "111.ANOM":
+                    continue  # Skip if full_lbls is False and it's not 111.ANOM
+                
+                # Process the label (either 111.ANOM when full_lbls is False or any label when full_lbls is True)
+                tmp = list(zip(metrics['FN'], metrics['AP'], metrics['AUC-PR'], metrics['AUC-ROC']))
+                
+                sort_index = list(metrics.keys()).index(self.sort_mtrc)
+                tmp = sorted(tmp, key=lambda x: x[sort_index], reverse=True)
+                # Unzip the sorted tuples back into the metrics dictionary
+                metrics['FN'], metrics['AP'], metrics['AUC-PR'], metrics['AUC-ROC'] = zip(*tmp)
+                
+                headers = [lbl_name] + list(metrics.keys())[1:]; rows = []
+                for i in range(len(metrics['FN'])):
+                    row_metrics = {k: f"{metrics[k][i]:.4f}" for k in headers[1:]}  
+                    row = [metrics['FN'][i]] + list(row_metrics.values())  
                     rows.append(row)
                 
                 table = tabulate(rows, headers, tablefmt="pretty")
@@ -216,7 +221,7 @@ class Tabler:
         plt.gca().set_facecolor('black')
         ax.axis('off')
         try:
-            if self.save: plt.savefig( osp.join(self.cfg.path.out_dir,f'{name}.png'), dpi=300, bbox_inches='tight', facecolor='black')
+            #if self.save: plt.savefig( osp.join(self.cfg.path.out_dir,f'{name}.png'), dpi=300, bbox_inches='tight', facecolor='black')
             if self.send2visdom: ## send table_img to vis
                 #self.vis.close(name) ## starts fresh
                 fig.canvas.draw()
@@ -243,6 +248,7 @@ class Tabler:
 ######################################################################
 class Metrics:
     def __init__(self, cfg_vldt, vis=None): 
+        self.tblr_full_anom =  cfg_vldt.get('full_anom_lbls', False) 
         self.mtrc_vis_plot = cfg_vldt.get('mtrc_visplot', False) 
         self.mtrc_vis_plot_per_epo = cfg_vldt.get('mtrc_visplot_epo', False) #train
         self.gtfl_vis_plot = cfg_vldt.get('gtfl_visplot', False) ## not yet
@@ -268,7 +274,8 @@ class Metrics:
         if vldt_info.per_what == 'vid': ## only4test
             ## lbl: 000.NORM | B1.FIGHT | B2.SHOOT | B4.RIOT | B5.ABUSE | B6.CARACC | G.EXPLOS | 111.ANOM | ALL
             self.data_handler.proc_by_video(vldt_info.DATA)
-            table = self.tabler.log_per_vid( self.data_handler.mtrc_info )
+            
+            table = self.tabler.log_per_vid( self.data_handler.mtrc_info, self.tblr_full_anom)
             
             if self.mtrc_vis_plot: 
                 log.error("mtrc_visplot not implemented")

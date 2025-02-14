@@ -7,6 +7,7 @@ import av ## prior 2 decord, or vis.video gives seg fault
 import decord
 #decord.bridge.set_bridge('torch')
 
+from omegaconf import DictConfig, OmegaConf
 from hydra.utils import instantiate as instantiate
 import os, os.path as osp, time, glob 
 import tkinter as tk, sys, select
@@ -24,11 +25,106 @@ from src.utils import hh_mm_ss, get_log, Visualizer, save_pkl, load_pkl
 log = get_log(__name__)
 
 
+
+def find_hydra_cfg(ckpt_path):
+    """Search upwards for .hydra/config.yaml"""
+    path = osp.dirname(ckpt_path)
+    while path != '/':
+        hydra_dir = osp.join(path, '.hydra')
+        cfg_path = osp.join(hydra_dir, 'config.yaml')
+        if osp.exists(cfg_path): return cfg_path
+        path = osp.dirname(path)
+    raise FileNotFoundError(f"No hydra config found for {ckpt_path}")
+    
+def merge_cfgs(cur_cfg, og_cfg):
+    """Preserve original network config but allow override of test parameters"""
+    merged = og_cfg.copy()
+    merged.data = cur_cfg.data
+    merged.dvc = cur_cfg.dvc
+    return merged
+
+def vldt_cfg(cur_cfg, og_cfg):
+    log.info(f"{cur_cfg.data.frgb}  {og_cfg.data.frgb}")
+    assert cur_cfg.data.frgb.id == og_cfg.data.frgb.id
+    assert cur_cfg.data.frgb.dfeat == og_cfg.data.frgb.dfeat
+    
+
 def tester(cfg, vis):
+    tic = time.time()
+    log.info(f'$$$$ TEST starting')
+
     cfg_vldt = cfg.vldt.test
+    watching = cfg_vldt.watch.frmt
+    log.error(f"Debug - Watching keys: {watching}")  # Check if keys are correct
+    all_watch_info = []
+    all_results = []
+    MH = ModelHandler(cfg)
     
+    for ckpt_path in MH.ckpt_path:
+        if not cfg.train:
+            ## https://github.com/facebookresearch/hydra/issues/1022
+            hydra_cfg_path = find_hydra_cfg(ckpt_path)  
+            og_cfg = OmegaConf.load(hydra_cfg_path)  
+            ## check for mismatch in data/frgb as diff features need diff dataloader
+            vldt_cfg(cfg, og_cfg)
+            ## preserve running vldt / override net  -> override all needed values for VLDT
+            #cfg = merge_cfgs(cfg, og_cfg)
+        
+        ## load arch
+        net, inferator = build_net(cfg)
+        net.to(cfg.dvc)
+        
+        ##########
+        if 'attws' in watching[:]:
+            raise NotImplementedError
+            ## from dflt all net.main._cfg has ret_att set to false
+            ## as long as the dyn_retatt is in use, if attws in frmt -> ret_att set to true
+            ## even if the net doesnt has that option is handled in Validate
+            assert cfg.model.net.main._cfg.ret_att == True, log.error(f"{cfg.model.net.id} w ret_att False ???")
+            #raise NotImplementedError
+            log.warning(f'watch attws from {cfg.model.net.id}')
+        
+        VLDT = Validate(cfg, cfg_vldt, cfg.data.frgb, vis=vis, watching=watching)
+        if cfg.vldt.dryrun:
+            log.info("DBG DRY VLDT RUN")
+            _ = VLDT.start(net, inferator); VLDT.reset() #;return
+            continue
+            
+        net.load_state_dict( MH.get_test_state(ckpt_path) )
+        vldt_info, watch_info, mtrc_info, curv_info, table_res = VLDT.start(net, inferator)
+        
+        all_watch_info.append( copy.deepcopy(watch_info) )
+        all_results.append({
+            'ckpt': ckpt_path,
+            'metrics': copy.deepcopy(mtrc_info),
+            'curves': copy.deepcopy(curv_info),
+            'table': (table_res)
+        })
+        
+        ## save into same folder as parameters file
+        if cfg_vldt.savepkl: save_pkl(cfg.load.ckpt_path, vldt_info, 'vldt')
+        #if cfg_vldt.watch.savepkl: save_pkl(cfg.load.ckpt_path, watch_info, 'watch')
+        
+        ## clean
+        VLDT.reset()
+        del net
+        torch.cuda.empty_cache()
+
+    if cfg_vldt.per_what == 'lbl' and len(all_results) > 0:
+        pltr = Plotter(vis)
+        for result in all_results:
+            pltr.metrics(result['metrics'])
+            pltr.curves(result['curves'])
     
-    ## shortcut to validate directly from a watch_info.pkl w/o Validate
+    if watching:
+        ## TODO: Modify Watcher to handle list
+        Watcher(cfg, cfg_vldt.watch, all_watch_info[0], vis)  
+
+    log.info(f'$$$$ Test Completed in {hh_mm_ss(time.time() - tic)}')
+    sys.exit()
+    
+'''
+def check_vldt_pkl(cfg_vldt): 
     if osp.exists(cfg_vldt.frompkl):
         tic = time.time()
         log.info(f'$$$$ Validating from pkl')
@@ -38,7 +134,8 @@ def tester(cfg, vis):
         #Metrics(cfg, 'test', vis).get_fl(vldt_info)
         #log.info(f'$$$$ vldt done in {hh_mm_ss(time.time() - tic)}')
         return
-    
+
+def check_wtch_pkl(cfg_vldt): 
     ## shortcut to watch directly from a watch_info.pkl w/o Validate
     if osp.exists(cfg_vldt.watch.frompkl):
         tic = time.time()
@@ -49,6 +146,12 @@ def tester(cfg, vis):
         #log.info(f'$$$$ watched 4 {hh_mm_ss(time.time() - tic)}')
         return
     
+    
+def tester(cfg, vis):
+    cfg_vldt = cfg.vldt.test
+    
+    check_vldt_pkl(cfg_vldt)
+    check_wtch_pkl(cfg_vldt)
     
     tic = time.time()
     log.info(f'$$$$ TEST starting')
@@ -93,6 +196,7 @@ def tester(cfg, vis):
 
     log.info(f'$$$$ Test Completed in {hh_mm_ss(time.time() - tic)}')
     sys.exit()
+'''
 
 
 class Watcher:
@@ -483,3 +587,6 @@ class RealTimePlot:
         plt.show(block=False)
         plt.pause(0.01)
         
+
+## v=eqtJjxsTgtg__#1_label_G-0-0.mp4
+## v=UK--hvgP2uY__#1_label_G-0-0.mp4 --smoking sets anom high

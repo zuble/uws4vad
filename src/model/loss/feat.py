@@ -97,7 +97,9 @@ class Rtfm(nn.Module):
         
         self.alpha = _cfg.alpha
         self.margin = _cfg.margin
-        self.bce = nn.BCELoss()
+        #self.bce = nn.BCELoss()
+        self.bce = nn.BCEWithLogitsLoss()
+        self.sig = nn.Sigmoid()
         self.smooth = smooth
         self.sparse = sparsity
     
@@ -163,13 +165,14 @@ class Rtfm(nn.Module):
         log.debug(f"{l_fabn.shape=} {l_fnor.shape=} {loss_mgnt=} ")
         
         
-        
         ## SCORE
         scores = self.pfu.uncrop( scores, 'mean') ## bs*nc,t -> bs, t
         abn_scors, nor_scors = self.pfu.unbag(scores, labels) ## bag, t
         vls_abn, vls_nor = self.pfu.sel_scors( abn_scors, nor_scors, idx_abn, idx_nor, avg=True) ## bag
         log.debug(f"{vls_abn.mean()=}  {vls_nor.mean()=}")
         
+        #vls_abn, vls_nor = self.sig(vls_abn), self.sig(vls_nor)
+        #log.debug(f"{vls_abn.mean()=}  {vls_nor.mean()=}")
         
         loss_scor = self.bce(torch.cat((vls_abn,vls_nor)), ldata['label']) ## vls
         ## (bag*t)

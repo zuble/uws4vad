@@ -1,0 +1,37 @@
+# @package _global_
+
+defaults:
+  - override /data/frgb: vitamina #i3drocng vadclip cliptsa slowfast slowfast5 vitamina
+  #- override /data/faud: efat10bse
+  - override /net: rtfm
+
+# hydra:
+#   mode: MULTIRUN
+#   sweeper:
+#     params:
+#       #model.loss.rtfm.preproc: og, sbs
+
+tags: [""]
+
+## if a list of .state is provided
+## net arch is created based on .hydra/config.yaml living in same folder
+## since its saved into logs folder
+#load:
+#  ckpt_path:
+
+
+dataproc: 
+  cropasvideo: 
+    test: True
+
+dataload:
+  test:
+    in2mem: False
+    ## slowing cause usb troughput max out, better use low
+    #nworkers: ${dyn_nworkers:-1}
+    #pinmem: True
+    #pftch_fctr: 4
+    #prstwrk: True
+
+
+## 2751792490 ~ rtfm-magn-xdv/timm__vitamin_base_224.datacomp1b_clip/runs/28-07_19-38-32

@@ -65,7 +65,11 @@ test:
   ## makes this variables global per vldt, to serve high_state and this
   ## sorted results in descending order according to this
   record_mtrc: ${dyn_per_ds:${data.id}, AUC-ROC, AP}
+  ## when 'vid', controls if all anom lbl get a table, or only full set
+  ## usefull to compare vids clustered per lbl 
+  full_anom_lbls: False
 
+  ## visdom
   ## send barplot per metric to visdom server (xaxis is labels)
   ## useful for compare same metrics per multiples experiments in visdom
   mtrc_visplot: 1

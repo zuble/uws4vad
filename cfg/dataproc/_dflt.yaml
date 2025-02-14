@@ -38,6 +38,5 @@ cropasvideo: ## each crop with be treated as a video it self
 ## Curriculum-ish Learning for XDV
 ## a list of entries from lbls.info under data/xdv
 ## to be removed from train set, based on the frist label of filenames
-## test atm has all set
 culum: ~ 
   #- B4.RIOT
