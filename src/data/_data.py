@@ -241,9 +241,8 @@ class FeaturePathListFinder: ## dirt as it can gets ffff
         mode = mode.upper()
         modality = modality.upper()
         
-        ID_FEAT = cfg_feat.id
-        fpath = cfg.data.froot+'/'+modality+"/"+ID_FEAT+"/"+mode
-        flist = glob.glob(fpath + '/*.npy')
+        fpath = f"{cfg.data.froot}/{modality}/{cfg_feat.id}/{mode}"
+        flist = glob.glob(f"{fpath}/*.npy")
         if not len(flist): 
             raise Exception (f'{fpath} has NADA')
         flist.sort()

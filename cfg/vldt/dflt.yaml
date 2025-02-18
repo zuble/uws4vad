@@ -116,10 +116,12 @@ test:
     ## eg: UCF abuse and vandalism ['1','13']
     ## if None selected, a prompt enabling to dynamic select videos to watch
     label: ['']
-    ## controls params when asp is enabled in watch.frmt
+    
+    ## anomaly score player
+    ## controls asp if enabled in watch.frmt
     asp:
-      fs: 1   ## frames 2 skip in hte overlayed video to save time :)
-      ## float: scores in text/numbers
+      fs: 1   ## frames 2 skip in the overlayed video to save time :)
+      ## float: gt/scores in text/numbers
       ## overlay: half machine other half gt , green-normal / red-abn
       cvputfx: float
       th: 0.5  ## if overlay, sets score th [0:1[ thold to trigger red/green colors

@@ -9,7 +9,7 @@ import decord
 
 from omegaconf import DictConfig, OmegaConf
 from hydra.utils import instantiate as instantiate
-import os, os.path as osp, time, glob 
+import os, os.path as osp, time, glob , copy
 import tkinter as tk, sys, select
 
 import plotly.graph_objs as go
@@ -25,6 +25,27 @@ from src.utils import hh_mm_ss, get_log, Visualizer, save_pkl, load_pkl
 log = get_log(__name__)
 
 
+def check_vldt_pkl(cfg_vldt): 
+    if osp.exists(cfg_vldt.frompkl):
+        tic = time.time()
+        log.info(f'$$$$ Validating from pkl')
+        raise NotImplementedError
+        #vldt_info = load_pkl(cfg.EXPERIMENTPATH, 'vldt')
+        #log.info(f'$$ {vldt_info.per_what=}')
+        #Metrics(cfg, 'test', vis).get_fl(vldt_info)
+        #log.info(f'$$$$ vldt done in {hh_mm_ss(time.time() - tic)}')
+        return
+
+def check_wtch_pkl(cfg_vldt): 
+    ## shortcut to watch directly from a watch_info.pkl w/o Validate
+    if osp.exists(cfg_vldt.watch.frompkl):
+        tic = time.time()
+        log.info(f'$$$$ Watching from pkl')
+        raise NotImplementedError
+        #watch_info = load_pkl(cfg.EXPERIMENTPATH,'watch')
+        #Watcher(cfg, watch_info, vis)
+        #log.info(f'$$$$ watched 4 {hh_mm_ss(time.time() - tic)}')
+        return
 
 def find_hydra_cfg(ckpt_path):
     """Search upwards for .hydra/config.yaml"""
@@ -37,10 +58,9 @@ def find_hydra_cfg(ckpt_path):
     raise FileNotFoundError(f"No hydra config found for {ckpt_path}")
     
 def merge_cfgs(cur_cfg, og_cfg):
-    """Preserve original network config but allow override of test parameters"""
-    merged = og_cfg.copy()
-    merged.data = cur_cfg.data
-    merged.dvc = cur_cfg.dvc
+    """Preserve validation parameters but allow override of original network config"""
+    merged = cur_cfg.copy()
+    merged.net = og_cfg.net
     return merged
 
 def vldt_cfg(cur_cfg, og_cfg):
@@ -52,23 +72,27 @@ def vldt_cfg(cur_cfg, og_cfg):
 def tester(cfg, vis):
     tic = time.time()
     log.info(f'$$$$ TEST starting')
-
+    
     cfg_vldt = cfg.vldt.test
     watching = cfg_vldt.watch.frmt
-    log.error(f"Debug - Watching keys: {watching}")  # Check if keys are correct
-    all_watch_info = []
-    all_results = []
+    log.info(f"{watching=}")
+    
+    check_vldt_pkl(cfg_vldt)
+    check_wtch_pkl(cfg_vldt)
+    
+    all_watch_info, all_results = [], []
     MH = ModelHandler(cfg)
     
-    for ckpt_path in MH.ckpt_path:
+    for i, ckpt_path in enumerate(MH.ckpt_path):
+        
         if not cfg.train:
             ## https://github.com/facebookresearch/hydra/issues/1022
             hydra_cfg_path = find_hydra_cfg(ckpt_path)  
             og_cfg = OmegaConf.load(hydra_cfg_path)  
             ## check for mismatch in data/frgb as diff features need diff dataloader
             vldt_cfg(cfg, og_cfg)
-            ## preserve running vldt / override net  -> override all needed values for VLDT
-            #cfg = merge_cfgs(cfg, og_cfg)
+            ## preserve running vldt cfg / override net cfg
+            cfg = merge_cfgs(cfg, og_cfg)
         
         ## load arch
         net, inferator = build_net(cfg)
@@ -93,12 +117,16 @@ def tester(cfg, vis):
         net.load_state_dict( MH.get_test_state(ckpt_path) )
         vldt_info, watch_info, mtrc_info, curv_info, table_res = VLDT.start(net, inferator)
         
-        all_watch_info.append( copy.deepcopy(watch_info) )
+        ## TODOafter frist one, preserve only the fl array, as fn/gt are the same (attws not implemented yet)
+        all_watch_info.append({
+            'ckpt_path': ckpt_path,
+            'watch_info': copy.deepcopy(watch_info) ## keys: FN/GT/FL/ATTW 
+        })
         all_results.append({
-            'ckpt': ckpt_path,
+            'ckpt_path': ckpt_path,
             'metrics': copy.deepcopy(mtrc_info),
             'curves': copy.deepcopy(curv_info),
-            'table': (table_res)
+            'table': table_res
         })
         
         ## save into same folder as parameters file
@@ -113,98 +141,23 @@ def tester(cfg, vis):
     if cfg_vldt.per_what == 'lbl' and len(all_results) > 0:
         pltr = Plotter(vis)
         for result in all_results:
+            log.info(f"{result['ckpt_path']}")
             pltr.metrics(result['metrics'])
             pltr.curves(result['curves'])
     
     if watching:
-        ## TODO: Modify Watcher to handle list
-        Watcher(cfg, cfg_vldt.watch, all_watch_info[0], vis)  
+        Watcher(cfg, cfg_vldt.watch, all_watch_info, vis)  
 
     log.info(f'$$$$ Test Completed in {hh_mm_ss(time.time() - tic)}')
     sys.exit()
     
-'''
-def check_vldt_pkl(cfg_vldt): 
-    if osp.exists(cfg_vldt.frompkl):
-        tic = time.time()
-        log.info(f'$$$$ Validating from pkl')
-        raise NotImplementedError
-        #vldt_info = load_pkl(cfg.EXPERIMENTPATH, 'vldt')
-        #log.info(f'$$ {vldt_info.per_what=}')
-        #Metrics(cfg, 'test', vis).get_fl(vldt_info)
-        #log.info(f'$$$$ vldt done in {hh_mm_ss(time.time() - tic)}')
-        return
-
-def check_wtch_pkl(cfg_vldt): 
-    ## shortcut to watch directly from a watch_info.pkl w/o Validate
-    if osp.exists(cfg_vldt.watch.frompkl):
-        tic = time.time()
-        log.info(f'$$$$ Watching from pkl')
-        raise NotImplementedError
-        #watch_info = load_pkl(cfg.EXPERIMENTPATH,'watch')
-        #Watcher(cfg, watch_info, vis)
-        #log.info(f'$$$$ watched 4 {hh_mm_ss(time.time() - tic)}')
-        return
     
-    
-def tester(cfg, vis):
-    cfg_vldt = cfg.vldt.test
-    
-    check_vldt_pkl(cfg_vldt)
-    check_wtch_pkl(cfg_vldt)
-    
-    tic = time.time()
-    log.info(f'$$$$ TEST starting')
-
-    ## MODEL
-    net, inferator = build_net(cfg)
-    net.to(cfg.dvc)
-
-    ##########
-    watching = cfg_vldt.watch.frmt
-    if 'attws' in watching[:]:
-        ## from dflt all net.main._cfg has ret_att set to false
-        ## as long as the dyn_retatt is in use, if attws in frmt -> ret_att set to true
-        ## even if the net doesnt has that option is handled in Validate
-        assert cfg.model.net.main._cfg.ret_att == True, log.error(f"{cfg.model.net.id} w ret_att False ???")
-        #raise NotImplementedError
-        log.warning(f'watch attws from {cfg.model.net.id}')
-    
-    VLDT = Validate(cfg, cfg_vldt, cfg.data.frgb, vis, watching)
-    if cfg.vldt.dryrun:
-        log.info("DBG DRY VLDT RUN")
-        _ = VLDT.start(net, inferator); VLDT.reset() #;return
-
-    
-    ## LOAD
-    ## if coming from train loads best saved state
-    ## if not cfg.load.ckpt_path must be given
-    net.load_state_dict( ModelHandler(cfg).get_test_state() )
-    #net.to(cfg.dvc) ## AttributeError: '_IncompatibleKeys' object has no attribute 'to'
-
-    vldt_info, watch_info, mtrc_info, curv_info, table_res = VLDT.start(net, inferator) ## class, dict, _
-    if cfg_vldt.per_what == 'lbl':
-        pltr = Plotter(vis)
-        pltr.metrics(mtrc_info)
-        pltr.curves(curv_info)
-
-    ## save into same folder as parameters file
-    if cfg_vldt.savepkl: save_pkl(cfg.load.ckpt_path, vldt_info, 'vldt')
-    #if cfg_vldt.watch.savepkl: save_pkl(cfg.load.ckpt_path, watch_info, 'watch')
-    
-    if watching: Watcher(cfg, cfg_vldt.watch, watch_info, vis)
-
-    log.info(f'$$$$ Test Completed in {hh_mm_ss(time.time() - tic)}')
-    sys.exit()
-'''
-
-
 class Watcher:
-    def __init__(self, cfg, cfg_wtc, watch_info, vis):
+    def __init__(self, cfg, cfg_wtc, all_watch_info, vis):
         self.cfg = cfg
         self.cfg_dsinf = cfg.data
         self.cfg_wtc = cfg_wtc 
-        self.data = watch_info
+        self.all_watch_info = all_watch_info
         
         if not cfg_wtc.frmt: cfg_wtc.frmt = input(f"asp,gtfl,attws ? and/or comma separated").split(",")
         
@@ -219,25 +172,44 @@ class Watcher:
         else: self.plot = lambda *args, **kwargs: None
         log.info(f"Watcher.plot {self.plot}")
         
+        log.info(f"Watcher initialized with {len(self.all_watch_info)} models")
         self.init_gui() if cfg_wtc.guividsel else self.init_lst()    
 
     
     def process(self, fn):
         ## common worker for both gui or lst
-        idx = self.data['ALL']['FN'].index(fn)
-        gt = self.data['ALL']['GT'][idx]
-        fl = self.data['ALL']['FL'][idx]
-        attw = self.data['ALL']['ATTWS'][idx]
-        log.info(
-            f'watch {fn}, '
-            f'gt {len(gt)} {type(gt).__name__} | '
-            f'fl {len(fl)} {type(fl).__name__} | '
-            f'attw {type(attw).__name__ if attw is not None else "None"} '
-            f'{len(attw) if attw is not None else 0}'
-        )
-        self.plot(fn, gt, fl, attw) ## plot with full lenght of vframes
-        vpath = osp.join(self.cfg_dsinf.vroot , f"TEST/{fn}")+'.mp4'
-        stop = self.asp(vpath, gt, fl) ## play with frame_skip
+        
+        idx = self.all_watch_info[0]['watch_info']['ALL']['FN'].index(fn)
+        gt = self.all_watch_info[0]['watch_info']['ALL']['GT'][idx]
+        sms=f'Watching {fn}\n gt {len(gt)} {type(gt).__name__}'
+        
+        tmp = [{
+            'ckpt': wi['ckpt_path'],
+            'fl': wi['watch_info']['ALL']['FL'][idx],
+            'attw': wi['watch_info']['ALL']['ATTWS'][idx]
+        } for wi in self.all_watch_info]
+
+        sms = [
+            f"Watching {fn}",
+            f"GT: {len(gt)} frames ({type(gt).__name__})"
+        ]
+        
+        for i, d in enumerate(tmp):
+            sms.append(
+                f"  Model {i+1} {d['ckpt']}:\n"
+                f"  - FL: {len(d['fl'])} frames ({type(d['fl']).__name__})\n"
+                f"  - ATTW: {type(d['attw']).__name__ if d['attw'] is not None else 'None'}"
+            )
+
+        log.info('\n'.join(sms))
+        self.plot(fn, gt, tmp)
+        
+        log.warning(f"TODO: adapt asp to view more than one FL")
+        vpath = osp.join(self.cfg_dsinf.vroot, f"TEST/{fn}.mp4")
+        if len(tmp) > 1:
+            log.warning("Multiple models detected")
+            log.info(f"Available models: {[m['ckpt'] for m in tmp]}")
+        stop = self.asp(vpath, gt, tmp) ##[m['fl'] for m in tmp]
         return stop
     
     def init_lst(self):
@@ -261,8 +233,7 @@ class Watcher:
                 for fn in fnlist:
                     stop = self.process(fn)
                     if stop: log.warning(f"watch.init_lst just broke"); return
-
-
+    
     def on_vid_sel(self, event):
         widget = event.widget
         index = int(widget.curselection()[0])
@@ -275,7 +246,7 @@ class Watcher:
         self.root.title("VidSel")
         self.video_listbox = tk.Listbox(self.root)
         self.video_listbox.pack(side="left", fill="both", expand=True)
-        fnlist = self.data['ALL']['FN']
+        fnlist = self.all_watch_info['ALL']['FN']
         for fn in fnlist: self.video_listbox.insert(tk.END, fn)
         self.scrollbar = tk.Scrollbar(self.root, orient="vertical")
         self.scrollbar.config(command=self.video_listbox.yview)
@@ -293,52 +264,82 @@ class ASPlotter:
         self.fx = {
             'wnshow': self.matplt,
             'visdom': self.plotly
-        }.get(mode)        
+        }.get(mode)
         self.vis = vis
-        ## if asp enabled, clear previous video related windows in visdom, otherwise accumulates
-        self.overwrite = overwrite 
+        self.overwrite = overwrite
         self.cmap = 'viridis'
+        self.colors = [
+            'blue', 
+            'green', 
+            'orange', 
+            'purple'
+        ]
 
-    def plotly(self, fn, gt, fl, attw):
-        ## global
+    def _short_name(self, path):
+        """Extract meaningful short name from checkpoint path"""
+        return path.split('/')[-1].split('.')[0]
+        # parts = path.split('/')
+        # for part in reversed(parts):
+        #     if 'seed=' in part or 'run' in part:
+        #         return part
+        # return osp.bas(path)
+
+    def plotly(self, fn, gt, data):
+        """Plotly version supporting multiple FL curves"""
         fig = make_subplots(
             rows=2, cols=1,
             subplot_titles=('GT/FL', 'ATTWS'),
-            vertical_spacing=0.1,  # Space between the subplots
-            row_heights=[0.7, 0.3] ) # Relative heights of rows (heatmap is larger)
+            vertical_spacing=0.1, # Space between the subplots
+            row_heights=[0.7, 0.3]  # Relative heights of rows (heatmap is larger)
+        )
+        # fig = make_subplots(
+        #     rows=2 if attw_list else 1, cols=1,
+        #     subplot_titles=('Score Comparison', 'Attention Weights') if attw_list else None,
+        #     vertical_spacing=0.1
+        # )
         
-        nframes = gt.shape[0] 
-        ## GT scores line plot to the second row
-        gt_trace = go.Scatter(
-            x=list(range(nframes)),
-            y=gt,
-            mode='lines',
-            name='GT Scores',
-            line=dict(color='red', dash='dash') )
-        fig.add_trace(gt_trace, row=1, col=1)
+        nframes = len(gt)
+        ## GT
+        fig.add_trace(
+            go.Scatter(
+                x=list(range(nframes)),
+                y=gt,
+                mode='lines',
+                name='GT',
+                line=dict(color='red', dash='dash')
+            ),
+            row=1, col=1
+        )
         
-        ## FL scores line plot to the second row
-        fl_trace = go.Scatter(
-            x=list(range(nframes)),
-            y=fl,
-            mode='lines',
-            name='FL Scores',
-            line=dict(color='blue', dash='dash') )
-        fig.add_trace(fl_trace, row=1, col=1)
-
-        fig.update_xaxes(title_text="Frames", row=1, col=1)
-        fig.update_yaxes(title_text="Scores", row=1, col=1)
+        ## each FL curve with checkpoint info
+        for idx, d in enumerate(data):
+            fig.add_trace(
+                go.Scatter(
+                    x=list(range(len(d['fl']))),
+                    y=d['fl'],
+                    mode='lines',
+                    name=f'FL {self._short_name(d["ckpt"])}',
+                    line=dict(color=self.colors[idx % len(self.colors)], width=1)
+                ), 
+                row=1, col=1
+            )
         
-        if attw:
-            ## heatmap for attention weights to the first row
-            nattmaps = attw.shape[1]    
-            heatmap = go.Heatmap(
-                z=attw.transpose(),
-                x=list(range(1, nframes + 1)),
-                y=[f'#{i+1}' for i in range(nattmaps)],
-                colorscale='Viridis')
-            fig.add_trace(heatmap, row=2, col=1)
-            fig.update_yaxes(title_text="Attention Map Number", row=2, col=1)
+        ## attention weights (if available)
+        if any(d['attw'] is not None for d in data):
+            for i, d in enumerate(data):
+                if d['attw'] is not None:
+                    nattmaps = d['attw'].shape[1]  
+                    fig.add_trace(
+                        go.Heatmap(
+                            z=d['attw'].T,
+                            x=list(range(nframes)),
+                            y=[f'{self._short_name(d["ckpt"])} Map {j+1}' for j in range(nattmaps)],
+                            colorscale='Viridis',
+                            showscale=False,
+                            name=f'ATTW {self._short_name(d["ckpt"])}'
+                        ),
+                        row=2, col=1
+                    )
         
         if self.overwrite:
             title = f"Plotter"
@@ -349,22 +350,58 @@ class ASPlotter:
         fig.update_layout(
             height=600,
             showlegend=True,
-            title_text=title)
+            title_text=title
+        )
         #fig.show()
         
         self.vis.potly(fig)
         
-    def matplt(self, fn, gt, fl, attw):
+        
+    def matplt(self, fn, gt, data):
         '''
-        Plots the attention weights for each attention map across all frames.
+        Plots the attention weights for each attention map across all frames, with multiple models.
 
         Parameters:
         - attw: A 2D array of shape (nframes, nattmaps), containing the attention weights for each frame.
         - overlay: If True, create a color map plot where each y value corresponds to an attention map.
-        '''        
-
+        '''     
+        
         nframes = len(gt)
+        
+        ## Create figure
+        if any(d['attw'] is not None for d in data):
+            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True, gridspec_kw={'height_ratios': [3, 1]})
+        else: ## Only plot GT/FL scores if no attention weights provided
+            fig, ax2 = plt.subplots(figsize=(12, 4))
+        
+        ## Plot GT and FL
+        ax2.plot(gt, label='GT', color='red', linestyle='--', linewidth=1)
+        for i, d in enumerate(data):
+            ax2.plot(d['fl'], 
+                label=f'Model {i+1} FL', 
+                color=self.colors[i % len(self.colors)], 
+                linestyle='--'
+            )
+        ax2.legend(loc='upper right')
+        ax2.set_xlabel('Frames')
+        ax2.set_ylabel('Scores')
+        ax2.set_xticks([0, nframes - 1])
+        ax2.set_xticklabels(['1', str(nframes)])
+        
+        # Plot attention weights (if available)
+        if any(d['attw'] is not None for d in data):
+            for i, d in enumerate(data):
+                if d['attw'] is not None:
+                    cax = ax1.imshow(d['attw'].T, aspect='auto', cmap=self.cmap, alpha=0.7)
+                    ax1.set_yticks(range(d['attw'].shape[1]))
+                    ax1.set_yticklabels([f'Model {i+1} Map {j+1}' for j in range(d["ckpt"].shape[1])])
+                    ax1.set_ylabel('Attention Maps')
+        
+        plt.ion()
+        plt.tight_layout()
+        plt.show()  #block=block
 
+        '''
         #if len(attw): 
         if attw is not None and len(attw) > 0 and len(attw[0]) > 0:
             
@@ -387,7 +424,7 @@ class ASPlotter:
             cbar = fig.colorbar(cax, ax=ax1, orientation='vertical')
             cbar.set_label('Attention weights')
         else:
-            ## Only plot GT/FL scores if no attention weights provided
+            
             fig, ax2 = plt.subplots(figsize=(12, 4))
 
         # Plot GT and FL scores in subplot 2 or the only subplot
@@ -408,32 +445,32 @@ class ASPlotter:
         #plt.close('all')
         #plt.draw()
         #plt.pause(3)
+
+        '''
+            # fig, ax = plt.subplots(figsize=(12, nattmaps))
+            
+            # cax = ax.imshow(attw, aspect='auto', cmap=self.cmap, interpolation='nearest')
+            # ax.set_xticks([0, nframes - 1])
+            # ax.set_xticklabels(['1', str(nframes)])
+            # ax.set_yticks(list(range(nattmaps)))
+            # ax.set_yticklabels([f'{self.title} #{i+1}' for i in range(nattmaps)])
+
+            # # Now scale the normalized scores to match the y-axis of the attention maps image
+            # # This is assuming you want to plot the scores across the entire height of the image.
+            # gt = gt * (nattmaps - 1)
+            # fl = fl * (nattmaps - 1)
+
+            # ax.plot(numpy.arange(nframes) , gt[:nframes], label='GT Scores', color='red', linestyle='--', linewidth=1)
+            # ax.plot(numpy.arange(nframes) , fl[:nframes], label='FL Scores', color='blue', linestyle='--', linewidth=1)
+            
+            # cbar = fig.colorbar(cax, ax=ax, orientation='vertical')
+            # cbar.set_label(self.ylabel)
+            # cbar.ax.set_ylabel('Attention weights')
+
+            # ax.set_xlabel('Frames')
+            # ax.set_ylabel('Attention Map Number')
+            # ax.legend(loc='upper right')
         
-        '''
-            fig, ax = plt.subplots(figsize=(12, nattmaps))
-            
-            cax = ax.imshow(attw, aspect='auto', cmap=self.cmap, interpolation='nearest')
-            ax.set_xticks([0, nframes - 1])
-            ax.set_xticklabels(['1', str(nframes)])
-            ax.set_yticks(list(range(nattmaps)))
-            ax.set_yticklabels([f'{self.title} #{i+1}' for i in range(nattmaps)])
-
-            # Now scale the normalized scores to match the y-axis of the attention maps image
-            # This is assuming you want to plot the scores across the entire height of the image.
-            gt = gt * (nattmaps - 1)
-            fl = fl * (nattmaps - 1)
-
-            ax.plot(numpy.arange(nframes) , gt[:nframes], label='GT Scores', color='red', linestyle='--', linewidth=1)
-            ax.plot(numpy.arange(nframes) , fl[:nframes], label='FL Scores', color='blue', linestyle='--', linewidth=1)
-            
-            cbar = fig.colorbar(cax, ax=ax, orientation='vertical')
-            cbar.set_label(self.ylabel)
-            cbar.ax.set_ylabel('Attention weights')
-
-            ax.set_xlabel('Frames')
-            ax.set_ylabel('Attention Map Number')
-            ax.legend(loc='upper right')
-        '''
         
 
 ###############################
@@ -444,19 +481,38 @@ class ASPlayer:
         self.frame_skip = cfg_wtc.asp.fs
         self.thrashold = cfg_wtc.asp.th
         self.cvputfx = {
-            'float': self.cvputfloat,
-            'color': self.cvputcolor
+            'float': self._cvputfloat,
+            'color': self._cvputcolor
         }.get(cfg_wtc.asp.cvputfx)
         self.vis = vis
+        self.colors = [
+            (0, 200, 100),  # Teal
+            (0, 150, 150),  # Cyan
+            (0, 100, 200),  # Blue-green
+            (0, 50, 255)    # Blue
+        ]
 
-    def cvputfloat(self, frame, gt_fidx, fl_fidx):    
-        cv2.putText(frame,'AS '+str('%.4f' % (fl_fidx)),(10,15),self.font,self.fontScale+0.2,[0,0,255],self.thickness,self.lineType)
-        cv2.putText(frame,'GT '+str(gt_fidx), (10, 40), self.font,self.fontScale+0.2,[100,250,10],self.thickness,self.lineType)
+    def _cvputfloat(self, frame, gt_fidx, fls):
+        ## GT at bottom
+        cv2.putText(frame, f'GT {gt_fidx}', (10, int(self.height)-10), 
+                    self.font, self.fontScale+0.2, (100,250,10), 
+                    self.thickness, self.lineType)
+        
+        ## each model's FL with descending offset
+        y_start = 15
+        for i, fl in enumerate(reversed(fls)):
+            y = y_start + (25 * i)
+            color = self.colors[i % len(self.colors)]
+            cv2.putText(frame, f'M{len(fls)-i}: {fl:.4f}', (10, y),
+                    self.font, self.fontScale+0.2, color,
+                    self.thickness, self.lineType)
+        #cv2.putText(frame,'AS '+str('%.4f' % (fl_fidx)),(10,15),self.font,self.fontScale+0.2,[0,0,255],self.thickness,self.lineType)
+        
         #new_time = time.time()
         #cv2.putText(frame, '%.2f' % (1/(new_time-tic))+' fps',(140,int(self.height)-10),self.font,self.fontScale,[0,50,200],self.thickness,self.lineType)
         #tic = new_time
     
-    def cvputcolor(self, frame, gt_fidx, fl_fidx):
+    def _cvputcolor(self, frame, gt_fidx, fls):
         
         def layer(frame, color, alpha):
             overlay = np.full_like(frame, color, dtype=np.uint8)
@@ -476,7 +532,7 @@ class ASPlayer:
         if gt_fidx == 0: frame[:, center:] = layer(frame[:, center:], g, 0.5)
         else: frame[:, center:] = layer(frame[:, center:], r, 0.5)    
     
-    def init_cv(self, vpath):
+    def _init_cv(self, vpath):
         ## cv video info
         video = cv2.VideoCapture(vpath)
         self.total_frames = video.get(cv2.CAP_PROP_FRAME_COUNT)
@@ -489,33 +545,37 @@ class ASPlayer:
         self.fontScale = 0.5; self.thickness = 1; self.lineType = cv2.LINE_AA
 
     
-    def overlay(self, vpath, gt, fl):
+    def overlay(self, vpath, gt, fls):
         ## generates gt/fl overlayed vid tensor
         dvr = decord.VideoReader(vpath)
         vframes = len(dvr)
-        assert vframes == len(gt) == len(fl), f'{vframes = } , {len(gt) = } , {len(fl) = } ' ## when match_gtfl == truncate, this fails
+        
+        for fl in fls:
+            assert vframes == len(fl), f'{vframes} != {len(fl)}'
+            assert vframes == len(gt) == len(fl), f'{vframes = } , {len(gt) = } , {len(fl) = } ' ## when match_gtfl == truncate, this fails
 
         flist = list(range(0, vframes, self.frame_skip)) ##vframes+1
         log.debug(f"{len(flist)=} {self.frame_skip=}")
         vdata = dvr.get_batch(flist).asnumpy()
         #self.vis.vid(vdata, "vid"); return
         
-        self.init_cv(vpath)    
+        self._init_cv(vpath)    
         self.data = { "vpath": vpath, "frames": [], "gt": [], "fl": []}
         for i, fidx in enumerate(flist):
             #frame = dvr[fidx].asnumpy()
             frame = vdata[i]
             gt_fidx = gt[fidx]
-            fl_fidx = fl[fidx]
+            fl_fidx = [fl[fidx] for fl in fls] #fl[fidx]
             #log.debug(f"{i = } {fidx = } {gt_fidx = } {fl_fidx = } ")
             self.cvputfx(frame, gt_fidx, fl_fidx)  
             self.data["frames"].append(frame)
             self.data["gt"].append(gt_fidx)
             self.data["fl"].append(fl_fidx)
     
-    def play(self, vpath, gt, fl):
+    def play(self, vpath, gt, wi):
         log.info(f"asp playing {vpath}")
-        self.overlay(vpath, gt, fl)
+        fls = [w['fl'] for w in wi]
+        self.overlay(vpath, gt, fls)
         
         if self.frtend == 'wnshow':
             wn = 'as' + os.path.splitext(os.path.basename(vpath))[0]

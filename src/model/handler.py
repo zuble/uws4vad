@@ -141,10 +141,10 @@ class ModelHandler:
     
     ########
     def check_nd_find(self, path):
-        if isinstance(path, int): 
+        if isinstance(path, int): ##if seed is provided
             pattern = f"**/*{path}*.state.pt"
             raise NotImplementedError
-        else:
+        else: ## if filename is provided
             pattern = f"**/{path}"
         
         matches = glob.glob(osp.join(self.cfg.path.log_dir, pattern), recursive=True)
