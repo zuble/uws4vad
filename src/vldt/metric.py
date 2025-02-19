@@ -16,6 +16,7 @@ from tabulate import tabulate, SEPARATING_LINE
 import plotly.graph_objs as go, plotly.express as px
 from plotly.subplots import make_subplots
 
+from collections import defaultdict
 from src.utils import get_log
 log = get_log(__name__)
 
@@ -147,6 +148,12 @@ class Tabler:
         self.save = save
         self.send2visdom = send2visdom
         self.vis = vis
+        self.stat_measures = {
+            'std': lambda x: np.std(x),
+            'mean': np.mean,
+            'median': np.median,
+            'range': lambda x: np.ptp(x)
+        }
         
     def log_per_lbl(self, mtrc_info): 
         ## AU ROC/PR(single table lbls/metrics) and sends always 2 log , nd in test can send 2 visdom depending on cfg.TEST.VLDT
@@ -166,12 +173,90 @@ class Tabler:
         rows.append(tmp_row)
         
         table = tabulate(rows, headers, tablefmt="pretty")
-        log.info(f'\n{table}')
         #self.table2img(table, 'FL')
+        return [table]
+    
+    def log_per_lbl_per_ckpt(self, rslt_infos):
+        """Log label-wise metrics across multiple checkpoints with statistical analysis"""
+        
+        ckpt_ids = [self._shorten_path(res.ckpt_path) for res in rslt_infos]
+        metric_data = defaultdict(lambda: defaultdict(list))
+        
+        for result in rslt_infos:
+            for lbl, metrics in result.mtrc_info.items():
+                if lbl == "000.NORM": 
+                    continue  # Handle norm separately
+                for mtrc, values in metrics.items():
+                    if mtrc in ['AP', 'AUC-PR', 'AUC-ROC']:
+                        metric_data[lbl][mtrc].append(values[0])  # Assuming first value is main metric
+
+        # Create sorted structure with statistics
+        sorted_data = []
+        for lbl, metrics in metric_data.items():
+            stat_metrics = {
+                'label': lbl,
+                'values': {},
+                'stats': {}
+            }
+            
+            for mtrc, values in metrics.items():
+                stat_metrics['values'][mtrc] = values
+                stat_metrics['stats'][mtrc] = {
+                    k: f"{func(values):.3f}" 
+                    for k, func in self.stat_measures.items()
+                }
+            
+            # Calculate sorting key (mean + std)
+            sort_values = metrics.get(self.sort_mtrc, [])
+            stat_metrics['sort_key'] = (
+                -np.mean(sort_values),  # Primary sort: descending mean
+                np.std(sort_values)    # Secondary sort: ascending std
+            )
+            sorted_data.append(stat_metrics)
+
+        # Sort by custom key
+        sorted_data.sort(key=lambda x: x['sort_key'])
+
+        # Build table
+        headers = ["Label", f"Mean({self.sort_mtrc})", f"Std({self.sort_mtrc})"] + ckpt_ids
+        rows = []
+        
+        for item in sorted_data:
+            main_metric = item['values'][self.sort_mtrc]
+            row = [
+                item['label'],
+                f"{np.mean(main_metric):.3f}",
+                f"{np.std(main_metric):.3f}"
+            ]
+            
+            # Add individual model values
+            for model_val in main_metric:
+                row.append(f"{model_val:.3f}")
+                
+            rows.append(row)
+
+        # Add Norm row at bottom
+        norm_data = next((res.mtrc_info["000.NORM"] for res in rslt_infos), None)
+        if norm_data:
+            far_values = [res.mtrc_info["000.NORM"]['FAR'][0] for res in rslt_infos]
+            rows.append([
+                "000.NORM~FAR", 
+                f"{np.mean(far_values):.3f}",
+                f"{np.std(far_values):.3f}"
+            ] + [f"{v:.3f}" for v in far_values])
+
+        table = tabulate(rows, headers, tablefmt="pretty", stralign="right")
+        log.info(f'\n=== Aggregated Metrics (Sorted by {self.sort_mtrc} variability) ===\n{table}')
         return table
+
+
+    def _shorten_path(self, ckpt_path):
+        return ckpt_path.split('/')[-1].split('.')[0]
+        #return osp.basename(ckpt_path).split('.')[0]
         
     def log_per_vid(self, mtrc_info, full_lbls=False): 
         ## table-it, 1 per lbl with all videos metrics ordered by sort_mtrc provided high to low
+        tables = []
         for i, (lbl_name, metrics) in enumerate(mtrc_info.items()):
             if lbl_name == "000.NORM":
                 # Always process and print 000.NORM
@@ -186,8 +271,9 @@ class Tabler:
                     rows.append(row)
                 
                 table = tabulate(rows, headers, tablefmt="pretty")
-                log.info(f'\n{table}')
+                #log.info(f'\n{table}')
                 #self.table2img(table, lbl_name)
+                tables.append(table)
             else:
                 # For other labels, check if we should process them
                 if not full_lbls and lbl_name != "111.ANOM":
@@ -208,11 +294,165 @@ class Tabler:
                     rows.append(row)
                 
                 table = tabulate(rows, headers, tablefmt="pretty")
-                log.info(f'\n{table}')
+                #log.info(f'\n{table}')
                 #self.table2img(table, lbl_name)
-        
-        return None
+                tables.append(table)
+        return tables
     
+    # def log_per_vid_per_ckpt(self, rslt_infos, full_lbls=False):
+    #     """Log video-wise metrics across multiple checkpoints with statistical analysis"""
+    #     tables = []
+    #     ckpt_ids = [self._shorten_path(res.ckpt_path) for res in rslt_infos]
+        
+    #     # Collect base structure from first result
+    #     base_mtrc_info = rslt_infos[0].mtrc_info
+    #     labels = [lbl for lbl in base_mtrc_info.keys() 
+    #             if (full_lbls or lbl == "111.ANOM") and lbl != "000.NORM"]
+        
+    #     for lbl in labels:
+    #         # Build video-centric data structure
+    #         video_metrics = defaultdict(lambda: {
+    #             'scores': [[] for _ in rslt_infos],
+    #             'far': []
+    #         })
+            
+    #         # Collect data across checkpoints
+    #         for ckpt_idx, result in enumerate(rslt_infos):
+    #             lbl_info = result.mtrc_info.get(lbl, {})
+                
+    #             # Create FN to index mapping
+    #             fn_to_idx = {fn: idx for idx, fn in enumerate(lbl_info.get('FN', []))}
+                
+    #             for fn in fn_to_idx:
+    #                 vid_idx = fn_to_idx[fn]
+    #                 video_metrics[fn]['scores'][ckpt_idx] = [
+    #                     lbl_info.get('AP', [0])[vid_idx],
+    #                     lbl_info.get('AUC-PR', [0])[vid_idx],
+    #                     lbl_info.get('AUC-ROC', [0])[vid_idx]
+    #                 ]
+                    
+    #                 # Collect FAR if available
+    #                 if lbl == "000.NORM":
+    #                     video_metrics[fn]['far'].append(
+    #                         lbl_info.get('FAR', [0])[vid_idx]
+    #                     )
+
+    #         # Prepare table data
+    #         headers = ["Video", f"Mean({self.sort_mtrc})", f"Std({self.sort_mtrc})"] + ckpt_ids
+    #         sort_idx = ['AP', 'AUC-PR', 'AUC-ROC'].index(self.sort_mtrc)
+            
+    #         rows = []
+    #         for fn, data in video_metrics.items():
+    #             # Extract scores for sort metric
+    #             sort_scores = [scores[ckpt_idx][sort_idx] 
+    #                         for ckpt_idx, scores in enumerate(data['scores'])
+    #                         if scores]
+    #             if not sort_scores:
+    #                 continue
+                    
+    #             stats = {
+    #                 'mean': np.mean(sort_scores),
+    #                 'std': np.std(sort_scores)
+    #             }
+                
+    #             # Build row with checkpoint values
+    #             row = [fn, f"{stats['mean']:.3f}", f"{stats['std']:.3f}"]
+    #             for ckpt_scores in data['scores']:
+    #                 if ckpt_scores:
+    #                     row.append(f"{ckpt_scores[sort_idx]:.3f}")
+    #                 else:
+    #                     row.append("N/A")
+                
+    #             rows.append(row)
+
+    #         # Sort rows by descending mean + ascending std
+    #         rows.sort(key=lambda x: (-float(x[1]), float(x[2])))
+            
+    #         # Add FAR row for norm label
+    #         if lbl == "000.NORM":
+    #             far_row = ["FAR Stats", "", ""]
+    #             for ckpt_idx in range(len(rslt_infos)):
+    #                 fars = [v['far'][ckpt_idx] for v in video_metrics.values()]
+    #                 far_row.append(f"{np.mean(fars):.3f}")
+    #             rows.append(far_row)
+
+    #         table = tabulate(rows, headers, tablefmt="pretty", stralign="right")
+    #         log.info(f"\n=== {lbl} Videos Across Checkpoints ===")
+    #         log.info(f"Sorted by {self.sort_mtrc} variability\n{table}")
+    #         tables.append(table)
+        
+    #     return tables
+
+    def log_per_vid_per_ckpt(self, rslt_infos, full_lbls=False):
+        """Log video-wise metrics across multiple checkpoints with statistical analysis"""
+        ckpt_ids = [self._shorten_path(res.ckpt_path) for res in rslt_infos]
+        
+        ## First, collect all unique videos and their metrics across checkpoints
+        video_metrics = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+        
+        for result in rslt_infos:
+            for lbl_name, metrics in result.mtrc_info.items():
+                if lbl_name == "000.NORM":
+                    # Handle NORM videos separately
+                    for vid_idx, (vid_name, far_val) in enumerate(zip(metrics['FN'], metrics['FAR'])):
+                        video_metrics[lbl_name][vid_name]['FAR'].append(far_val)
+                else:
+                    # Skip non-ANOM labels if full_lbls is False
+                    if not full_lbls and lbl_name != "111.ANOM":
+                        continue
+                        
+                    for vid_idx, vid_name in enumerate(metrics['FN']):
+                        for metric_name in ['AP', 'AUC-PR', 'AUC-ROC']:
+                            video_metrics[lbl_name][vid_name][metric_name].append(metrics[metric_name][vid_idx])
+
+        tables = []
+        
+        # Always process NORM first
+        if "000.NORM" in video_metrics:
+            norm_headers = ["000.NORM", "Mean(FAR)", "Std(FAR)"] + ckpt_ids
+            norm_rows = []
+            
+            for vid_name, metrics in video_metrics["000.NORM"].items():
+                far_values = metrics['FAR']
+                row = [
+                    vid_name,
+                    f"{np.mean(far_values):.4f}",
+                    f"{np.std(far_values):.4f}"
+                ] + [f"{v:.4f}" for v in far_values]
+                norm_rows.append(row)
+            
+            norm_rows.sort(key=lambda x: float(x[2])) ## Sort by std FAR
+            norm_table = tabulate(norm_rows, norm_headers, tablefmt="pretty", stralign="right")
+            tables.append(norm_table)
+
+        ## Process other labels
+        for lbl_name, lbl_data in video_metrics.items():
+            if lbl_name == "000.NORM":
+                continue
+                
+            headers = [lbl_name, f"Mean({self.sort_mtrc})", f"Std({self.sort_mtrc})"] + ckpt_ids
+            rows = []
+            
+            for vid_name, metrics in lbl_data.items():
+                main_metric = metrics[self.sort_mtrc]
+                row = [
+                    vid_name,
+                    f"{np.mean(main_metric):.4f}",
+                    f"{np.std(main_metric):.4f}"
+                ] + [f"{v:.4f}" for v in main_metric]
+                
+                #rows.append(((-np.mean(main_metric), np.std(main_metric)), row))
+                rows.append((np.std(main_metric), row))  # only store std as sorting key
+            
+            # Sort rows by the sorting key (same as in log_per_vid: high to low)
+            rows.sort(key=lambda x: x[0])
+            rows = [row for _, row in rows]
+            
+            table = tabulate(rows, headers, tablefmt="pretty", stralign="right")
+            tables.append(table)
+
+        return tables
+
     def table2img(self, table, name):
         ## transforms table into img
         fig, ax = plt.subplots(figsize=(7,3))
@@ -252,7 +492,7 @@ class Metrics:
         self.mtrc_vis_plot = cfg_vldt.get('mtrc_visplot', False) 
         self.mtrc_vis_plot_per_epo = cfg_vldt.get('mtrc_visplot_epo', False) #train
         self.gtfl_vis_plot = cfg_vldt.get('gtfl_visplot', False) ## not yet
-        self.mtrc_vis_table = cfg_vldt.get('mtrc_vistabe', False) ## train/tst
+        self.mtrc_vis_table = cfg_vldt.get('mtrc_vistable', False) ## train/tst
         self.mtrc_save_table = cfg_vldt.get('mtrc_savetable', False) ## train/tst
         
         self.vis = vis
@@ -285,6 +525,7 @@ class Metrics:
             ## glob: 000.NORM | 111.ANOM | ALL
             ## lbl: 000.NORM | B1.FIGHT | B2.SHOOT | B4.RIOT | B5.ABUSE | B6.CARACC | G.EXPLOS | 111.ANOM | ALL
             self.data_handler.proc_by_label(vldt_info.DATA)
+            
             table = self.tabler.log_per_lbl( self.data_handler.mtrc_info ) 
             
             if self.mtrc_vis_plot_per_epo: 
@@ -302,6 +543,11 @@ class Metrics:
             #log.debug(f"{self.data_handler.curv_info=}")
         
         return self.data_handler.mtrc_info, self.data_handler.curv_info, table
+        # return {
+        #     'mtrc_info': self.data_handler.mtrc_info,
+        #     'curv_info': self.data_handler.curv_info, 
+        #     'table_res': table
+        # }
 ######################################################################
 
 

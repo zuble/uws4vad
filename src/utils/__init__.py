@@ -2,7 +2,8 @@ from src.utils.env import (
     init_seed,
     seed_sade,
     collect_random_states,
-    set_max_threads
+    set_max_threads,
+    cleanup_on_exit
 )
 from src.utils.xtra import (
     xtra,
@@ -10,9 +11,6 @@ from src.utils.xtra import (
     print_config_tree
     )
 from src.utils.misc import (
-    save_pkl, 
-    load_pkl,
-    get_log,
     mp4_rgb_info,
     hh_mm_ss
     )

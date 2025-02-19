@@ -3,7 +3,7 @@ import os, os.path as osp
 from omegaconf import DictConfig, OmegaConf
 from hydra.core.hydra_config import HydraConfig
 
-from src.utils import get_log
+from src.utils.logger import get_log
 log = get_log(__name__)
 
 

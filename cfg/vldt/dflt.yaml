@@ -54,9 +54,9 @@ train:
 
 test:
   ## saves vldt_info returned per Validate into .pkl format
-  savepkl: 0
+  savepkl: True
   ## jumps Validate and uses vldt_info.pkl if already generated
-  frompkl: ""
+  frompkl: True
 
   ## per_what perspectives to show validation results
   per_what: vid ## lbl , vid
@@ -69,27 +69,23 @@ test:
   ## usefull to compare vids clustered per lbl 
   full_anom_lbls: False
 
+
   ## visdom
   ## send barplot per metric to visdom server (xaxis is labels)
   ## useful for compare same metrics per multiples experiments in visdom
   mtrc_visplot: 1
   ## sends metrics table as png to visdom server
-  mtrc_vistabe: 0
+  mtrc_vistable: 0
   ## saves metrics table as png
   mtrc_savetable: 0
   ## sends plotly figs roc/pr curves 2 visdom
   curv_visplot: 1
-  ## send full 
+  ## send full gt/fl arrs
   ## only workign when per_what is lbl
   gtfl_visplot: 0 
 
 
   watch: ## B1 FIGHT | B2 SHOOT | B4 RIOT | B5 ABUSE | B6 CARACC | G EXPLOS
-    ## saves watch_info returned per Validate into .pkl format
-    savepkl: 0
-    ## jumps Validate and uses watch_info.pkl if already generated
-    frompkl: ""
-    
     ## FORMAT to watch the results
     ## []: disabled
     ## asp (anomaly score player): 

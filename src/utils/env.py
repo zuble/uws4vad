@@ -3,16 +3,17 @@ import random
 import numpy as np
 
 import os, os.path as osp
-from typing import Any, Dict, Callable
+import functools, signal, sys
+from types import FrameType
+from typing import Any, Dict, Callable, Optional
 
 from src.utils.logger import get_log
 log = get_log(__name__)
 
 
-def init_seed(cfg, istrain=True):
+def init_seed(cfg, ckpt_path='', istrain=True):
     ## https://pytorch.org/docs/1.8.1/notes/randomness.html
     ## https://github.com/henrryzh1/UR-DMU/blob/master/utils.py#L34
-    ## https://github.com/Roc-Ng/DeepMIL/blob/master/main.py#L9
     ## https://github.com/Lightning-AI/pytorch-lightning/blob/baeef935fb172a5aca2c84bff47b9b59d8e35b8a/src/lightning/fabric/utilities/seed.py#L37 
     
     def get_seed():
@@ -27,8 +28,11 @@ def init_seed(cfg, istrain=True):
         if seed == 0: ## failed to get from cfg
             seed = get_seed()
     else:
-        if not cfg.load.get("ckpt_path"): raise Exception
-        seed = int(osp.basename(cfg.load.ckpt_path).split("--")[0])
+        if not ckpt_path: 
+            if cfg.load.get("ckpt_path"): 
+                ckpt_path = cfg.load.ckpt_path    
+            else: raise Exception
+        seed = int(osp.basename(ckpt_path).split("--")[0])
         if seed is None: ## failed to get from filename
             log.warning(f'seed not in ckpt_path filename !!')
             seed = cfg.get("seed")
@@ -106,3 +110,52 @@ def set_max_threads(max_threads: int = 32) -> None:
     os.environ["NUMEXPR_NUM_THREADS"] = str(max_threads)
 
 
+class cleanup_on_exit:
+    """Decorator to manage cleanup operations with Hydra compatibility"""
+    _current = None  # Track active cleaner instance
+
+    def __init__(self):
+        self.cleanup_actions = []
+        self.original_signal = None
+
+    def __call__(self, func: Callable) -> Callable:
+        @functools.wraps(func)
+        def hydra_compatible_wrapper(*args, **kwargs) -> Optional[Any]:
+            # Set as current cleaner before Hydra executes
+            cleanup_on_exit._current = self
+            self.original_signal = signal.getsignal(signal.SIGINT)
+            
+            try:
+                signal.signal(signal.SIGINT, self._handle_signal)
+                result = func(*args, **kwargs)
+            finally:
+                self._execute_cleanup()
+                signal.signal(signal.SIGINT, self.original_signal)
+                cleanup_on_exit._current = None
+                
+            return result
+            
+        return hydra_compatible_wrapper
+
+    @classmethod
+    def get_cleaner(cls):
+        """Get the active cleaner instance from any context"""
+        return cls._current
+
+    def _handle_signal(self, signum: int, frame: Optional[FrameType]) -> None:
+        """Handle interrupt signals"""
+        print(f"\n🛑 Received signal {signum}. Cleaning up...")
+        self._execute_cleanup()
+        sys.exit(1)
+
+    def _execute_cleanup(self) -> None:
+        """Execute all registered cleanup actions"""
+        for action, args, kwargs in reversed(self.cleanup_actions):
+            try:
+                action(*args, **kwargs)
+            except Exception as e:
+                print(f"⚠️ Cleanup error: {str(e)}")
+
+    def register(self, func: Callable, *args, **kwargs) -> None:
+        """Register a cleanup action"""
+        self.cleanup_actions.append((func, args, kwargs))

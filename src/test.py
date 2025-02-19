@@ -7,9 +7,11 @@ import av ## prior 2 decord, or vis.video gives seg fault
 import decord
 #decord.bridge.set_bridge('torch')
 
+from dataclasses import dataclass
+from typing import Optional, Any
 from omegaconf import DictConfig, OmegaConf
 from hydra.utils import instantiate as instantiate
-import os, os.path as osp, time, glob , copy
+import os, os.path as osp, time, glob, copy, pickle
 import tkinter as tk, sys, select
 
 import plotly.graph_objs as go
@@ -20,32 +22,11 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 from src.model import ModelHandler, build_net
-from src.vldt import Validate, Metrics, Plotter
-from src.utils import hh_mm_ss, get_log, Visualizer, save_pkl, load_pkl
+from src.vldt import Validate, Metrics, Plotter, Tabler
+from src.utils import hh_mm_ss, get_log, Visualizer, init_seed
 log = get_log(__name__)
 
 
-def check_vldt_pkl(cfg_vldt): 
-    if osp.exists(cfg_vldt.frompkl):
-        tic = time.time()
-        log.info(f'$$$$ Validating from pkl')
-        raise NotImplementedError
-        #vldt_info = load_pkl(cfg.EXPERIMENTPATH, 'vldt')
-        #log.info(f'$$ {vldt_info.per_what=}')
-        #Metrics(cfg, 'test', vis).get_fl(vldt_info)
-        #log.info(f'$$$$ vldt done in {hh_mm_ss(time.time() - tic)}')
-        return
-
-def check_wtch_pkl(cfg_vldt): 
-    ## shortcut to watch directly from a watch_info.pkl w/o Validate
-    if osp.exists(cfg_vldt.watch.frompkl):
-        tic = time.time()
-        log.info(f'$$$$ Watching from pkl')
-        raise NotImplementedError
-        #watch_info = load_pkl(cfg.EXPERIMENTPATH,'watch')
-        #Watcher(cfg, watch_info, vis)
-        #log.info(f'$$$$ watched 4 {hh_mm_ss(time.time() - tic)}')
-        return
 
 def find_hydra_cfg(ckpt_path):
     """Search upwards for .hydra/config.yaml"""
@@ -67,34 +48,88 @@ def vldt_cfg(cur_cfg, og_cfg):
     log.info(f"{cur_cfg.data.frgb}  {og_cfg.data.frgb}")
     assert cur_cfg.data.frgb.id == og_cfg.data.frgb.id
     assert cur_cfg.data.frgb.dfeat == og_cfg.data.frgb.dfeat
-    
+
+
+
+@dataclass
+class VldtRslt:
+    ckpt_path: str
+    vldt_info: dict
+    wtch_info: dict
+    mtrc_info: Optional[dict] = None
+    curv_info: Optional[dict] = None
+    tables: Optional[list] = None
+
+@dataclass
+class VldtPckg:
+    rslts: list[VldtRslt]
+
+######################
+## .val.pkl i/o
+def load_pkl(ckpt_path):
+    p = f"{ckpt_path}.val.pkl"
+    if not osp.exists(p):
+        log.error(f"none {p} -> run once with cfg.vldt.test.savepkl:true AND .frompkl:'' ")
+        return None
+
+    with open(p, 'rb') as f:
+        data = pickle.load(f)
+            
+    return VldtRslt(
+        ckpt_path=ckpt_path,
+        vldt_info=data['vldt_info'],
+        wtch_info=data['wtch_info']
+    )
+
+def save_pkl(vldtrslt):
+    p = f"{vldtrslt.ckpt_path}.val.pkl"
+    if osp.exists(p): 
+        inp = input(f".val.pkl already present {p}\noverwrite? (y/n)")
+        if inp != 'y': return
+        
+    with open(p, 'wb') as f:
+        pickle.dump({
+            'vldt_info': vldtrslt.vldt_info,
+            'wtch_info': vldtrslt.wtch_info
+        }, f, pickle.HIGHEST_PROTOCOL)
+    log.info(f"saved vldt_info at {p}")
+
 
 def tester(cfg, vis):
     tic = time.time()
     log.info(f'$$$$ TEST starting')
     
+    pckg = VldtPckg([])
     cfg_vldt = cfg.vldt.test
     watching = cfg_vldt.watch.frmt
     log.info(f"{watching=}")
     
-    check_vldt_pkl(cfg_vldt)
-    check_wtch_pkl(cfg_vldt)
-    
-    all_watch_info, all_results = [], []
     MH = ModelHandler(cfg)
+    VLDT = Validate(cfg, cfg_vldt, cfg.data.frgb, vis=vis, watching=watching)
+    MTRC = Metrics(cfg_vldt, vis)
     
-    for i, ckpt_path in enumerate(MH.ckpt_path):
+    for ckpt_path in MH.ckpt_path:
         
-        if not cfg.train:
-            ## https://github.com/facebookresearch/hydra/issues/1022
+        ## only load when not comming from train and frompkl is set
+        rslt = load_pkl(ckpt_path)
+        if rslt and cfg_vldt.frompkl and not cfg.train:
+            log.warning(f"{cfg_vldt.per_what=} {rslt.vldt_info.per_what=}")
+            rslt.mtrc_info, rslt.curv_info, rslt.tables = MTRC.get_fl(rslt.vldt_info)
+            pckg.rslts.append(rslt)
+            continue
+        else: rslt = VldtRslt(ckpt_path,{},{})
+        
+        
+        if not cfg.train:  ## set seed / cfg.net / vldt cfg.data
+            init_seed(cfg, ckpt_path, False)
+            
             hydra_cfg_path = find_hydra_cfg(ckpt_path)  
             og_cfg = OmegaConf.load(hydra_cfg_path)  
             ## check for mismatch in data/frgb as diff features need diff dataloader
             vldt_cfg(cfg, og_cfg)
             ## preserve running vldt cfg / override net cfg
             cfg = merge_cfgs(cfg, og_cfg)
-        
-        ## load arch
+
         net, inferator = build_net(cfg)
         net.to(cfg.dvc)
         
@@ -107,57 +142,65 @@ def tester(cfg, vis):
             assert cfg.model.net.main._cfg.ret_att == True, log.error(f"{cfg.model.net.id} w ret_att False ???")
             #raise NotImplementedError
             log.warning(f'watch attws from {cfg.model.net.id}')
+        ##########
         
-        VLDT = Validate(cfg, cfg_vldt, cfg.data.frgb, vis=vis, watching=watching)
         if cfg.vldt.dryrun:
             log.info("DBG DRY VLDT RUN")
-            _ = VLDT.start(net, inferator); VLDT.reset() #;return
+            vi,_ = VLDT.start(net, inferator); VLDT.reset() #;return
+            _,_,ts = MTRC.get_fl(vi)
+            for t in ts: log.info(f'\n{t}')
             continue
-            
+        
         net.load_state_dict( MH.get_test_state(ckpt_path) )
-        vldt_info, watch_info, mtrc_info, curv_info, table_res = VLDT.start(net, inferator)
+        rslt.vldt_info, rslt.wtch_info = VLDT.start(net, inferator)
+        if cfg_vldt.savepkl: save_pkl(rslt)
         
-        ## TODOafter frist one, preserve only the fl array, as fn/gt are the same (attws not implemented yet)
-        all_watch_info.append({
-            'ckpt_path': ckpt_path,
-            'watch_info': copy.deepcopy(watch_info) ## keys: FN/GT/FL/ATTW 
-        })
-        all_results.append({
-            'ckpt_path': ckpt_path,
-            'metrics': copy.deepcopy(mtrc_info),
-            'curves': copy.deepcopy(curv_info),
-            'table': table_res
-        })
-        
-        ## save into same folder as parameters file
-        if cfg_vldt.savepkl: save_pkl(cfg.load.ckpt_path, vldt_info, 'vldt')
-        #if cfg_vldt.watch.savepkl: save_pkl(cfg.load.ckpt_path, watch_info, 'watch')
+        rslt.mtrc_info, rslt.curv_info, rslt.tables = MTRC.get_fl(rslt.vldt_info)
+        pckg.rslts.append(rslt)
         
         ## clean
         VLDT.reset()
         del net
         torch.cuda.empty_cache()
 
-    if cfg_vldt.per_what == 'lbl' and len(all_results) > 0:
+    ## Reporting
+    if cfg_vldt.per_what == 'lbl' and pckg.rslts:
         pltr = Plotter(vis)
-        for result in all_results:
-            log.info(f"{result['ckpt_path']}")
-            pltr.metrics(result['metrics'])
-            pltr.curves(result['curves'])
-    
+        for rslt in pckg.rslts:
+            log.info(f"Results for {rslt.ckpt_path}")
+            pltr.metrics(rslt.mtrc_info)
+            pltr.curves(rslt.curv_info)
+            for table in rslt.tables:
+                log.info(f'\n{table}')
+                
+    elif cfg_vldt.per_what == 'vid':
+        if len(pckg.rslts) == 1:
+            for rslt in pckg.rslts:
+                log.info(f"Results for {rslt.ckpt_path}")
+                for table in rslt.tables: log.info(f'\n{table}')
+        else:
+            tables = Tabler(cfg_vldt.record_mtrc).log_per_vid_per_ckpt(pckg.rslts)#.log_per_lbl_per_ckpt(pckg.rslts)
+            for t in tables: log.info(f'\n{t}')
+            
     if watching:
-        Watcher(cfg, cfg_vldt.watch, all_watch_info, vis)  
-
+        ## TODO: change wtch_info handling in watcher
+        Watcher(
+            cfg, cfg_vldt.watch,
+            [(rslt.ckpt_path, rslt.wtch_info) for rslt in pckg.rslts],
+            vis
+        )
+        
     log.info(f'$$$$ Test Completed in {hh_mm_ss(time.time() - tic)}')
     sys.exit()
     
     
+    
 class Watcher:
-    def __init__(self, cfg, cfg_wtc, all_watch_info, vis):
+    def __init__(self, cfg, cfg_wtc, wtch_infos, vis):
         self.cfg = cfg
         self.cfg_dsinf = cfg.data
         self.cfg_wtc = cfg_wtc 
-        self.all_watch_info = all_watch_info
+        self.wtch_infos = wtch_infos
         
         if not cfg_wtc.frmt: cfg_wtc.frmt = input(f"asp,gtfl,attws ? and/or comma separated").split(",")
         
@@ -172,43 +215,38 @@ class Watcher:
         else: self.plot = lambda *args, **kwargs: None
         log.info(f"Watcher.plot {self.plot}")
         
-        log.info(f"Watcher initialized with {len(self.all_watch_info)} models")
+        log.info(f"Watcher initialized with {len(self.wtch_infos)} models")
         self.init_gui() if cfg_wtc.guividsel else self.init_lst()    
-
-    
+        
     def process(self, fn):
         ## common worker for both gui or lst
-        
-        idx = self.all_watch_info[0]['watch_info']['ALL']['FN'].index(fn)
-        gt = self.all_watch_info[0]['watch_info']['ALL']['GT'][idx]
+        idx = self.wtch_infos[0][1]['ALL']['FN'].index(fn)
+        gt = self.wtch_infos[0][1]['ALL']['GT'][idx]
         sms=f'Watching {fn}\n gt {len(gt)} {type(gt).__name__}'
         
         tmp = [{
-            'ckpt': wi['ckpt_path'],
-            'fl': wi['watch_info']['ALL']['FL'][idx],
-            'attw': wi['watch_info']['ALL']['ATTWS'][idx]
-        } for wi in self.all_watch_info]
+            'ckpt': wi[0],
+            'fl': wi[1]['ALL']['FL'][idx],
+            'attw': wi[1]['ALL']['ATTWS'][idx]
+        } for wi in self.wtch_infos]
 
         sms = [
             f"Watching {fn}",
             f"GT: {len(gt)} frames ({type(gt).__name__})"
         ]
-        
         for i, d in enumerate(tmp):
             sms.append(
                 f"  Model {i+1} {d['ckpt']}:\n"
                 f"  - FL: {len(d['fl'])} frames ({type(d['fl']).__name__})\n"
                 f"  - ATTW: {type(d['attw']).__name__ if d['attw'] is not None else 'None'}"
             )
-
         log.info('\n'.join(sms))
         self.plot(fn, gt, tmp)
         
-        log.warning(f"TODO: adapt asp to view more than one FL")
         vpath = osp.join(self.cfg_dsinf.vroot, f"TEST/{fn}.mp4")
         if len(tmp) > 1:
-            log.warning("Multiple models detected")
-            log.info(f"Available models: {[m['ckpt'] for m in tmp]}")
+            log.warning("Multiple ckpts detected")
+            log.info(f"{[m['ckpt'] for m in tmp]}")
         stop = self.asp(vpath, gt, tmp) ##[m['fl'] for m in tmp]
         return stop
     
@@ -246,7 +284,7 @@ class Watcher:
         self.root.title("VidSel")
         self.video_listbox = tk.Listbox(self.root)
         self.video_listbox.pack(side="left", fill="both", expand=True)
-        fnlist = self.all_watch_info['ALL']['FN']
+        fnlist = self.wtch_infos[0][1]['ALL']['FN']
         for fn in fnlist: self.video_listbox.insert(tk.END, fn)
         self.scrollbar = tk.Scrollbar(self.root, orient="vertical")
         self.scrollbar.config(command=self.video_listbox.yview)
@@ -278,11 +316,7 @@ class ASPlotter:
     def _short_name(self, path):
         """Extract meaningful short name from checkpoint path"""
         return path.split('/')[-1].split('.')[0]
-        # parts = path.split('/')
-        # for part in reversed(parts):
-        #     if 'seed=' in part or 'run' in part:
-        #         return part
-        # return osp.bas(path)
+        #return int(osp.basename(path).split("--")[0])
 
     def plotly(self, fn, gt, data):
         """Plotly version supporting multiple FL curves"""
@@ -474,7 +508,7 @@ class ASPlotter:
         
 
 ###############################
-## cv windows viewer of results 
+## cv windows viewer of rslts 
 class ASPlayer:
     def __init__(self, cfg_wtc, vis):
         self.frtend = cfg_wtc.frtend

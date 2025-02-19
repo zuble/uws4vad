@@ -21,7 +21,7 @@ defaults:
 #exp_name: SBS-CULUMCARACC-itp32-bs64-0.00005
 #exp_name: CULUM-CA-EXPLOS-FIGHT-SBS-itp200-bs64-0.0001-bagset1.2
 #exp_name: CULUM-CA-EXPLOS-SBS-itp200-bs64-0.0001-bagset1.2
-tags: ["dataload"]
+tags: [""]
 
   
 model:
@@ -31,7 +31,7 @@ model:
     weight_decay: 0.0005
   loss:
     rtfm:
-      preproc: og
+      preproc: sbs
 
 dataproc: 
   seg:
@@ -39,16 +39,13 @@ dataproc:
     len: 200
     #jit: 1
     #rnd: 1
-  cropasvideo: 
-    train: False  
-    test: True
   culum: 
     #- B1.FIGHT
     #- B2.SHOOT
     #- B4.RIOT
     #- B5.ABUSE
     - B6.CARACC
-    #- G.EXPLOS
+    - G.EXPLOS
 
 dataload:
   bs: 16
@@ -56,5 +53,5 @@ dataload:
     bag: 0.5
     set: 1.2
 
-
-## 2751792490 ~ rtfm-magn-xdv/timm__vitamin_base_224.datacomp1b_clip/runs/28-07_19-38-32
+## 3612927237--4_1
+## 1864992042--2_1

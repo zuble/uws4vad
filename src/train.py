@@ -59,6 +59,7 @@ def trainer(cfg, vis):
         log.info("DBG DRY VLDT RUN")
         VLDT.start(net, inferator); VLDT.reset() ;return    
     tmeter = TrainMeter( cfg.dataload, cfg_vldt, vis)
+    MTRC = Metrics(cfg_vldt, vis)
     
     #progress = Progress(
     #    SpinnerColumn(),
@@ -144,9 +145,11 @@ def trainer(cfg, vis):
             if (epo + 1) % cfg_vldt.freq == 0:
                 log.info(f'$$$ Validation at epo {epo+1}')
                 #torch.backends.cudnn.benchmark = False
-                _, _, mtrc_info, curv_info, table_res = VLDT.start(net, inferator)
+                vldt_info, _ = VLDT.start(net, inferator)
+                mtrc_info, curv_info, table_res = MTRC.get_fl(vldt_info)
                 VLDT.reset()
                 #torch.backends.cudnn.benchmark = True
+                for table in table_res: log.info(f'\n{table}')
                 if not cfg.get("debug"): 
                     MH.record( mtrc_info, curv_info, table_res, net, optima, trn_inf)
             

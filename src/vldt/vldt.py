@@ -1,5 +1,5 @@
 import torch
-import os, os.path as osp, numpy as np, time, cv2, gc
+import os, os.path as osp, numpy as np, time, cv2, gc, copy
 from sklearn.metrics import average_precision_score
 
 from src.vldt.metric import Metrics, Plotter
@@ -168,7 +168,7 @@ class Validate:
         else: self.fwd = self._fwd_glob
         
         
-        self.metrics = Metrics(cfg_vldt, vis)
+        #self.metrics = Metrics(cfg_vldt, vis)
         self.gtfl = GTFL(cfg.data)
         
         if cfg.vldt.match_gtfl not in ['rshpndfill', 'truncate']:
@@ -339,11 +339,10 @@ class Validate:
         self.watch_info.upgrade()
         self.watch_info.log()
 
-        mtrc_info, curv_info, table_res = self.metrics.get_fl(self.vldt_info)
+        #mtrc_info, curv_info, table_res = self.metrics.get_fl(self.vldt_info)
         
         log.info(f'$$$$ VALIDATE @ {hh_mm_ss(time.time() - tic)}')
-        ## outs are 4 -> test / test / train*2 (to save alongside the model state dict) / train to send 
-        return self.vldt_info, self.watch_info.DATA, mtrc_info, curv_info, table_res
+        return copy.deepcopy(self.vldt_info), copy.deepcopy(self.watch_info.DATA) #, mtrc_info, curv_info, table_res
 
 
 ###########

@@ -22,12 +22,16 @@ _HYDRA_PARAMS = {
     "config_path": str(root / "cfg"),
     "config_name": "xdv.yaml", ## -> override w/ -cn=
 }
-        
+
+#@utils.cleanup_on_exit()
 @utils.reg_custom_resolvers(**_HYDRA_PARAMS)  ## @src/utils/cfgres.py
 @hydra.main(**_HYDRA_PARAMS)
 def main(cfg: DictConfig) -> None:
     log = utils.get_log(__name__, cfg) ## -> runs once 2 set right lvl's per module
     
+    #cleaner = utils.cleanup_on_exit.get_cleaner()
+    #if not cleaner: raise RuntimeError("Cleanup manager not initialized!")
+        
     if cfg.get("tmp"):
         from src import tmp
         utils.xtra(cfg)
@@ -66,6 +70,12 @@ def main(cfg: DictConfig) -> None:
                     'overrides', HydraConfig.get().overrides.task,
                     'sweeper', HydraConfig.get().sweeper.params
                     ])
+        # Register Visdom cleanup
+        #cleaner.register(
+        #    vis.delete, 
+        #    envn=vis.env_name,
+        #    #reason="Session cleanup"
+        #)
         
         if cfg.get("train"):
             from src.train import trainer
@@ -81,7 +91,8 @@ def main(cfg: DictConfig) -> None:
         
         elif cfg.get("test"):
                 from src.test import tester
-                utils.init_seed(cfg, False)
+                ## with multi nets to iter, 
+                #utils.init_seed(cfg, False)
                 utils.xtra(cfg)
                 tester(cfg, vis)
         

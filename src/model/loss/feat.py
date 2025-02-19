@@ -132,7 +132,6 @@ class Rtfm(nn.Module):
     
     def _preproc(self, feats, labels):
         ## bag*nc,f
-
         abn_fmgnt, nor_fmgnt = self.pfu.get_mtrcs_magn(feats, labels=labels, apply_do=True)
 
         feats_pnc = self.pfu.uncrop(feats, force=True) ## bs,nc,t,f
@@ -161,15 +160,14 @@ class Rtfm(nn.Module):
         l_fabn = torch.abs(self.margin - l2n_abn)
         l_fnor = torch.norm(sel_nor_feats, p=2, dim=1) ## (bag*nc)
         loss_mgnt = torch.mean((l_fabn + l_fnor) ** 2)
-        
-        log.debug(f"{l_fabn.shape=} {l_fnor.shape=} {loss_mgnt=} ")
+        log.debug(f"mgnt: {l_fabn.shape=} {l_fnor.shape=} {loss_mgnt=} ")
         
         
         ## SCORE
         scores = self.pfu.uncrop( scores, 'mean') ## bs*nc,t -> bs, t
         abn_scors, nor_scors = self.pfu.unbag(scores, labels) ## bag, t
         vls_abn, vls_nor = self.pfu.sel_scors( abn_scors, nor_scors, idx_abn, idx_nor, avg=True) ## bag
-        log.debug(f"{vls_abn.mean()=}  {vls_nor.mean()=}")
+        log.debug(f"score: {vls_abn.mean()=}  {vls_nor.mean()=}")
         
         #vls_abn, vls_nor = self.sig(vls_abn), self.sig(vls_nor)
         #log.debug(f"{vls_abn.mean()=}  {vls_nor.mean()=}")

@@ -128,7 +128,7 @@ class LossComputer(nn.Module):
             for component_name, component_value in loss_output.items():
                 #log.debug(f"{component_name}  {component_value}")
                 print_grad_fn_info(component_value,component_name)
-                loss_glob = loss_glob + component_value 
+                loss_glob = loss_glob + component_value
                 
                 loss_dict[f"{loss_name}/{component_name}"] = component_value
                 

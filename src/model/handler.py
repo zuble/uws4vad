@@ -33,9 +33,7 @@ class ModelHandler:
                 "step": None,
                 "epo": None,
                 "mtrc_info":None
-            }
-            log.info(f"[train] load path set as {self.ckpt_path}") 
-        
+            }        
         else: self.get_ckpt_paths()
     
     def optima_to(self, optima, dvc = 'cpu'):
@@ -141,11 +139,7 @@ class ModelHandler:
     
     ########
     def check_nd_find(self, path):
-        if isinstance(path, int): ##if seed is provided
-            pattern = f"**/*{path}*.state.pt"
-            raise NotImplementedError
-        else: ## if filename is provided
-            pattern = f"**/{path}"
+        pattern = f"**/*{path}*.state.pt"
         
         matches = glob.glob(osp.join(self.cfg.path.log_dir, pattern), recursive=True)
         if not matches:
@@ -173,13 +167,12 @@ class ModelHandler:
             raise Exception("provide load.ckpt_path")
         
         else: ## in test
-            tmp = self.cfg.load.ckpt_path
-            if not isinstance(tmp, list): 
+            tmp = self.cfg.load.get("ckpt_path")
+            if isinstance(tmp, str): 
                 if osp.exists(tmp): 
                     self.ckpt_path = [tmp]
                     return
-                else: tmp = [tmp]
-            
+            tmp = list(tmp)     
             self.ckpt_path = [self.check_nd_find(p) for p in tmp]    
     ########
     

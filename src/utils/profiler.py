@@ -3,7 +3,7 @@ from torch.profiler import profile, record_function, ProfilerActivity
 from torchinfo import summary
 from fvcore.nn import FlopCountAnalysis, flop_count_str, flop_count, flop_count_table, parameter_count, activation_count, ActivationCountAnalysis
 
-from src.utils import get_log
+from src.utils.logger import get_log
 log = get_log(__name__)
 
 
