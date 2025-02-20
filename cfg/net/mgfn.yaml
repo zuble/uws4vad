@@ -1,19 +1,13 @@
 defaults:
-  - _.yaml
-  - main: dflt
-  #- fm: gf
+  - _dflt
   - cls: ~
 
 id: mgfn
 
 main:
   mag_ratio: 0.1
-  dims: [64, 128, 1024]
-  #_cfg:
-    
-
-  _fm:
-    _target_: src.model.net.layers.gfn.GlanceFocus
+  fm:
+    #_target_: src.model.net.layers.gfn.GlanceFocus
     dims: [64, 128, 1024]
     depths: [3, 3, 2]
     mgfn_types: ['gb', 'fb', 'fb']

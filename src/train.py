@@ -57,7 +57,7 @@ def trainer(cfg, vis):
     VLDT = Validate(cfg, cfg_vldt, cfg.data.frgb, vis=vis)
     if cfg.vldt.dryrun:
         log.info("DBG DRY VLDT RUN")
-        VLDT.start(net, inferator); VLDT.reset() ;return    
+        VLDT.start(net, inferator); VLDT.reset(); return    
     tmeter = TrainMeter( cfg.dataload, cfg_vldt, vis)
     MTRC = Metrics(cfg_vldt, vis)
     
@@ -147,7 +147,7 @@ def trainer(cfg, vis):
                 #torch.backends.cudnn.benchmark = False
                 vldt_info, _ = VLDT.start(net, inferator)
                 mtrc_info, curv_info, table_res = MTRC.get_fl(vldt_info)
-                VLDT.reset()
+                VLDT.reset(); MTRC.reset()
                 #torch.backends.cudnn.benchmark = True
                 for table in table_res: log.info(f'\n{table}')
                 if not cfg.get("debug"): 
@@ -162,7 +162,7 @@ def trainer(cfg, vis):
                 pltr = Plotter(vis)
                 pltr.metrics(MH.high_state['mtrc_info'])
                 pltr.curves(MH.high_state['curv_info'])
-                Tabler(send2visdom=True,vis=vis).table2img(MH.high_table,'high_res_table')
+                Tabler(cfg_vldt,vis).table2img(MH.high_table,'high_res_table',True)
         
     except Exception as e:
         log.error(traceback.format_exc())

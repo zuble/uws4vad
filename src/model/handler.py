@@ -144,7 +144,7 @@ class ModelHandler:
         matches = glob.glob(osp.join(self.cfg.path.log_dir, pattern), recursive=True)
         if not matches:
             raise FileNotFoundError(f"No checkpoint with seed {seed}")
-        log.error(matches)
+        
         return max(matches, key=osp.getmtime)  # Get most recent
     
         #seed = osp.basename(path).split(".")[0]
@@ -159,7 +159,7 @@ class ModelHandler:
         
         if self.cfg.train: ## comming from traing, find state in now run_dir
             self.ckpt_path = glob.glob(f"{self.cfg.path.out_dir}/*.state.pt")
-            log.error(self.ckpt_path)
+            #log.error(self.ckpt_path)
             if not self.ckpt_path: 
                 raise Exception(f"no __.state.pt found in current dir {self.cfg.path.out_dir}") 
             
@@ -172,7 +172,7 @@ class ModelHandler:
                 if osp.exists(tmp): 
                     self.ckpt_path = [tmp]
                     return
-            tmp = list(tmp)     
+            tmp = [tmp]
             self.ckpt_path = [self.check_nd_find(p) for p in tmp]    
     ########
     

@@ -11,7 +11,7 @@ defaults:
 #     params:
 #       #model.loss.rtfm.preproc: og, sbs
 
-tags: ["culum-fightcaracc"]
+tags: [""]
 
 train: 0
 test: 1
@@ -21,13 +21,11 @@ test: 1
 ## since its saved into logs folder
 load:
   ckpt_path:
-    - 3612927237--4_1
-    - 1864992042--2_1
+    - 2209346947--2_1
 
 dataload:
   test:
     in2mem: False
-    ## slowing cause usb troughput max out, better use low
     #nworkers: ${dyn_nworkers:-1}
     #pinmem: True
     #pftch_fctr: 4
@@ -35,6 +33,7 @@ dataload:
 
 vldt:
   test:
-    savepkl: true
+    savepkl: false
     frompkl: false
-    per_what: vid
+    per_what: vid #lbl
+    full_anom_lbls: true

@@ -84,31 +84,32 @@ def build_loss(cfg):
 
 
 
-## ---- processor ----
-def print_grad_fn_info(tensor, tensor_name="Tensor"):
-    """Prints information about the grad_fn of a tensor."""
-    if tensor.grad_fn is not None:
-        log.debug(f"{tensor_name} grad_fn:")
-        log.debug(f" - Type: {type(tensor.grad_fn)}")
-        log.debug(f" - Name: {tensor.grad_fn.__class__.__name__}")
-        log.debug(f" - Device: {tensor.device}")
-        if hasattr(tensor.grad_fn, 'next_functions'):
-            log.debug(" - Inputs:")
-            for i, func in enumerate(tensor.grad_fn.next_functions):
-                if func[0] is not None:
-                    log.debug(f"   - Input {i}: {func[0].__class__.__name__}")
-        log.debug("-" * 20)
-    else:
-        log.debug(f"{tensor_name} has no grad_fn (likely a leaf variable).")
-        log.debug("-" * 20)
 
+## ---- processor ----
 class LossComputer(nn.Module):
     def __init__(self, lfxs, pfu: PstFwdUtils):
         super().__init__()
         self.lfxs = lfxs
         self.pfu = pfu
         #self._ = pfu.
-
+        
+    def print_grad_fn_info(self, tensor, tensor_name="Tensor"):
+        """Prints information about the grad_fn of a tensor."""
+        if tensor.grad_fn is not None:
+            log.debug(f"{tensor_name} grad_fn:")
+            log.debug(f" - Type: {type(tensor.grad_fn)}")
+            log.debug(f" - Name: {tensor.grad_fn.__class__.__name__}")
+            log.debug(f" - Device: {tensor.device}")
+            if hasattr(tensor.grad_fn, 'next_functions'):
+                log.debug(" - Inputs:")
+                for i, func in enumerate(tensor.grad_fn.next_functions):
+                    if func[0] is not None:
+                        log.debug(f"   - Input {i}: {func[0].__class__.__name__}")
+            log.debug("-" * 20)
+        else:
+            log.debug(f"{tensor_name} has no grad_fn (likely a leaf variable).")
+            log.debug("-" * 20)
+        
     def forward(self, ndata, ldata):
         if log.isEnabledFor(logging.DEBUG):
             self.pfu.logdat(ndata,ldata)
@@ -127,10 +128,10 @@ class LossComputer(nn.Module):
             ## this ugly !!!!!!
             for component_name, component_value in loss_output.items():
                 #log.debug(f"{component_name}  {component_value}")
-                print_grad_fn_info(component_value,component_name)
+                self.print_grad_fn_info(component_value,component_name)
                 loss_glob = loss_glob + component_value
                 
                 loss_dict[f"{loss_name}/{component_name}"] = component_value
                 
-        print_grad_fn_info(loss_glob, "Final Loss") 
+        self.print_grad_fn_info(loss_glob, "Final Loss") 
         return loss_glob, loss_dict

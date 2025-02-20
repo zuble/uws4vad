@@ -3,8 +3,8 @@ defaults:
   - pstfwd: dflt
   - optima: adam
   - lrs: null
-  - loss@loss.rtfm: rtfm
-  #- loss@loss.mc: mgfn
+  #- loss@loss.rtfm: rtfm
+  - loss@loss.mgfn: mgfn
   #- _self_
 
 id: magn

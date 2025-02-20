@@ -25,33 +25,32 @@ tags: [""]
 
   
 model:
-  epochs: 10  ## 5, 10, 10, 20
+  epochs: 5  ## 5, 10, 10, 20
   optima:
     lr: 0.0001
     weight_decay: 0.0005
-  loss:
-    rtfm:
-      preproc: sbs
+  #loss:
+  #  rtfm:
+  #    preproc: sbs
 
 dataproc: 
   seg:
     sel: itp
-    len: 200
-    #jit: 1
+    len: 32
+    jit: 1
     #rnd: 1
   culum: 
     #- B1.FIGHT
     #- B2.SHOOT
     #- B4.RIOT
     #- B5.ABUSE
-    - B6.CARACC
-    - G.EXPLOS
+    #- B6.CARACC
+    #- G.EXPLOS
 
 dataload:
-  bs: 16
+  bs: 8
   balance:
     bag: 0.5
     set: 1.2
 
-## 3612927237--4_1
-## 1864992042--2_1
+

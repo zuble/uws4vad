@@ -132,13 +132,13 @@ class _GlanceFocus(nn.Module):
 
     def forward(self, x):
         for i, (scc, attention, ffn) in enumerate(self.layers):
-            log.info(f"BACKBONE @ depth {i}")
+            log.debug(f"BACKBONE @ depth {i}")
             x = scc(x) + x  ## encode + residual
-            log.info(f"scc [{i}] {x.shape}")
+            log.debug(f"scc [{i}] {x.shape}")
             x = attention(x) + x ## Glance -> Focus -> Focus
-            log.info(f"att [{i}] {x.shape}")
+            log.debug(f"att [{i}] {x.shape}")
             x = ffn(x) + x
-            log.info(f"ffn [{i}] {x.shape}")
+            log.debug(f"ffn [{i}] {x.shape}")
         return x
     
 
@@ -147,7 +147,8 @@ class _GlanceFocus(nn.Module):
 ## excepts b, f, t
 ## return b, f, t
 class GlanceFocus(nn.Module):
-    def __init__( self, dfeat,
+    def __init__( self, 
+        dfeat,
         dims = (64, 128, 1024),
         depths = (3, 3, 2),
         mgfn_types = ( 'gb', 'fb', 'fb'),
@@ -182,18 +183,18 @@ class GlanceFocus(nn.Module):
                     nn.Conv1d(stage_dim, dims[ind + 1], 1, stride = 1),
                 ) if not is_last else None
             ]))
-        log.info(f"{self.stages} \n\n\n\n")
+        log.debug(f"{self.stages} \n\n\n\n")
 
     def forward(self, x_in):
-
+        x_gf = x_in
         for i, (backbone, conv) in enumerate(self.stages):
-            log.info(f"MGFN @ STAGE {i} ")
-            x_gf = backbone(x_in)
-            log.info(f"MGFN / after G or F {x_gf.shape}")
+            log.debug(f"MGFN @ STAGE {i} ")
+            x_gf = backbone(x_gf)
+            log.debug(f"MGFN / after G or F {x_gf.shape}")
             if exists(conv):
                 x_gf = conv(x_gf)
-                log.info(f"MGFN / conv dim prep {x_gf.shape}")
-        log.info(f"FM {x_in.shape=} -> {x_gf.shape=}")
+                log.debug(f"MGFN / conv dim prep {x_gf.shape}")
+        log.debug(f"FM {x_in.shape=} -> {x_gf.shape=}")
         
         return x_gf
         

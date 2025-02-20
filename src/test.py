@@ -72,8 +72,7 @@ def load_pkl(ckpt_path):
         log.error(f"none {p} -> run once with cfg.vldt.test.savepkl:true AND .frompkl:'' ")
         return None
 
-    with open(p, 'rb') as f:
-        data = pickle.load(f)
+    with open(p, 'rb') as f: data = pickle.load(f)
             
     return VldtRslt(
         ckpt_path=ckpt_path,
@@ -113,12 +112,13 @@ def tester(cfg, vis):
         ## only load when not comming from train and frompkl is set
         rslt = load_pkl(ckpt_path)
         if rslt and cfg_vldt.frompkl and not cfg.train:
-            log.warning(f"{cfg_vldt.per_what=} {rslt.vldt_info.per_what=}")
-            rslt.mtrc_info, rslt.curv_info, rslt.tables = MTRC.get_fl(rslt.vldt_info)
-            pckg.rslts.append(rslt)
-            continue
-        else: rslt = VldtRslt(ckpt_path,{},{})
-        
+            if cfg_vldt.per_what == rslt.vldt_info.per_what: 
+                rslt.mtrc_info, rslt.curv_info, rslt.tables = MTRC.get_fl(rslt.vldt_info)
+                pckg.rslts.append(rslt)
+                log.info(f"loaded from val.pkl {ckpt_path}")
+                continue
+            log.warning(f"Not using loaded .val.pkl\n{cfg_vldt.per_what=} {rslt.vldt_info.per_what=}")
+        rslt = VldtRslt(ckpt_path,{},{})
         
         if not cfg.train:  ## set seed / cfg.net / vldt cfg.data
             init_seed(cfg, ckpt_path, False)
@@ -153,15 +153,17 @@ def tester(cfg, vis):
         
         net.load_state_dict( MH.get_test_state(ckpt_path) )
         rslt.vldt_info, rslt.wtch_info = VLDT.start(net, inferator)
-        if cfg_vldt.savepkl: save_pkl(rslt)
+        if cfg_vldt.savepkl: save_pkl(rslt) ## save before mtrc, as its based on cfg
         
         rslt.mtrc_info, rslt.curv_info, rslt.tables = MTRC.get_fl(rslt.vldt_info)
         pckg.rslts.append(rslt)
         
         ## clean
-        VLDT.reset()
+        VLDT.reset(); MTRC.reset()
         del net
         torch.cuda.empty_cache()
+
+    del VLDT ## free DL
 
     ## Reporting
     if cfg_vldt.per_what == 'lbl' and pckg.rslts:
@@ -174,19 +176,27 @@ def tester(cfg, vis):
                 log.info(f'\n{table}')
                 
     elif cfg_vldt.per_what == 'vid':
+        T = Tabler(cfg_vldt)
+        
         if len(pckg.rslts) == 1:
-            for rslt in pckg.rslts:
-                log.info(f"Results for {rslt.ckpt_path}")
-                for table in rslt.tables: log.info(f'\n{table}')
-        else:
-            tables = Tabler(cfg_vldt.record_mtrc).log_per_vid_per_ckpt(pckg.rslts)#.log_per_lbl_per_ckpt(pckg.rslts)
-            for t in tables: log.info(f'\n{t}')
+            for table in pckg.rslts[0].tables: log.info(f'\n{table}')
+            
+        #for rslt in pckg.rslts:
+            #log.info(f"Results for {rslt.ckpt_path}")
+            #MTRC.datler.proc_by_label(rslt.vldt_info.DATA)
+            #table = MTRC.tabler.log_per_lbl( MTRC.datler.mtrc_info )
+            #log.error(table)
+            #T.log_per_lbl(rslt.mtrc_info)
+            #for table in rslt.tables: log.info(f'\n{table}')
+        
+        if len(pckg.rslts) > 1:
+            T.log_per_vid_per_ckpt(pckg.rslts)
+            T.log_per_lbl_per_ckpt(pckg.rslts)
             
     if watching:
-        ## TODO: change wtch_info handling in watcher
         Watcher(
             cfg, cfg_vldt.watch,
-            [(rslt.ckpt_path, rslt.wtch_info) for rslt in pckg.rslts],
+            pckg.rslts,
             vis
         )
         
@@ -196,11 +206,11 @@ def tester(cfg, vis):
     
     
 class Watcher:
-    def __init__(self, cfg, cfg_wtc, wtch_infos, vis):
+    def __init__(self, cfg, cfg_wtc, rslts, vis):
         self.cfg = cfg
         self.cfg_dsinf = cfg.data
         self.cfg_wtc = cfg_wtc 
-        self.wtch_infos = wtch_infos
+        self.rslts = rslts
         
         if not cfg_wtc.frmt: cfg_wtc.frmt = input(f"asp,gtfl,attws ? and/or comma separated").split(",")
         
@@ -215,20 +225,20 @@ class Watcher:
         else: self.plot = lambda *args, **kwargs: None
         log.info(f"Watcher.plot {self.plot}")
         
-        log.info(f"Watcher initialized with {len(self.wtch_infos)} models")
+        log.info(f"Watcher initialized with {len(self.rslts)} models")
         self.init_gui() if cfg_wtc.guividsel else self.init_lst()    
         
     def process(self, fn):
         ## common worker for both gui or lst
-        idx = self.wtch_infos[0][1]['ALL']['FN'].index(fn)
-        gt = self.wtch_infos[0][1]['ALL']['GT'][idx]
+        idx = self.rslts[0].wtch_info['ALL']['FN'].index(fn)
+        gt = self.rslts[0].wtch_info['ALL']['GT'][idx]
         sms=f'Watching {fn}\n gt {len(gt)} {type(gt).__name__}'
         
         tmp = [{
-            'ckpt': wi[0],
-            'fl': wi[1]['ALL']['FL'][idx],
-            'attw': wi[1]['ALL']['ATTWS'][idx]
-        } for wi in self.wtch_infos]
+            'ckpt': rslt.ckpt_path,
+            'fl': rslt.wtch_info['ALL']['FL'][idx],
+            'attw': rslt.wtch_info['ALL']['ATTWS'][idx]
+        } for rslt in self.rslts]
 
         sms = [
             f"Watching {fn}",
@@ -258,9 +268,9 @@ class Watcher:
             fnlist = FeaturePathListFinder(self.cfg, 'test', 'rgb').get('watch', self.cfg_wtc.label)
             log.info(f'Watching lst init in {self.cfg_wtc.frmt} formats for {self.cfg_wtc.label} w/ {len(fnlist)} vids')
             for fn in fnlist: 
-                stop = self.process(fn)
+                stop = self.process(fn.replace(" ",""))
                 if stop: log.warning(f"watch.init_lst just broke"); return
-        
+            
         else:            
             ## Continuously process filenames input by the user
             while True:
@@ -284,7 +294,7 @@ class Watcher:
         self.root.title("VidSel")
         self.video_listbox = tk.Listbox(self.root)
         self.video_listbox.pack(side="left", fill="both", expand=True)
-        fnlist = self.wtch_infos[0][1]['ALL']['FN']
+        fnlist = self.rslts[0].wtch_info['ALL']['FN']
         for fn in fnlist: self.video_listbox.insert(tk.END, fn)
         self.scrollbar = tk.Scrollbar(self.root, orient="vertical")
         self.scrollbar.config(command=self.video_listbox.yview)
@@ -332,8 +342,10 @@ class ASPlotter:
         #     vertical_spacing=0.1
         # )
         
-        nframes = len(gt)
         ## GT
+        nframes = len(gt)
+        fig.update_layout(yaxis_range = [0,1])
+        #fig.update_layout(yaxis2_range=[0,1]) 
         fig.add_trace(
             go.Scatter(
                 x=list(range(nframes)),
@@ -629,6 +641,7 @@ class ASPlayer:
             
         elif self.frtend == 'visdom':
             self.vis.close("vid")
+            log.error(self.data['frames'])
             self.vis.vid(self.data["frames"], "vid")
 
             timeout = 3

@@ -1,0 +1,40 @@
+# @package _global_
+
+defaults:
+  - override /data/frgb: vitamina #i3drocng vadclip cliptsa slowfast slowfast5 vitamina
+  - override /model: magn  ## clas anm
+  - override /net: mgfn
+  - override /xtra: dflt
+tags: [""]
+
+  
+model:
+  epochs: 5  
+  optima:
+    lr: 0.0001
+    weight_decay: 0.0005
+  loss:
+    mgfn:
+      margin: 300
+
+dataproc: 
+  seg:
+    sel: itp
+    len: 32
+    #jit: 1
+    #rnd: 1
+  culum: 
+    #- B1.FIGHT
+    #- B2.SHOOT
+    #- B4.RIOT
+    #- B5.ABUSE
+    #- B6.CARACC
+    #- G.EXPLOS
+
+dataload:
+  bs: 16
+  balance:
+    bag: 0.5
+    set: 1.2
+
+

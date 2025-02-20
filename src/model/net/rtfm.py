@@ -13,7 +13,11 @@ log = get_log(__name__)
 
 
 class Network(nn.Module):
-    def __init__(self, dfeat: int, _cfg: DictConfig, rgs = None):
+    def __init__(self, 
+        dfeat: int, 
+        _cfg: DictConfig, 
+        rgs = None
+    ):
         super().__init__()
         self.dfeat = sum(dfeat)
         
@@ -45,8 +49,8 @@ class Network(nn.Module):
         x_new = self.fm( rgbf ) ## (b, t, f)
         log.debug(f'fm {x_new.shape}')
         
-        #scors = self.sig( self.slrgs(x_new) )
-        scors = self.slrgs(x_new)
+        scors = self.sig( self.slrgs(x_new) )
+        #scors = self.slrgs(x_new)
         
         return { ## standard output
             'scores': scors, 
@@ -64,7 +68,7 @@ class Infer():
     def __call__(self, ndata): 
         scores = self.pfu.uncrop(ndata['scores'], 'mean')
         #log.info(f"{scores=}")
-        scores = self.sig(scores)
+        #scores = self.sig(scores)
         #log.info(f"{_scores=}")
         return scores
     

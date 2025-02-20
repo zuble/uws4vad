@@ -26,7 +26,9 @@ def dry_run(net, cfg, dfeat, inferator=None,):
     t = cfg.dataproc.seg.len
     feat = torch.randn( (nc*bs, t, sum(dfeat) ))
     ndata = net(feat)
-    for k, v in ndata.items(): log.info(f"{k}: {list(v.shape)}")
+    for k, v in ndata.items(): 
+        try: log.info(f"{k}: {list(v.shape)}")
+        except: log.info(f"{k}: {len(v)}")
     if inferator:
         sls = inferator(ndata)
         log.info(f"sls {list(sls.shape)}")
@@ -38,7 +40,7 @@ def build_net(cfg):
     log.info(f"{dfeat=}")
     
     
-    ## !!!!!!!!!!!!!!
+    ## TODO
     ## a robust builder in order to lock a Network design 
     ## having multiple variable networks,
     ## without relying on instantiate in individuals Network classes 

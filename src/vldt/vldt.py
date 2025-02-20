@@ -63,7 +63,7 @@ class VldtInfo:
         if per_what == 'glob':
             ## global: store normal and all abnormal
             ## 000.NORM | 111.ANOM | ALL
-            self.DATA = {   self.norm:  {'GT': [], 'FL': []}, ## far
+            self.DATA = {self.norm: {'GT': [], 'FL': []}, ## far
                             self.anom: {'GT': [], 'FL': []}, ## auc / ap
                             self.all: {'GT': [], 'FL': []} }  ## auc / ap on fstep16, after upgrade 2330384
             self.updt = self._updt_glob

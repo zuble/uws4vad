@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from src.model.net.layers import BasePstFwd
+from src.model.pstfwd.utils import PstFwdUtils
 from src.model.net.layers import GlanceFocus
 
 from omegaconf.dictconfig import DictConfig
@@ -11,24 +11,22 @@ log = get_log(__name__)
 
 
 class Network(nn.Module):
-    def __init__( self, dfeat, 
-        mag_ratio = 0.1,
-        dims = [64, 128, 1024],
-        _cfg = None,
-        _fm = None,
-    ):
+    def __init__( self,  
+        dfeat: int, 
+        _cfg: DictConfig, 
+        rgs = None
+    ): 
         super().__init__()
-        
+        log.error(_cfg)
         self.dfeat = sum(dfeat)
-        self.mag_ratio = mag_ratio
-
-        #if _cfg.dims is not None:
-        #    dims = _cfg.dims
-        init_dim, *_, last_dim = dims
+        self.mag_ratio = _cfg.mag_ratio
         
-        if _fm is not None:
-            self.fmodulator = instantiate(_fm, dfeat=self.dfeat)
-        else: self.fmodulator = GlanceFocus(self.dfeat)
+        init_dim, *_, last_dim = _cfg.fm.dims
+        
+        #if _cfg.fm.get("_target_"):
+        #    self.fmodulator = instantiate(_cfg.fm, dfeat=self.dfeat)
+        #else: 
+        self.fmodulator = GlanceFocus(self.dfeat)
         
         ## assert dim and compowr save
         ## feature map dimension from 𝐶 in 𝐹𝐹𝐴𝑀 to 𝐶/32.
@@ -45,7 +43,7 @@ class Network(nn.Module):
         #x_m2 = torch.norm(x_f, p=2, dim=1)[:,None, :] ## bs*nc, 1, t
         #assert torch.all(x_m.eq(x_m2)) == True
         #log.debug(f"{x_m2.shape} {x_m2}")
-        log.info(f"FAM {x.shape} {x_m.shape} {x_m}")
+        log.debug(f"FAM x:{list(x.shape)} x_m{list(x_m.shape)} {x_m=}")
         return x_m
         
     def forward(self, x):
@@ -57,51 +55,32 @@ class Network(nn.Module):
         ## fmagn enha
         x_fme = x_f + self.mag_ratio*x_m ## bs*nc, init_dim, t
         
-        log.info(f"ENC {x_f.shape=} {x_m.shape=} {x_fme.shape=}")
-        log.debug(f"ENC {x_f}\n{x_m}\n{x_fme}")
+        log.debug(f"ENC {x_f.shape=} {x_m.shape=} {x_fme.shape=}")
+        log.debug(f"ENC {x_f=}\n{x_m=}\n{x_fme=}")
         
         x_fm = self.fmodulator(x_fme)
         x_fm = x_fm.permute(0, 2, 1) ## bs*nc, t, f 
-        log.info(f"FM {x_fm.shape=}")
+        log.debug(f"FM {x_fm.shape=}")
         
         x_out = self.to_logits(x_fm) 
-        scors = self.sig( self.fc(x_out) ) ## bs*nc, t, 1
+        scores = self.sig( self.fc(x_out) ) ## bs*nc, t, 1
+        scores = scores.squeeze(-1)
         return {
-            'scors': scors,
+            'scores': scores,
             'feats': x_out
         }
 
-class NetPstFwd(BasePstFwd):
-    def __init__(self, _cfg):
-        super().__init__(_cfg)
-
-    def train(self, ndata, ldata, lossfx):
-        ## FEAT
-        feats = ndata['feats'] ## (bs*nc, t, f)
-
-        ## bag*nc,k,f ->  bag*nc, f (crop dim kept exposed)
-        abn_feat, nor_feat, idx_abn, idx_nor = super().sel_feats_by_magn(feats, 
-                                                                        labels=ldata["label"],
-                                                                        per_crop=True, avg=True)
-        log.debug(f"{abn_feat.shape=} {nor_feat.shape=}")
+class Infer():
+    def __init__(self, _cfg, pfu: PstFwdUtils = None): 
+        super().__init__()
+        self._cfg = _cfg
+        self.pfu = pfu
+        self.sig = nn.Sigmoid()
         
-        L0 = lossfx['mc'](abn_feats, nor_feats)
+    def __call__(self, ndata): 
+        scores = self.pfu.uncrop(ndata['scores'], 'mean')
+        #log.debug(f"{scores=}")
+        #scores = self.sig(scores)
+        #log.debug(f"{_scores=}")
+        return scores
 
-        ## SCORE
-        #scors = ndata['scors'].shape ## bs*nc,t
-        scors = super().uncrop( ndata['scors'], 'mean') ## bs, t
-        abn_scors, nor_scors = super().unbag(scors, ldata["label"]) ## bag, t
-        vls_abn = super().sel_scors( abn_scors, idx_abn, avg=True) ## bag
-        vls_nor = super().sel_scors( nor_scors, idx_nor, avg=True) ## bag
-        
-        log.debug(f"{abn_scors.shape=} {nor_scors.shape=}")
-        log.debug(f"{vls_abn.shape=} {vls_nor.shape=}")
-        
-        L1 = lossfx['bce'](torch.cat((vls_nor, vls_abn)), ldata['label']) ## vls
-
-
-        ## (bag*t)
-        #L2 = lossfx['smooth'](abn_scors.view(-1)) ## sls
-        #L3 = lossfx['spars'](abn_scors.view(-1), rtfm=True) ## sls
-        
-        return super().merge(L0, L1, L2)

@@ -210,8 +210,10 @@ class MagnCont(nn.Module):
         assert self.pfu.bat_div == self.pfu.bs // 2
         
         self.alpha = _cfg.alpha
-        
         self.crit = ContrastiveLoss(_cfg.margin)
+        self.bce = nn.BCELoss()
+        self.smooth = smooth
+        self.sparse = sparsity
         
     def preproc(self, feats, labels):
         ## bag*nc,f
@@ -233,48 +235,52 @@ class MagnCont(nn.Module):
     
     def forward(self, ndata, ldata):
         feats = ndata['feats']
-        #scores = ndata['scores']
+        scores = ndata['scores']
         labels = ldata['label']
         
-        sel_abn_feats, _, sel_nor_feats, _ = self.preproc(feats, labels)
+        sel_abn_feats, idx_abn, sel_nor_feats, idx_nor = self.preproc(feats, labels)
         log.debug(f"{sel_abn_feats.shape=} {sel_nor_feats.shape=}")
         
         seperate = sel_abn_feats.shape[0] // 2
 
         ## different from rtfm, no mean over topk sel feats
         ## thus sel_abn_feats/sel_nor_feats = bag*nc, k, f 
-        loss_con = self.crit(torch.norm(sel_abn_feats, p=1, dim=2), ## bag*nc, k
-                                    torch.norm(sel_nor_feats, p=1, dim=2), ## bag*nc, k
-                                    1)  # try tp separate normal and abnormal
+        loss_con = self.crit(   torch.norm(sel_abn_feats, p=1, dim=2), ## bag*nc, k
+                                torch.norm(sel_nor_feats, p=1, dim=2), ## bag*nc, k
+                                1)  # try tp separate normal and abnormal
         ## bag*nc, k, f 
-        loss_con_n = self.crit(torch.norm(sel_nor_feats[seperate:], p=1, dim=2), ## (bag*nc)/2, k
-                                    torch.norm(sel_nor_feats[:seperate], p=1, dim=2),  ## (bag*nc)/2, k
-                                    0)  # try to cluster the same class 
+        loss_con_n = self.crit( torch.norm(sel_nor_feats[seperate:], p=1, dim=2), ## (bag*nc)/2, k
+                                torch.norm(sel_nor_feats[:seperate], p=1, dim=2),  ## (bag*nc)/2, k
+                                0)  # try to cluster the same class 
         ## bag*nc, k, f 
-        loss_con_a = self.crit(torch.norm(sel_abn_feats[seperate:], p=1, dim=2), ## (bag*nc)/2, k
-                                    torch.norm(sel_abn_feats[:seperate], p=1, dim=2), ## (bag*nc)/2, k
-                                    0)
+        loss_con_a = self.crit( torch.norm(sel_abn_feats[seperate:], p=1, dim=2), ## (bag*nc)/2, k
+                                torch.norm(sel_abn_feats[:seperate], p=1, dim=2), ## (bag*nc)/2, k
+                                0)
         #loss_total = loss_cls + self.alpha * (0.001 * loss_con + loss_con_a + loss_con_n )
         
         ## SCORE
-        #scores = self.pfu.uncrop( scores, 'mean') ## bs*nc,t -> bs, t
-        #abn_scors, nor_scors = self.pfu.unbag(scores, labels) ## bag, t
-        #vls_abn, vls_nor = self.pfu.sel_scors( abn_scors, nor_scors, idx_abn, idx_nor, avg=True) ## bag
-        #log.debug(f"{vls_abn.mean()=}  {vls_nor.mean()=}")
-        #
-        #loss_scor = self.bce(torch.cat((vls_abn,vls_nor)), ldata['label']) ## vls
-        ##L1 = lossfx['bce'](vls_abn, torch.ones_like(vls_abn), 'abn') ## vls
-        ##L2 = lossfx['bce'](vls_nor, torch.zeros_like(vls_nor), 'nor') ## vls
+        scores = self.pfu.uncrop( scores, 'mean') ## bs*nc,t -> bs, t
+        abn_scors, nor_scors = self.pfu.unbag(scores, labels) ## bag, t
+        vls_abn, vls_nor = self.pfu.sel_scors( abn_scors, nor_scors, idx_abn, idx_nor, avg=True) ## bag
+        log.debug(f"{vls_abn.mean()=}  {vls_nor.mean()=}")
+        
+        loss_scor = self.bce(torch.cat((vls_abn,vls_nor)), ldata['label']) ## vls
+        #L1 = self.bce(vls_abn, torch.ones_like(vls_abn), 'abn') ## vls
+        #L2 = self.bce(vls_nor, torch.zeros_like(vls_nor), 'nor') ## vls
         
         ## (bag*t)
-        #loss_smooth = self.smooth(abn_scors.view(-1)) ## sls
-        #loss_spars = self.sparse(abn_scors.view(-1), rtfm=True) ## sls
+        loss_smooth = self.smooth(abn_scors.view(-1)) ## sls
+        loss_spars = self.sparse(abn_scors.view(-1), rtfm=True) ## sls
         
-        return {
+        return self.pfu.merge({
             'abn-nor': loss_con * self.alpha**2,
             'abn':  loss_con_a * self.alpha,
             'nor':  loss_con_n * self.alpha,
-        }
+            'bce':  loss_scor
+            }, 
+            loss_smooth, 
+            loss_spars
+        )
 
 
 class Dev(nn.Module):

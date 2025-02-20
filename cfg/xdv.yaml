@@ -4,7 +4,7 @@ defaults:
   - 000.yaml
   - _self_
   - data: xdv
-  - data/frgb: vadclip #cliptsa # 
+  - data/frgb: vitamina #cliptsa #vadclip
   - data/faud: ~ # vggish
   - dataload: high
   - dataproc: seq
@@ -12,7 +12,7 @@ defaults:
   - net: mir
   - vldt: dflt
   - path: dflt
-  - xtra: dflt
+  - xtra: clean #dflt
   - hydra: dflt
 
   - exp: null

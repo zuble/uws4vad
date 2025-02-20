@@ -54,9 +54,9 @@ train:
 
 test:
   ## saves vldt_info returned per Validate into .pkl format
-  savepkl: True
+  savepkl: false
   ## jumps Validate and uses vldt_info.pkl if already generated
-  frompkl: True
+  frompkl: false
 
   ## per_what perspectives to show validation results
   per_what: vid ## lbl , vid
@@ -66,7 +66,7 @@ test:
   ## sorted results in descending order according to this
   record_mtrc: ${dyn_per_ds:${data.id}, AUC-ROC, AP}
   ## when 'vid', controls if all anom lbl get a table, or only full set
-  ## usefull to compare vids clustered per lbl 
+  ## usefull to compare vids clustered per lbl @ metric/Metrics&Tabler
   full_anom_lbls: False
 
 

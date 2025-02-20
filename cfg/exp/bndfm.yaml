@@ -32,7 +32,7 @@ model:
     
   loss:
     mpp:
-  #    w_mpp: 0.01
+      #w_mpp: 0.01
       w_triplet: [5, 20]
       margin: 1
     normal:
@@ -40,8 +40,16 @@ model:
 
 net:
   main:
-##    do: 0.2
-    nh_dimratios: [16,32] # [16, 32] #
+    emb_hdim_ratio: 2 
+    ## transf
+    depth: 2
+    heads: 4
+    head_dim: 128
+    #ff_hdim: 512 ##set internaly to emb_hdim
+    do: 0.
+    ## normal head
+    nh_dimratios: [16, 32] 
+    nh_ks: [1, 1, 1]
     moment: 0.1
 
 #vldt:
@@ -62,9 +70,8 @@ dataproc:
 
 
 dataload:
+  bs: 128
   balance:
     bag: 0.5
     set: 1.2
-  bs: 128
-
 
