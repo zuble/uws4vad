@@ -168,11 +168,12 @@ class ModelHandler:
         
         else: ## in test
             tmp = self.cfg.load.get("ckpt_path")
+            #log.error(tmp)
             if isinstance(tmp, str): 
                 if osp.exists(tmp): 
                     self.ckpt_path = [tmp]
                     return
-            tmp = [tmp]
+            #log.error(tmp)
             self.ckpt_path = [self.check_nd_find(p) for p in tmp]    
     ########
     

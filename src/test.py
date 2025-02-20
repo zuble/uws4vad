@@ -106,7 +106,7 @@ def tester(cfg, vis):
     MH = ModelHandler(cfg)
     VLDT = Validate(cfg, cfg_vldt, cfg.data.frgb, vis=vis, watching=watching)
     MTRC = Metrics(cfg_vldt, vis)
-    
+    log.error(MH.ckpt_path)
     for ckpt_path in MH.ckpt_path:
         
         ## only load when not comming from train and frompkl is set
@@ -641,7 +641,11 @@ class ASPlayer:
             
         elif self.frtend == 'visdom':
             self.vis.close("vid")
-            log.error(self.data['frames'])
+            #log.error(self.data['frames'])
+            ## TODO: assert C order  LxHxWxC.
+            ## https://github.com/fossasia/visdom/issues/210
+            #log.error(f"{type(data['frames'])}")
+            #log.error(f"{self.data['frames'].shape}")
             self.vis.vid(self.data["frames"], "vid")
 
             timeout = 3

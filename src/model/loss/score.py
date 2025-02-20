@@ -43,7 +43,7 @@ class Bce(nn.Module):
         #log.debug(f"Bce/{scores.shape} {scores.device} {label.shape} {label.device}")
         return {
             'bce': self.crit(ndata['vlscores'],ldata["label"])
-            }
+        }
 
 class Clas(nn.Module):
     def __init__(self, _cfg, pfu: PstFwdUtils): 
@@ -373,7 +373,6 @@ class Salient(nn.Module):
         '''
 
 
-
 class MultiBranchSupervision(nn.Module):
     def __init__(self, _cfg, pfu: PstFwdUtils): 
         super().__init__()
@@ -653,8 +652,6 @@ class MultiBranchSupervision(nn.Module):
 '''
 
 
-
-
 class InfoNCE(nn.Module):
     def __init__(self, temperature=0.1, reduction='mean', negative_mode='unpaired'):
         super().__init__()
@@ -922,3 +919,133 @@ class CIL(nn.Module):
                 a_norm = torch.cat((a_norm, a_rep_top), 0)  
 '''   
 ###########
+
+
+
+class Glance(nn.Module):
+    def __init__(self, _cfg, pfu: PstFwdUtils): 
+        super().__init__()
+        self.pfu = pfu
+        self.crit = nn.BCELoss()
+        #self.crit = nn.BCELossWithLogitsLoss()
+        
+        self.abn_ratio = _cfg.alpha
+        self.sigma = _cfg.sigma
+        self.min_mining_step = _cfg.min_mining_step
+        
+    def gaussian_kernel_mining(self, score, point_label):
+        abn_snippet = point_label.clone().detach()
+
+        for b in range(point_label.shape[0]):
+            abn_idx = torch.nonzero(point_label[b]).squeeze(1)
+            if len(abn_idx) == 0:
+                continue
+
+            # most left
+            if abn_idx[0] > 0:
+                '''pseudo abnormal'''
+                for j in range(abn_idx[0]-1, -1, -1):
+                    abn_thresh = self.abn_ratio * score[b, abn_idx[0]]
+                    if score[b, j] >= abn_thresh:
+                        abn_snippet[b, j] = 1
+                    else:
+                        break
+
+            # most right
+            if abn_idx[-1] < (point_label.shape[1]-1):
+                '''pseudo abnormal'''
+                for j in range(abn_idx[-1]+1, point_label.shape[1]-1):
+                    abn_thresh = self.abn_ratio * score[b, abn_idx[-1]]
+                    if score[b, j] >= abn_thresh:
+                        abn_snippet[b, j] = 1
+                    else:
+                        break
+                
+            # between
+            for i in range(len(abn_idx)-1):
+                if abn_idx[i+1] - abn_idx[i] <= 1:
+                    continue
+                '''pseudo abnormal'''
+                for j in range(abn_idx[i]+1, abn_idx[i+1]):
+                    abn_thresh = self.abn_ratio * score[b, abn_idx[i]]
+                    if score[b, j] >= abn_thresh:
+                        abn_snippet[b, j] = 1
+                    else:
+                        break
+                for j in range(abn_idx[i+1]-1, abn_idx[i], -1):
+                    abn_thresh = self.abn_ratio * score[b, abn_idx[i+1]]
+                    if score[b, j] >= abn_thresh:
+                        abn_snippet[b, j] = 1
+                    else:
+                        break
+        return abn_snippet
+
+    def temporal_gaussian_splatting(self, point_label, distribution='normal', params=None):
+        """
+        Calculate weights splatted by different gaussian kernels.
+        Args:
+        - point_label: Input point labels
+        - distribution: Distribution type, options are 'normal', 'cauchy', 'laplace', 'exponential', 'lognormal'
+        - params: Distribution parameters, a dictionary
+        """
+
+        distribution_weight = torch.zeros_like(point_label)
+        N = distribution_weight.shape[1]
+
+        for b in range(point_label.shape[0]):
+            abn_idx = torch.nonzero(point_label[b]).squeeze(1)
+            if len(abn_idx) == 0:
+                continue
+
+            temp_weight = torch.zeros([len(abn_idx), N])
+
+            for i, point in enumerate(abn_idx):
+                i_arr = torch.arange(N, dtype=torch.float32)
+                h_i = 2 * (i_arr - 1) / (N - 1) - 1
+                h_p = 2 * (point - 1) / (N - 1) - 1
+
+                if distribution == 'normal':
+                    weight = torch.exp(-(h_i - h_p) ** 2 / (2 * params['sigma']**2)) / (params['sigma'] * (2 * np.pi)**0.5)
+                elif distribution == 'cauchy':
+                    weight = 1 / (1 + ((h_i - h_p) / params['gamma'])**2) / (np.pi * params['gamma'])
+                elif distribution == 'laplace':
+                    weight = 0.5 * torch.exp(-torch.abs(h_i - h_p) / params['b']) / params['b']
+                else:
+                    raise ValueError("Unsupported distribution type")
+
+                weight = (weight - torch.min(weight)) / (torch.max(weight) - torch.min(weight))
+                temp_weight[i, :] = weight
+
+            temp_weight = torch.max(temp_weight, dim=0)[0]
+            temp_weight = (temp_weight - torch.min(temp_weight)) / (torch.max(temp_weight) - torch.min(temp_weight))
+            distribution_weight[b, :] = temp_weight
+
+        return distribution_weight
+
+    def forward(self, ndata, ldata):
+        label = ldata['label'] ## bs
+        seqlen = ldata['seqlen'] ## bs
+        point_label = ldata['point_label']
+        scores = ndata['scores'] 
+        
+        #loss = torch.tensor(0., requires_grad=True, device=scores.device)
+        
+        scores = self.pfu.uncrop(scores, 'mean')
+        abn_scores, nor_scores = self.pfu.unbag(scores, labels)
+        
+        ## Guassian Mining
+        abn_kernel = self.gaussian_kernel_mining(abn_scores.detach().cpu(), point_label)
+        
+        ## Temporal Gaussian Splatting
+        if step < self.min_mining_step:
+            rendered_score = self.temporal_gaussian_splatting(point_label, 'normal', params={'sigma':sigma})
+        else:
+            rendered_score = self.temporal_gaussian_splatting(abn_kernel, 'normal', params={'sigma':sigma})
+        rendered_score = rendered_score.to(self.device)
+
+        loss = self.bce(abn_scores, rendered_score.to(self.device)).mean()
+        
+        
+        return {
+            'glance': loss
+        }

@@ -132,6 +132,7 @@ class LossComputer(nn.Module):
                 loss_glob = loss_glob + component_value
                 
                 loss_dict[f"{loss_name}/{component_name}"] = component_value
-                
+            
+            
         self.print_grad_fn_info(loss_glob, "Final Loss") 
         return loss_glob, loss_dict

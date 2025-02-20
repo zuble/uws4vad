@@ -1,4 +1,6 @@
 import torch
+import torch.nn as nn
+from torch import autograd
 import numpy as np
 import math 
 
@@ -82,7 +84,8 @@ def trainer(cfg, vis):
             trn_inf['etic'] = time.time()
             
             ##########
-            net.train()    
+            net.train()   
+            #with autograd.detect_anomaly(): 
             #for batch in tqdm(dataloader, leave = False, desc="Batch:", unit='bat'):
             for bi, batch in enumerate(dataloader):
                 trn_inf['bat'] =+ 1
@@ -105,7 +108,7 @@ def trainer(cfg, vis):
                 optima.zero_grad()
                 loss_glob.backward()
                 if cfg.model.get("clipnorm"): ## bndfm
-                    torch.nn.utils.clip_grad_norm_(net.parameters(), 1.)
+                    nn.utils.clip_grad_norm_(net.parameters(), 1.)
                 optima.step() 
                 #######
                 

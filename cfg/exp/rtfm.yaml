@@ -29,28 +29,34 @@ model:
   optima:
     lr: 0.0001
     weight_decay: 0.0005
-  #loss:
-  #  rtfm:
-  #    preproc: sbs
+  loss:
+    rtfm:
+      preproc: sbs
+
+#net:
+#  main:
+#    do: 0.3
 
 dataproc: 
   seg:
     sel: itp
-    len: 32
-    jit: 1
+    len: 200
+    #jit: 1
     #rnd: 1
   culum: 
     #- B1.FIGHT
     #- B2.SHOOT
     #- B4.RIOT
     #- B5.ABUSE
-    #- B6.CARACC
+    - B6.CARACC
     #- G.EXPLOS
 
 dataload:
-  bs: 8
+  bs: 16
   balance:
     bag: 0.5
     set: 1.2
 
-
+## 3509829796--3_1.state.pt -- baseline bs8 itp32 loss.rtfm.prepproc:og
+## 238308133--4_1.state.pt -- seq200 bs16 loss.rtfm.prepproc:sbs
+## 352941103--4_1 -- culumB6 itp200 bs16 loss.rtfm.prepproc:sbs

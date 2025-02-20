@@ -21,19 +21,24 @@ test: 1
 ## since its saved into logs folder
 load:
   ckpt_path:
-    - 2209346947--2_1
+    - 3509829796--3_1
+    - 352941103--4_1 
 
 dataload:
   test:
     in2mem: False
-    #nworkers: ${dyn_nworkers:-1}
+    #nworkers: ${dyn_nworkers:-1}f
     #pinmem: True
     #pftch_fctr: 4
     #prstwrk: True
 
 vldt:
   test:
-    savepkl: false
-    frompkl: false
+    savepkl: false #true
+    frompkl: true
     per_what: vid #lbl
     full_anom_lbls: true
+
+## v=cEOM18n8fhU__#1_label_G-0-0
+## v=_BgJEXQkjNQ__#1_label_G-0-0
+## v=8oTjTufJnXI__#1_label_G-0-0

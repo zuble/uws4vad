@@ -203,7 +203,7 @@ class ContrastiveLoss(nn.Module):
                         )
         return loss_contrastive
     
-class MagnCont(nn.Module):
+class MagnCont(nn.Module): 
     def __init__(self, _cfg, pfu: PstFwdUtils = None): 
         super().__init__()
         self.pfu = pfu

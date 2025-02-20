@@ -49,11 +49,11 @@ class Network(nn.Module):
         x_new = self.fm( rgbf ) ## (b, t, f)
         log.debug(f'fm {x_new.shape}')
         
-        scors = self.sig( self.slrgs(x_new) )
-        #scors = self.slrgs(x_new)
+        #scores = self.sig( self.slrgs(x_new) )
+        scores = self.slrgs(x_new) ## bcewlogits
         
         return { ## standard output
-            'scores': scors, 
+            'scores': scores, 
             'feats': x_new 
         }
         
@@ -68,7 +68,7 @@ class Infer():
     def __call__(self, ndata): 
         scores = self.pfu.uncrop(ndata['scores'], 'mean')
         #log.info(f"{scores=}")
-        #scores = self.sig(scores)
+        scores = self.sig(scores)
         #log.info(f"{_scores=}")
         return scores
     
