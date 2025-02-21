@@ -17,12 +17,12 @@ class Network(nn.Module):
         self.dfeat = sum(dfeat)
         self.rgs = rgs
         #self.rgs = SMlp( self.dfeat, _cfg.rate, _cfg.do) if rgs is None else rgs
-        
-        self.sig = nn.Sigmoid()
+        #self.sig = nn.Sigmoid()
         
     def forward(self, x):
         b, t, f = x.shape
-        out = self.sig( self.rgs(x) )
+        #out = self.sig( self.rgs(x) )
+        out = self.rgs(x)
         
         log.debug(f"{x.shape} -> {out.shape}")
         return {
@@ -34,7 +34,9 @@ class Infer():
         super().__init__()
         self._cfg = _cfg
         self.pfu = pfu
+        self.sig = nn.Sigmoid()
         
     def __call__(self, ndata):
         scores = self.pfu.uncrop(ndata['scores'], 'mean')
+        scores = self.sig(scores)
         return scores

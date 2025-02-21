@@ -139,42 +139,44 @@ class ModelHandler:
     
     ########
     def check_nd_find(self, path):
-        pattern = f"**/*{path}*.state.pt"
+        # If it's a full path and exists, return it directly
+        if osp.exists(path) and path.endswith('.state.pt'):
+            return path
+        search_term = path.replace('.state.pt', '')
         
-        matches = glob.glob(osp.join(self.cfg.path.log_dir, pattern), recursive=True)
-        if not matches:
-            raise FileNotFoundError(f"No checkpoint with seed {seed}")
+        # Handle both seed pattern (e.g., "3100549905--9_1") and filename pattern
+        patterns = [
+            f"**/*{search_term}*.state.pt",  # general pattern
+            f"**/{search_term}.state.pt",    # exact match
+        ]
         
-        return max(matches, key=osp.getmtime)  # Get most recent
-    
-        #seed = osp.basename(path).split(".")[0]
-        #match = re.match(r'(\d+)--(.*)\.(state|pt)$', )
-        #seed, epo, load_mode = match.groups()
-        #log.error(match.groups())
-        #match = re.search(r'seed=(\d+)', osp.basename(path))
+        all_matches = []
+        for pattern in patterns:
+            matches = glob.glob(osp.join(self.cfg.path.log_dir, pattern), recursive=True)
+            all_matches.extend(matches)
         
-        #if not match: raise ValueError(f"No seed in filename: {path}")        
-    
+        if not all_matches: raise FileNotFoundError(f"No checkpoint found matching: {path}")
+        ## Remove duplicates while preserving order
+        unique_matches = list(dict.fromkeys(all_matches))
+        ## Return the most recent match
+        return max(unique_matches, key=osp.getmtime)
+
     def get_ckpt_paths(self):
-        
-        if self.cfg.train: ## comming from traing, find state in now run_dir
-            self.ckpt_path = glob.glob(f"{self.cfg.path.out_dir}/*.state.pt")
-            #log.error(self.ckpt_path)
-            if not self.ckpt_path: 
-                raise Exception(f"no __.state.pt found in current dir {self.cfg.path.out_dir}") 
+        if self.cfg.train:  # coming from training, find state in current run_dir
+            matches = glob.glob(f"{self.cfg.path.out_dir}/*.state.pt")
+            if not matches:
+                raise Exception(f"No __.state.pt found in current dir {self.cfg.path.out_dir}")
+            self.ckpt_path = matches
             
         elif not self.cfg.load.ckpt_path:
             raise Exception("provide load.ckpt_path")
-        
-        else: ## in test
+            
+        else:  # in test
             tmp = self.cfg.load.get("ckpt_path")
-            #log.error(tmp)
-            if isinstance(tmp, str): 
-                if osp.exists(tmp): 
-                    self.ckpt_path = [tmp]
-                    return
-            #log.error(tmp)
-            self.ckpt_path = [self.check_nd_find(p) for p in tmp]    
+            if isinstance(tmp, str):
+                self.ckpt_path = [self.check_nd_find(tmp)]
+            else:  ## list of strings
+                self.ckpt_path = [self.check_nd_find(p) for p in tmp]
     ########
     
     

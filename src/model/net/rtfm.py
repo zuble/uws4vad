@@ -36,7 +36,7 @@ class Network(nn.Module):
         #if _cls is not None:
         #    self.slrgs = instantiate(_cls, dfeat=self.dfeat)
         #else: raise Exception
-        self.sig = nn.Sigmoid()
+        #self.sig = nn.Sigmoid()
 
     def forward(self, x):
         b, t, f = x.shape
@@ -50,7 +50,7 @@ class Network(nn.Module):
         log.debug(f'fm {x_new.shape}')
         
         #scores = self.sig( self.slrgs(x_new) )
-        scores = self.slrgs(x_new) ## bcewlogits
+        scores = self.slrgs(x_new)
         
         return { ## standard output
             'scores': scores, 

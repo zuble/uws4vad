@@ -92,7 +92,7 @@ test:
     #   video player with GT and anomaly scores overlayed
     ## gtfl (grount-truth frame-level): 
     #   xaxis: frames // yaxis: gt and fl
-    ## attws (attention-weights): colormap xaxis: 
+    ## TODO attws (attention-weights): colormap xaxis: 
     #   frames / yaxis: ATTNOMIL.R att_weights 
     #   usable for NET.NAME==attnomil
     frmt: 
@@ -111,7 +111,9 @@ test:
     ## 1 or multiples numbers from data.lbls.info
     ## eg: UCF abuse and vandalism ['1','13']
     ## if None selected, a prompt enabling to dynamic select videos to watch
-    label: ['']
+    label: []
+    ## accepts a list of fns that will iterate over, send all 2 visdom and ends
+    fns: []
     
     ## anomaly score player
     ## controls asp if enabled in watch.frmt

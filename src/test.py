@@ -214,14 +214,16 @@ class Watcher:
         
         if not cfg_wtc.frmt: cfg_wtc.frmt = input(f"asp,gtfl,attws ? and/or comma separated").split(",")
         
+        ## no overwrite when theres is a list of fns to iter
+        ## otherwise its loops trough a label or user input
         ## anomaly score player
-        if 'asp' in cfg_wtc.frmt: self.asp = ASPlayer(cfg_wtc, vis).play
-        else: self.asp = lambda *args, **kwargs: None
-        log.info(f"Watcher.asp {self.asp}")
+        if 'asp' in cfg_wtc.frmt: self.player = ASPlayer(cfg_wtc, vis, len(cfg_wtc.fns) > 1).play
+        else: self.player = lambda *args, **kwargs: None
+        log.info(f"Watcher.asp {self.player}")
         
         ## gtfl(grount-truth frame-level) ( /attws) viewer
         if any(x in cfg_wtc.frmt for x in ['gtfl', 'attws']):
-            self.plot = ASPlotter(cfg_wtc.frtend, vis, 'asp' in cfg_wtc.frmt).fx
+            self.plot = ASPlotter(cfg_wtc.frtend, vis, len(cfg_wtc.fns) > 1 ).fx #'asp' in cfg_wtc.frmt
         else: self.plot = lambda *args, **kwargs: None
         log.info(f"Watcher.plot {self.plot}")
         
@@ -257,11 +259,11 @@ class Watcher:
         if len(tmp) > 1:
             log.warning("Multiple ckpts detected")
             log.info(f"{[m['ckpt'] for m in tmp]}")
-        stop = self.asp(vpath, gt, tmp) ##[m['fl'] for m in tmp]
+        stop = self.player(vpath, gt, tmp) ##[m['fl'] for m in tmp]
         return stop
     
     def init_lst(self):
-        if not self.cfg_wtc.label:
+        if len(self.cfg_wtc.label):
             
             self.cfg_wtc.label = input(f"1 or + labels from: {self.cfg_dsinf.lbls} 'label1,labeln' ").split(",")
             
@@ -270,9 +272,14 @@ class Watcher:
             for fn in fnlist: 
                 stop = self.process(fn.replace(" ",""))
                 if stop: log.warning(f"watch.init_lst just broke"); return
+        
+        elif len(self.cfg_wtc.fns):
             
-        else:            
-            ## Continuously process filenames input by the user
+            for fn in self.cfg_wtc.fns:
+                stop = self.process(fn)
+                if stop: log.warning(f"watch.init_lst just broke"); return
+                
+        else: ## Continuously process filenames input by the user
             while True:
                 fns = input("1 or + fns 'fn1,fn2' (double-click+(ctrl+v)) | empty enter -> stop: ")
                 if fns.strip() == '': return
@@ -316,12 +323,15 @@ class ASPlotter:
         self.vis = vis
         self.overwrite = overwrite
         self.cmap = 'viridis'
+        # Updated color scheme for better visibility on white background
         self.colors = [
-            'blue', 
-            'green', 
-            'orange', 
-            'purple'
+            '#1f77b4',  # blue
+            '#2ca02c',  # green
+            '#ff7f0e',  # orange
+            '#9467bd',  # purple
         ]
+        self.gt_color = 'rgba(200, 200, 200, 0.3)'  ## Light gray with transparency for GT area
+        self.gt_line_color = 'rgba(100, 100, 100, 0.8)'  ## Darker gray for GT border
 
     def _short_name(self, path):
         """Extract meaningful short name from checkpoint path"""
@@ -331,45 +341,109 @@ class ASPlotter:
     def plotly(self, fn, gt, data):
         """Plotly version supporting multiple FL curves"""
         fig = make_subplots(
-            rows=2, cols=1,
-            subplot_titles=('GT/FL', 'ATTWS'),
-            vertical_spacing=0.1, # Space between the subplots
-            row_heights=[0.7, 0.3]  # Relative heights of rows (heatmap is larger)
+            rows=1, cols=1,  # Only scores plot for now
+            subplot_titles=(''),
+            vertical_spacing=0.1,
         )
-        # fig = make_subplots(
-        #     rows=2 if attw_list else 1, cols=1,
-        #     subplot_titles=('Score Comparison', 'Attention Weights') if attw_list else None,
-        #     vertical_spacing=0.1
-        # )
-        
-        ## GT
+        ## Set white background and grid styling
+        fig.update_layout(
+            plot_bgcolor='white',
+            paper_bgcolor='white',
+            xaxis=dict(
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='rgba(200,200,200,0.2)',
+                zeroline=False,
+                showline=True,
+                linewidth=1,
+                linecolor='black'
+            ),
+            yaxis=dict(
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='rgba(200,200,200,0.2)',
+                zeroline=False,
+                showline=True,
+                linewidth=1,
+                linecolor='black',
+                range=[0, 1]
+            )
+        )
+
         nframes = len(gt)
-        fig.update_layout(yaxis_range = [0,1])
-        #fig.update_layout(yaxis2_range=[0,1]) 
+        ## Add GT as filled area
         fig.add_trace(
             go.Scatter(
                 x=list(range(nframes)),
                 y=gt,
-                mode='lines',
+                fill='tozeroy',
+                fillcolor=self.gt_color,
+                line=dict(color=self.gt_line_color, width=1),
                 name='GT',
-                line=dict(color='red', dash='dash')
-            ),
-            row=1, col=1
+                showlegend=True
+            )
         )
-        
-        ## each FL curve with checkpoint info
+        ## Add score curves with improved styling
         for idx, d in enumerate(data):
             fig.add_trace(
                 go.Scatter(
                     x=list(range(len(d['fl']))),
                     y=d['fl'],
                     mode='lines',
-                    name=f'FL {self._short_name(d["ckpt"])}',
-                    line=dict(color=self.colors[idx % len(self.colors)], width=1)
-                ), 
-                row=1, col=1
+                    name=f'Score {self._short_name(d["ckpt"])}',
+                    line=dict(
+                        color=self.colors[idx % len(self.colors)],
+                        width=2
+                    )
+                )
             )
+
+        if self.overwrite:
+            title = "GT/FL"
+            self.vis.close(title)
+        else: title = f"GT/FL {fn}"
+
+        # Enhanced layout
+        fig.update_layout(
+            height=600,
+            #width=800,
+            showlegend=True,
+            title=dict(
+                text=title,
+                x=0.5,
+                xanchor='center',
+                font=dict(size=20)
+            ),
+            xaxis_title=f"{fn}",
+            yaxis_title="Anomaly Score",
+            font=dict(size=14),
+            legend=dict(
+                #anchor="top",
+                #=0.99,
+                #anchor="right",
+                #=0.99,
+                bgcolor='rgba(255,255,255,0.8)',
+                bordercolor='black',
+                borderwidth=1
+            ),
+            margin=dict(l=80, r=50, t=100, b=80)
+        )
+
+        # Optional: Add annotations/arrows for specific points
+        # Example of adding an annotation:
+        # fig.add_annotation(
+        #     x=100,  # frame number
+        #     y=0.8,  # score value
+        #     text="Peak detection",
+        #     showarrow=True,
+        #     arrowhead=2,
+        #     arrowcolor="black",
+        #     arrowwidth=2,
+        # )
+        #fig.show()
+        self.vis.potly(fig)
         
+        '''
         ## attention weights (if available)
         if any(d['attw'] is not None for d in data):
             for i, d in enumerate(data):
@@ -386,21 +460,7 @@ class ASPlotter:
                         ),
                         row=2, col=1
                     )
-        
-        if self.overwrite:
-            title = f"Plotter"
-            self.vis.close(title)
-        else: title = f"Plotter - {fn}"
-        
-        ## layout for the whole figure
-        fig.update_layout(
-            height=600,
-            showlegend=True,
-            title_text=title
-        )
-        #fig.show()
-        
-        self.vis.potly(fig)
+        '''
         
         
     def matplt(self, fn, gt, data):
@@ -447,7 +507,7 @@ class ASPlotter:
         plt.tight_layout()
         plt.show()  #block=block
 
-        '''
+    '''
         #if len(attw): 
         if attw is not None and len(attw) > 0 and len(attw[0]) > 0:
             
@@ -491,38 +551,39 @@ class ASPlotter:
         #plt.close('all')
         #plt.draw()
         #plt.pause(3)
+        #######
+        # fig, ax = plt.subplots(figsize=(12, nattmaps))
 
-        '''
-            # fig, ax = plt.subplots(figsize=(12, nattmaps))
+        # cax = ax.imshow(attw, aspect='auto', cmap=self.cmap, interpolation='nearest')
+        # ax.set_xticks([0, nframes - 1])
+        # ax.set_xticklabels(['1', str(nframes)])
+        # ax.set_yticks(list(range(nattmaps)))
+        # ax.set_yticklabels([f'{self.title} #{i+1}' for i in range(nattmaps)])
+
+        # # Now scale the normalized scores to match the y-axis of the attention maps image
+        # # This is assuming you want to plot the scores across the entire height of the image.
+        # gt = gt * (nattmaps - 1)
+        # fl = fl * (nattmaps - 1)
+
+        # ax.plot(numpy.arange(nframes) , gt[:nframes], label='GT Scores', color='red', linestyle='--', linewidth=1)
+        # ax.plot(numpy.arange(nframes) , fl[:nframes], label='FL Scores', color='blue', linestyle='--', linewidth=1)
+
+        # cbar = fig.colorbar(cax, ax=ax, orientation='vertical')
+        # cbar.set_label(self.ylabel)
+        # cbar.ax.set_ylabel('Attention weights')
+
+        # ax.set_xlabel('Frames')
+        # ax.set_ylabel('Attention Map Number')
+        # ax.legend(loc='upper right')
+    '''
             
-            # cax = ax.imshow(attw, aspect='auto', cmap=self.cmap, interpolation='nearest')
-            # ax.set_xticks([0, nframes - 1])
-            # ax.set_xticklabels(['1', str(nframes)])
-            # ax.set_yticks(list(range(nattmaps)))
-            # ax.set_yticklabels([f'{self.title} #{i+1}' for i in range(nattmaps)])
-
-            # # Now scale the normalized scores to match the y-axis of the attention maps image
-            # # This is assuming you want to plot the scores across the entire height of the image.
-            # gt = gt * (nattmaps - 1)
-            # fl = fl * (nattmaps - 1)
-
-            # ax.plot(numpy.arange(nframes) , gt[:nframes], label='GT Scores', color='red', linestyle='--', linewidth=1)
-            # ax.plot(numpy.arange(nframes) , fl[:nframes], label='FL Scores', color='blue', linestyle='--', linewidth=1)
-            
-            # cbar = fig.colorbar(cax, ax=ax, orientation='vertical')
-            # cbar.set_label(self.ylabel)
-            # cbar.ax.set_ylabel('Attention weights')
-
-            # ax.set_xlabel('Frames')
-            # ax.set_ylabel('Attention Map Number')
-            # ax.legend(loc='upper right')
         
         
 
 ###############################
 ## cv windows viewer of rslts 
 class ASPlayer:
-    def __init__(self, cfg_wtc, vis):
+    def __init__(self, cfg_wtc, vis, overwrite):
         self.frtend = cfg_wtc.frtend
         self.frame_skip = cfg_wtc.asp.fs
         self.thrashold = cfg_wtc.asp.th
@@ -531,6 +592,7 @@ class ASPlayer:
             'color': self._cvputcolor
         }.get(cfg_wtc.asp.cvputfx)
         self.vis = vis
+        self.overwrite = overwrite
         self.colors = [
             (0, 200, 100),  # Teal
             (0, 150, 150),  # Cyan
@@ -614,6 +676,11 @@ class ASPlayer:
             fl_fidx = [fl[fidx] for fl in fls] #fl[fidx]
             #log.debug(f"{i = } {fidx = } {gt_fidx = } {fl_fidx = } ")
             self.cvputfx(frame, gt_fidx, fl_fidx)  
+            
+            if self.frtend == 'visdom': ## HWC
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) ## LxHxWxC
+                #frame = np.transpose(frame, (2, 0, 1))  # LxCxHxW
+            
             self.data["frames"].append(frame)
             self.data["gt"].append(gt_fidx)
             self.data["fl"].append(fl_fidx)
@@ -640,13 +707,21 @@ class ASPlayer:
             cv2.destroyAllWindows()
             
         elif self.frtend == 'visdom':
-            self.vis.close("vid")
-            #log.error(self.data['frames'])
-            ## TODO: assert C order  LxHxWxC.
-            ## https://github.com/fossasia/visdom/issues/210
-            #log.error(f"{type(data['frames'])}")
-            #log.error(f"{self.data['frames'].shape}")
-            self.vis.vid(self.data["frames"], "vid")
+            if self.overwrite:
+                title = "vid"
+                self.vis.close(title)
+            else: title = f"vid {osp.basename(vpath)}"
+                        
+            self.vis.vid(
+                self.data["frames"], 
+                #dim='LxHxWxC', #'LxCxHxW',
+                title,
+                {
+                    'fps': self.fps,
+                    'autoplay': False,
+                    'loop': False
+                }
+            )
 
             timeout = 3
             end_time = time.time() + timeout

@@ -97,9 +97,9 @@ class Rtfm(nn.Module):
         
         self.alpha = _cfg.alpha
         self.margin = _cfg.margin
-        #self.bce = nn.BCELoss()
-        self.bce = nn.BCEWithLogitsLoss()
+        self.bce = nn.BCELoss()
         self.sig = nn.Sigmoid()
+        #self.bce = nn.BCEWithLogitsLoss()
         self.smooth = smooth
         self.sparse = sparsity
     
@@ -164,6 +164,7 @@ class Rtfm(nn.Module):
         
         
         ## SCORE
+        scores = self.sig(scores)
         scores = self.pfu.uncrop( scores, 'mean') ## bs*nc,t -> bs, t
         abn_scors, nor_scors = self.pfu.unbag(scores, labels) ## bag, t
         vls_abn, vls_nor = self.pfu.sel_scors( abn_scors, nor_scors, idx_abn, idx_nor, avg=True) ## bag
@@ -174,20 +175,20 @@ class Rtfm(nn.Module):
         
         loss_scor = self.bce(torch.cat((vls_abn,vls_nor)), ldata['label']) ## vls
         ## (bag*t)
-        #loss_smooth = self.smooth(abn_scors.view(-1)) ## sls
+        loss_smooth = self.smooth(abn_scors.view(-1)) ## sls
         loss_spars = self.sparse(abn_scors.view(-1), rtfm=True) ## sls
         
-        return {
-                'rtfm': self.alpha * loss_mgnt,
-                'bce': loss_scor,
-            }
-        #return self.pfu.merge( {
+        #return {
         #        'rtfm': self.alpha * loss_mgnt,
         #        'bce': loss_scor,
-        #    }, 
-        #    #loss_smooth,
-        #    loss_spars
-        #    )
+        #    }
+        return self.pfu.merge( {
+                'rtfm': self.alpha * loss_mgnt,
+                'bce': loss_scor,
+            }, 
+            loss_smooth,
+            loss_spars
+            )
         
     
 class ContrastiveLoss(nn.Module):

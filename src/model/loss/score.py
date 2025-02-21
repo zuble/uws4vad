@@ -37,7 +37,7 @@ class Bce(nn.Module):
         super().__init__()
         self.pfu = pfu
         self.crit = nn.BCELoss()
-        #self.crit = nn.BCELossWithLogitsLoss()
+        #self.crit = nn.BCEWithLogitsLoss()
         
     def forward(self, ndata, ldata):
         #log.debug(f"Bce/{scores.shape} {scores.device} {label.shape} {label.device}")
@@ -49,7 +49,6 @@ class Clas(nn.Module):
     def __init__(self, _cfg, pfu: PstFwdUtils): 
         super().__init__()
         self.pfu = pfu
-        self.crit = nn.BCELoss()    
         self._fx = {
             'topk': self.fwd_topk,
             'full': self.fwd_full
@@ -57,6 +56,9 @@ class Clas(nn.Module):
         self.k = _cfg.k
         self.per_crop = _cfg.per_crop
         if self.per_crop: assert self.pfu.ncrops
+
+        #self.crit = nn.BCELoss()
+        self.crit = nn.BCEWithLogitsLoss()
     
     def get_k(self, x, label):
         #if label == 0: 
@@ -121,6 +123,8 @@ class Ranking(nn.Module):
         self.lambda2 = _cfg["lambda12"][1] 
         self.use_tcn = False
         
+        self.sig = nn.Sigmoid()
+        
     def smooth(self, arr):
         '''
         slides arr one index in negative direction
@@ -141,8 +145,9 @@ class Ranking(nn.Module):
         labels = ldata['label']
         seqlen = ldata['seqlen']
         scores = ndata['scores']
-        scores = self.pfu.uncrop(scores, 'mean')
         
+        scores = self.sig(scores)
+        scores = self.pfu.uncrop(scores, 'mean')
         loss = torch.tensor(0., requires_grad=True, device=scores.device)
         
         abn_scores, nor_scores = self.pfu.unbag(scores, labels)
@@ -226,7 +231,8 @@ class Salient(nn.Module):
     def __init__(self, _cfg, pfu: PstFwdUtils): 
         super().__init__()
         self.pfu = pfu
-        self.bce = nn.BCELoss()
+        
+        self.crit = nn.BCELoss()
         self.per_crop = _cfg.per_crop
         self.margin = _cfg.trip_margin
         
@@ -251,7 +257,7 @@ class Salient(nn.Module):
             vls = self.pfu.uncrop(ndata['vls'], 'mean') #
             label = ldata["label"]
         #log.debug(f"{label.shape}")
-        loss_vid = self.bce(vls, label) 
+        loss_vid = self.crit(vls, label) 
         return {'salient': loss_vid}
         '''
         #######
@@ -386,7 +392,7 @@ class MultiBranchSupervision(nn.Module):
         self.mu = _cfg.mu
         self.M = _cfg.M
         
-        self.bce = nn.BCELoss()
+        self.crit = nn.BCELoss()
         self.cur_stp = 1
     
     def preproc(self, ndata, ldata):
@@ -463,20 +469,20 @@ class MultiBranchSupervision(nn.Module):
             ones = torch.ones((1, slen_abn[bi]), device=self.pfu.dvc)
             
             ## Raw Org/Att , eq(12)
-            tmp_lcso = self.bce(SO_0.unsqueeze(0), zeros) + self.bce(SO_1.unsqueeze(0), ones)
+            tmp_lcso = self.crit(SO_0.unsqueeze(0), zeros) + self.crit(SO_1.unsqueeze(0), ones)
             if LC_SO is None: LC_SO = tmp_lcso.unsqueeze(0)
             else: LC_SO = torch.cat((LC_SO, tmp_lcso.unsqueeze(0)), dim=0)
             
-            tmp_lcsa = self.bce(SA_0.unsqueeze(0), zeros) + self.bce(SA_1.unsqueeze(0), ones)
+            tmp_lcsa = self.crit(SA_0.unsqueeze(0), zeros) + self.crit(SA_1.unsqueeze(0), ones)
             if LC_SA is None: LC_SA = tmp_lcsa.unsqueeze(0)
             else: LC_SA = torch.cat((LC_SA, tmp_lcsa.unsqueeze(0)), dim=0)
             
             ## Supressed Org/Att , eq(12)
-            tmp_lcsso = self.bce(SSO_0.unsqueeze(0), zeros) + self.bce(SSO_1.unsqueeze(0), ones)
+            tmp_lcsso = self.crit(SSO_0.unsqueeze(0), zeros) + self.crit(SSO_1.unsqueeze(0), ones)
             if LC_SSO is None: LC_SSO = tmp_lcsso.unsqueeze(0)
             else: LC_SSO = torch.cat((LC_SSO, tmp_lcsso.unsqueeze(0)), dim=0)
             
-            tmp_lcssa = self.bce(SSA_0.unsqueeze(0), zeros) + self.bce(SSA_1.unsqueeze(0), ones)
+            tmp_lcssa = self.crit(SSA_0.unsqueeze(0), zeros) + self.crit(SSA_1.unsqueeze(0), ones)
             if LC_SSA is None: LC_SSA = tmp_lcssa.unsqueeze(0)
             else: LC_SSA = torch.cat((LC_SSA, tmp_lcssa.unsqueeze(0)), dim=0)
             
@@ -613,11 +619,11 @@ class MultiBranchSupervision(nn.Module):
             zeros = torch.zeros((1, slen_nor), device=self.pfu.dvc)
             ones = torch.ones((1, slen_abn), device=self.pfu.dvc)
             ## Raw Org/Att , eq(12)
-            LC_SO = self.bce(SO_0.unsqueeze(0), zeros) + self.bce(SO_1.unsqueeze(0), ones)
-            LC_SA = self.bce(SA_0.unsqueeze(0), zeros) + self.bce(SA_1.unsqueeze(0), ones)
+            LC_SO = self.crit(SO_0.unsqueeze(0), zeros) + self.crit(SO_1.unsqueeze(0), ones)
+            LC_SA = self.crit(SA_0.unsqueeze(0), zeros) + self.crit(SA_1.unsqueeze(0), ones)
             ## Supressed Org/Att , eq(12)
-            LC_SSO = self.bce(SSO_0.unsqueeze(0), zeros) + self.bce(SSO_1.unsqueeze(0), ones)
-            LC_SSA = self.bce(SSA_0.unsqueeze(0), zeros) + self.bce(SSA_1.unsqueeze(0), ones)
+            LC_SSO = self.crit(SSO_0.unsqueeze(0), zeros) + self.crit(SSO_1.unsqueeze(0), ones)
+            LC_SSA = self.crit(SSA_0.unsqueeze(0), zeros) + self.crit(SSA_1.unsqueeze(0), ones)
             
             LC = self.alpha * (LC_SO + LC_SA) + (1 - self.alpha) * (LC_SSO + LC_SSA) ## eq(13)
             if (self.cur_stp % dbg_stp) == 0: 
@@ -926,20 +932,26 @@ class Glance(nn.Module):
     def __init__(self, _cfg, pfu: PstFwdUtils): 
         super().__init__()
         self.pfu = pfu
-        self.crit = nn.BCELoss()
-        #self.crit = nn.BCELossWithLogitsLoss()
+        assert self.pfu.bat_div == self.pfu.bs//2
+        assert self.pfu.seg_sel == 'itp'
         
         self.abn_ratio = _cfg.alpha
-        self.sigma = _cfg.sigma
+        #self.sigma = torch.nn.Parameter(torch.tensor(0.1))  
+        self.sigma = torch.tensor(_cfg.sigma) #requires_grad=True, device=self.pfu.dvc
         self.min_mining_step = _cfg.min_mining_step
+        
+        ## gaussian_kernel_mining 
+        ## expects scores in probability space [0,1]
+        self.sig = nn.Sigmoid()
+        self.crit = nn.BCELoss()
+        #self.crit = nn.BCEWithLogitsLoss()
         
     def gaussian_kernel_mining(self, score, point_label):
         abn_snippet = point_label.clone().detach()
 
         for b in range(point_label.shape[0]):
             abn_idx = torch.nonzero(point_label[b]).squeeze(1)
-            if len(abn_idx) == 0:
-                continue
+            if len(abn_idx) == 0: continue
 
             # most left
             if abn_idx[0] > 0:
@@ -988,14 +1000,16 @@ class Glance(nn.Module):
         - distribution: Distribution type, options are 'normal', 'cauchy', 'laplace', 'exponential', 'lognormal'
         - params: Distribution parameters, a dictionary
         """
+        point_label = point_label.clone().detach().cpu()
 
         distribution_weight = torch.zeros_like(point_label)
+        #log.error(f"{distribution_weight.shape=}")
         N = distribution_weight.shape[1]
 
         for b in range(point_label.shape[0]):
             abn_idx = torch.nonzero(point_label[b]).squeeze(1)
-            if len(abn_idx) == 0:
-                continue
+            #log.error(f"{b=} {abn_idx=} ")
+            if len(abn_idx) == 0: continue
 
             temp_weight = torch.zeros([len(abn_idx), N])
 
@@ -1005,9 +1019,9 @@ class Glance(nn.Module):
                 h_p = 2 * (point - 1) / (N - 1) - 1
 
                 if distribution == 'normal':
-                    weight = torch.exp(-(h_i - h_p) ** 2 / (2 * params['sigma']**2)) / (params['sigma'] * (2 * np.pi)**0.5)
+                    weight = torch.exp(-(h_i - h_p) ** 2 / (2 * params['sigma']**2)) / (params['sigma'] * (2 * torch.pi)**0.5)
                 elif distribution == 'cauchy':
-                    weight = 1 / (1 + ((h_i - h_p) / params['gamma'])**2) / (np.pi * params['gamma'])
+                    weight = 1 / (1 + ((h_i - h_p) / params['gamma'])**2) / (torch.pi * params['gamma'])
                 elif distribution == 'laplace':
                     weight = 0.5 * torch.exp(-torch.abs(h_i - h_p) / params['b']) / params['b']
                 else:
@@ -1023,27 +1037,46 @@ class Glance(nn.Module):
         return distribution_weight
 
     def forward(self, ndata, ldata):
-        label = ldata['label'] ## bs
+        labels = ldata['label'] ## bs
         seqlen = ldata['seqlen'] ## bs
-        point_label = ldata['point_label']
-        scores = ndata['scores'] 
+        point_label = ldata['point_label'] ## bs, seqlen
+        step = ldata["step"]
+        #log.error(f"{seqlen.shape=} {point_label.shape=}")
         
-        #loss = torch.tensor(0., requires_grad=True, device=scores.device)
+        
+        scores = self.sig( ndata['scores'] ) 
+        #log.error(f"{scores.shape=} ")
+        
+        #loss = torch.tensor(0., requires_grad=True, device=self.pfu.dvc)
         
         scores = self.pfu.uncrop(scores, 'mean')
         abn_scores, nor_scores = self.pfu.unbag(scores, labels)
+        #log.error(f"{abn_scores.shape=} ")
+        
+        abn_pnt_lbl,_ = self.pfu.unbag(point_label, labels) ## bs, seqlen
+        #log.error(f"{abn_pnt_lbl.shape=} ")
+        
         
         ## Guassian Mining
-        abn_kernel = self.gaussian_kernel_mining(abn_scores.detach().cpu(), point_label)
+        abn_kernel = self.gaussian_kernel_mining(abn_scores.detach().cpu(), abn_pnt_lbl)
+        #log.error(f"{abn_kernel.shape=} ")
         
         ## Temporal Gaussian Splatting
+        #log.error(step)
         if step < self.min_mining_step:
-            rendered_score = self.temporal_gaussian_splatting(point_label, 'normal', params={'sigma':sigma})
+            rendered_score = self.temporal_gaussian_splatting(abn_pnt_lbl, 'normal', params={'sigma':self.sigma}) #.item()
         else:
-            rendered_score = self.temporal_gaussian_splatting(abn_kernel, 'normal', params={'sigma':sigma})
-        rendered_score = rendered_score.to(self.device)
-
-        loss = self.bce(abn_scores, rendered_score.to(self.device)).mean()
+            rendered_score = self.temporal_gaussian_splatting(abn_kernel, 'normal', params={'sigma':self.sigma}) #.item()
+        rendered_score = rendered_score.to(self.pfu.dvc)
+        #Log.error(f"{rendered_score.shape=} ")
+        
+        #log.error(abn_scores)
+        #log.error(rendered_score)
+        loss = self.crit(abn_scores, rendered_score)
+        #log.error(f"{loss} {loss.shape=}")
+        
+        loss = loss.mean()
+        #log.error(f"{loss} {loss.shape=}")
         
         
         return {

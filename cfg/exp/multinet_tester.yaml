@@ -21,8 +21,7 @@ test: 1
 ## since its saved into logs folder
 load:
   ckpt_path:
-    - 3509829796--3_1
-    - 352941103--4_1 
+    - 110370935--4_1144
 
 dataload:
   test:
@@ -34,11 +33,14 @@ dataload:
 
 vldt:
   test:
-    savepkl: false #true
+    savepkl: true #true
     frompkl: true
     per_what: vid #lbl
     full_anom_lbls: true
 
-## v=cEOM18n8fhU__#1_label_G-0-0
-## v=_BgJEXQkjNQ__#1_label_G-0-0
-## v=8oTjTufJnXI__#1_label_G-0-0
+    #watch:
+    #  fns: 
+    #    - v=cEOM18n8fhU__#1_label_G-0-0 
+    #    - v=_BgJEXQkjNQ__#1_label_G-0-0
+    #    - v=8oTjTufJnXI__#1_label_G-0-0
+

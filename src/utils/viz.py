@@ -21,7 +21,7 @@ helper = """
     if something wrong:
         ps aux | grep 'visdom.server'
         kill -? pid    ?:(2SIGINT) (15 SIGTERM) (9 SIGKILL)
-        or 
+            or 
         ps -ef | grep 'python -m visdom.server' | grep -v grep | awk '{print $2}' | xargs -r kill -9 
 """
             
@@ -130,8 +130,8 @@ class Visualizer:
     def disp_image(self, img, wtitle, opts):
         self.vis.image(img, win=wtitle, opts=opts)
     
-    def vid(self, vid, wtitle):
-        self.vis.video(vid, win=wtitle)
+    def vid(self, vid, wtitle, opts):
+        self.vis.video(vid, win=wtitle, opts=opts)
     
     
     def close(self, wtitle=None):

@@ -3,8 +3,8 @@ from torch.utils.data import DataLoader, Dataset, BatchSampler, RandomSampler, W
 from pytorch_metric_learning.samplers import MPerClassSampler
 from src.data.samplers import AbnormalBatchSampler, analyze_sampler, dummy_train_loop
 import numpy as np
-
-import glob , os, os.path as osp , math , time
+import pandas as pd
+import glob, os, os.path as osp, math, time
 from multiprocessing import Pool
 
 from src.utils import hh_mm_ss, seed_sade, logger
@@ -157,6 +157,7 @@ class TrainDS(Dataset):
         #self.rgbl2n = cfg_dproc.rgbl2n
         #self.audl2n = cfg_dproc.audl2n
         
+        self.fsfeat = cfg_ds.frgb.fstep
         self.dfeat = cfg_ds.frgb.dfeat
         if audflst: self.peakboo_aud(cfg_ds.faud.dfeat)
         
@@ -168,7 +169,10 @@ class TrainDS(Dataset):
             False: self.get_feat_wocrop
         }.get(self.frgb_ncrops and not self.cropasvideo)
         log.info(f'TRAIN get_feat {self.get_feat}')
-
+        
+        
+        self.glance = pd.read_csv(cfg_ds.glance)
+        
         if cfg_dload.in2mem: 
             ## rnd state will b de same troughout epo iters
             ## or load full arrays int memory
@@ -200,10 +204,30 @@ class TrainDS(Dataset):
     
 
     def get_label(self,idx):
-        #if 'label_A' in self.rgbflst[int(idx)]: return int(0)
-        #else: return int(1)
-        if self.norm_lbl in self.rgbflst[int(idx)]: return np.float32(0.0)
-        else: return np.float32(1.0)
+        fn = osp.basename(self.rgbflst[int(idx)])
+        if self.norm_lbl in fn: return torch.scalar_tensor(0) #np.float32(0.0)
+        else: return torch.scalar_tensor(1) #np.float32(1.0)
+        
+    
+    def get_pnt_lbl(self, idx, feat_len):
+        ## TODO !!!!!!
+        ## only 4 seg.sel=itp
+        fn = osp.basename(self.rgbflst[int(idx)])
+        points = []
+        points = self.glance.loc[self.glance['video-id'] == fn, 'glance'].values
+        log.debug(f'{points=}')
+        
+        #feat_len = feat.shape[-2]
+        pnt_lbl = np.zeros([self.seg_len], dtype=np.float32)
+        if len(points)>0 and points[0]>0:
+            for p in points:
+                #idx_seg = int((p/16)/feat_len*self.seg_len)
+                #idx_seg = min(max(int((p/self.fsfeat)/feat_len*self.seg_len), 0), self.seg_len-1)  
+                idx_seg = int((p/self.fsfeat)/feat_len*self.seg_len)
+                log.debug(f"Frame {p} → Feature idx {p/self.fsfeat} → Segment idx {idx_seg}")
+                pnt_lbl[idx_seg] = np.float32(1.0)
+        
+        return pnt_lbl     
     
     ## (ncrops, len, dfeat)
     def get_feat_wcrop(self, idx):
@@ -266,13 +290,18 @@ class TrainDS(Dataset):
             else: 
                 feats[crop_i] = feat_crop
 
-        if idxs_trnsf['idxs'] is None: ## pad
+        if idxs_trnsf['idxs'] is None: ## selorpad
             seqlen = unified_len 
         else: ## interpolate 
             seqlen = self.seg_len
         
-        log.debug(f'vid[{idx}] {feats.shape} {feats.dtype} {seqlen=}')
-        return feats, seqlen
+        ## TODO dev for seg.sel: seq
+        ## original only used itp
+        pnt_lbl = self.get_pnt_lbl(idx, unified_len)
+        
+        log.debug(f'vid[{idx}] {feats.shape=} {feats.dtype} {seqlen=} {pnt_lbl.shape=}')
+        return feats, seqlen, pnt_lbl
+
 
     ## (len, dfeat)
     def get_feat_wocrop(self,idx):
@@ -321,9 +350,12 @@ class TrainDS(Dataset):
         else: ## interpolate
             seqlen = self.seg_len
         
-        log.debug(f'vid[{idx}] {feats.shape} {feats.dtype} {seqlen=}')
-        return feats, seqlen
-    
+        ## TODO dev for seg.sel: seq
+        ## original only used itp
+        pnt_lbl = self.get_pnt_lbl(idx, frgb.shape[0])
+        
+        log.debug(f'vid[{idx}] {feats.shape} {feats.dtype} {seqlen=} {pnt_lbl.shape}')
+        return feats, seqlen, pnt_lbl
     
     def __getitem__(self, idx):
         ## as n normal videos > abnormal
@@ -336,10 +368,10 @@ class TrainDS(Dataset):
             feats, seqlen, label = self.data[int(idx)]  
         else:
             label = self.get_label(idx)
-            feats, seqlen = self.get_feat(idx)
+            feats, seqlen, pnt_lbl = self.get_feat(idx)
             
         #log.debug(f'f[{idx}]: {feats.shape}')    
-        return feats, seqlen, label
+        return feats, seqlen, label, pnt_lbl 
 
     def __len__(self):
         return len(self.rgbflst)
@@ -478,12 +510,14 @@ class DataCollator:
     
     def __call__(self, tdata, trn_inf):  
         ldata={}
-        cfeat, seqlen, label = tdata
+        cfeat, seqlen, label, pnt_lbl = tdata
         
         #if self.seg_sel != 'itp': ## it may come w/ pad ## better always pass
         ldata["seqlen"] = seqlen.to(trn_inf['dvc'])
         ldata["label"] = label.to(trn_inf['dvc'])
+        ldata["point_label"] = pnt_lbl.to(trn_inf['dvc'])
+        ldata["step"] = trn_inf['step']
         
-        log.debug(f"E[{trn_inf['epo']}]B[{trn_inf['bat']}][{self.seg_sel}] feat: {cfeat.shape} ,seqlen: {seqlen.shape} {seqlen}, lbl: {label} {label.shape} {label.device}")
+        log.debug(f"E[{trn_inf['epo']}]B[{trn_inf['bat']}]S[{trn_inf['step']}][{self.seg_sel}] feat: {list(cfeat.shape)}, seqlen: {list(seqlen.shape)} {seqlen}, lbl: {label} {list(label.shape)} {label.device}")
         return self._rshp_in(cfeat).to(trn_inf['dvc']), ldata
 

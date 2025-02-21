@@ -5,8 +5,7 @@ defaults:
   - lrs: null
   - loss@loss.rtfm: rtfm
   #- loss@loss.mgfn: mgfn
-  #- _self_
-
+  
 id: magn
 epochs: 5
 optima:

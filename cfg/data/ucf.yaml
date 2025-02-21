@@ -73,6 +73,7 @@ len: ## 950A 950N
 
 gt: '${hydra:runtime.cwd}/data/gt/ucf.txt' ## del normal lines
 tframes: '${hydra:runtime.cwd}/data/gt/ucf_tframes.txt'
+glance: '${hydra:runtime.cwd}/data/gt/ucf_glance.csv'
 froot: ${path.ucf_froot}
 vroot: ${path.ucf_vroot}
 

@@ -88,8 +88,8 @@ def trainer(cfg, vis):
             #with autograd.detect_anomaly(): 
             #for batch in tqdm(dataloader, leave = False, desc="Batch:", unit='bat'):
             for bi, batch in enumerate(dataloader):
-                trn_inf['bat'] =+ 1
-                trn_inf['step'] =+ 1
+                trn_inf['bat'] += 1
+                trn_inf['step'] += 1
                 btic = time.time()
                 
                 ## data collate
@@ -119,10 +119,9 @@ def trainer(cfg, vis):
                     raise Exception("Loss exploded")
                 
                 tmeter.update({'global': loss_glob.item()})
-                for key, value in loss_indv.items():
-                    ## Update individual loss parts
-                    tmeter.update({key: value.item()})  
-                tmeter.log_bat(trn_inf)
+                ## Update individual loss parts
+                for key, value in loss_indv.items(): tmeter.update({key: value.item()})  
+                #tmeter.log_bat(trn_inf)
                 
                 abn_bag_len = torch.sum(ldata["label"] == 1).item()
                 vis.plot_lines('abn/nor bag ratio', 
@@ -166,6 +165,8 @@ def trainer(cfg, vis):
                 pltr.metrics(MH.high_state['mtrc_info'])
                 pltr.curves(MH.high_state['curv_info'])
                 Tabler(cfg_vldt,vis).table2img(MH.high_table,'high_res_table',True)
+        
+        #del dataloader, VLDT, MTRC
         
     except Exception as e:
         log.error(traceback.format_exc())

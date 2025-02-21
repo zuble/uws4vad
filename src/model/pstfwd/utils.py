@@ -39,7 +39,7 @@ class PstFwdUtils:
                 ## uncrop @ Infer will avg
                 ## therefore Infer outputs t
                 self.ncrops = _cfg.ncrops[1]
-            log.info(f"PFU TEST{self.ncrops=} {self.cropasvideo=}")
+            log.info(f"PFU TEST {self.ncrops=} {self.cropasvideo=}")
         
         ## 4train
         ## batch sampler

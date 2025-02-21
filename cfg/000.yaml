@@ -17,7 +17,7 @@ tags: [""]
 
 ## gpu idx or -1 for CPU
 ## set trough main wrapper custim resolver
-dvc: ${dyn_dvc:1}
+dvc: ${dyn_dvc:-1}
 ## if 0 and train: generates trough OS @ utils/env.py
 ## if test::
 ##  seed: 0 -> use seed from network_chkpt_path fn
