@@ -145,7 +145,7 @@ def trainer(cfg, vis):
             
             ## eval
             if (epo + 1) % cfg_vldt.freq == 0:
-                log.info(f'$$$ Validation at epo {epo+1}')
+                log.debug(f'$$$ Validation at epo {epo+1}')
                 #torch.backends.cudnn.benchmark = False
                 vldt_info, _ = VLDT.start(net, inferator)
                 mtrc_info, curv_info, table_res = MTRC.get_fl(vldt_info)
@@ -236,7 +236,7 @@ class TrainMeter:
             
     def log_epo(self, trn_inf):
         ## logs / plots to visdom loss_epo_..
-        sms = f"*E[{trn_inf['epo']}]"
+        sms = f"*E[{trn_inf['epo']}] S[{(trn_inf['step'])}]"
         if self.spacer: sms += " "*(self.spacer-len(sms))
         
         for loss_name, meter in self.loss_meters.items():

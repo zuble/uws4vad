@@ -153,6 +153,7 @@ class TrainDS(Dataset):
         self.cropasvideo = cfg_dproc.cropasvideo.train
         self.frgb_ncrops = cfg_dproc.crops2use.train
         self.seg_len = cfg_dproc.seg.len
+        self.seg_sel = cfg_dproc.seg.sel
         #self.l2n = cfg_dproc.l2n
         #self.rgbl2n = cfg_dproc.rgbl2n
         #self.audl2n = cfg_dproc.audl2n
@@ -207,28 +208,62 @@ class TrainDS(Dataset):
         fn = osp.basename(self.rgbflst[int(idx)])
         if self.norm_lbl in fn: return torch.scalar_tensor(0) #np.float32(0.0)
         else: return torch.scalar_tensor(1) #np.float32(1.0)
-        
-    
-    def get_pnt_lbl(self, idx, feat_len):
-        ## TODO !!!!!!
-        ## only 4 seg.sel=itp
+
+    def get_pnt_lbl(self, idx, feat_len, idxs_seg):
         fn = osp.basename(self.rgbflst[int(idx)])
-        points = []
         points = self.glance.loc[self.glance['video-id'] == fn, 'glance'].values
-        log.debug(f'{points=}')
+        #log.error(f'{points=} {idxs_seg=}')
         
-        #feat_len = feat.shape[-2]
         pnt_lbl = np.zeros([self.seg_len], dtype=np.float32)
-        if len(points)>0 and points[0]>0:
+        if len(points) == 0: return pnt_lbl
+        
+        if len(idxs_seg.nonzero()[0]) == 0: ## pad
             for p in points:
                 #idx_seg = int((p/16)/feat_len*self.seg_len)
-                #idx_seg = min(max(int((p/self.fsfeat)/feat_len*self.seg_len), 0), self.seg_len-1)  
                 idx_seg = int((p/self.fsfeat)/feat_len*self.seg_len)
                 log.debug(f"Frame {p} → Feature idx {p/self.fsfeat} → Segment idx {idx_seg}")
+                if 0 <= idx_seg < self.seg_len:
+                    pnt_lbl[idx_seg] = np.float32(1.0)
+                    
+        elif self.seg_sel == 'seq':
+            # Filter points to only those in the extracted segment
+            start_idx = idxs_seg[0]
+            end_idx = idxs_seg[-1]
+            assert len(idxs_seg) == self.seg_len 
+            
+            segment_start_frame = start_idx * self.fsfeat  # Convert feature idx to frame idx
+            segment_end_frame = end_idx * self.fsfeat
+            
+            for p in points: # check if it falls in our segment
+                if segment_start_frame <= p < segment_end_frame:
+                    # Convert global frame index to segment-relative index
+                    relative_idx = (p - segment_start_frame) / self.fsfeat
+                    # Scale to seg_len
+                    idx_seg = int(relative_idx / (end_idx - start_idx) * self.seg_len)
+                    #if 0 <= idx_seg < self.seg_len:
+                    pnt_lbl[idx_seg] = np.float32(1.0)
+                    
+        elif self.seg_sel == 'uni':
+            for p in points: # find the nearest sampled index
+                feat_idx = p / self.fsfeat  # Convert frame idx to feature idx
+                # Find closest sampled index
+                closest_idx = np.argmin(np.abs(idxs_seg - feat_idx))
+                #if 0 <= closest_idx < self.seg_len:  # Safety check
+                pnt_lbl[closest_idx] = 1
+                    
+        elif self.seg_sel == 'itp':
+            #feat_len = feat.shape[-2]            
+            for p in points:
+                #idx_seg = int((p/16)/feat_len*self.seg_len)
+                idx_seg = int((p/self.fsfeat)/feat_len*self.seg_len)
+                log.debug(f"Frame {p} → Feature idx {p/self.fsfeat} → Segment idx {idx_seg}")
+                #if 0 <= idx_seg < self.seg_len:
                 pnt_lbl[idx_seg] = np.float32(1.0)
         
-        return pnt_lbl     
+        #log.error(f'{pnt_lbl=}')
+        return pnt_lbl
     
+
     ## (ncrops, len, dfeat)
     def get_feat_wcrop(self, idx):
         log.debug(f"**** {idx} ****")
@@ -295,13 +330,11 @@ class TrainDS(Dataset):
         else: ## interpolate 
             seqlen = self.seg_len
         
-        ## TODO dev for seg.sel: seq
-        ## original only used itp
-        pnt_lbl = self.get_pnt_lbl(idx, unified_len)
+        ## TODO dev for seg.sel:
+        pnt_lbl = self.get_pnt_lbl(idx, unified_len, idxs_trnsf['idxs'])
         
         log.debug(f'vid[{idx}] {feats.shape=} {feats.dtype} {seqlen=} {pnt_lbl.shape=}')
-        return feats, seqlen, pnt_lbl
-
+        return feats, seqlen, pnt_lbl, idxs_trnsf['idxs']
 
     ## (len, dfeat)
     def get_feat_wocrop(self,idx):
@@ -312,6 +345,7 @@ class TrainDS(Dataset):
         log.debug(f"vid[{idx}][RGB] {frgb.shape} {frgb.dtype}  {osp.basename(rgb_fp)}")
         
         #if self.rgbl2n: frgb = self.l2normfx(frgb)
+        ## TODO: pass points here, if seq/uni return idxs rndm w/ anom within
         idxs_trnsf = self.trnsfrm.get_idxs(frgb.shape[0])
         frgb_seg = self.trnsfrm.fx(frgb, idxs_trnsf['idxs'])
         log.debug(f'vid[{idx}][RGB] PST-SEG {frgb_seg.shape}')
@@ -350,12 +384,12 @@ class TrainDS(Dataset):
         else: ## interpolate
             seqlen = self.seg_len
         
-        ## TODO dev for seg.sel: seq
-        ## original only used itp
-        pnt_lbl = self.get_pnt_lbl(idx, frgb.shape[0])
+        ## TODO: dev for segsel uni 
+        pnt_lbl = self.get_pnt_lbl(idx, frgb.shape[0], idxs_trnsf['idxs'])
         
-        log.debug(f'vid[{idx}] {feats.shape} {feats.dtype} {seqlen=} {pnt_lbl.shape}')
-        return feats, seqlen, pnt_lbl
+        log.debug(f'vid[{idx}] {feats.shape} {feats.dtype} {seqlen=} {pnt_lbl.shape} {idxs_trnsf["idxs"]=}')
+        return feats, seqlen, pnt_lbl, idxs_trnsf['idxs']
+    
     
     def __getitem__(self, idx):
         ## as n normal videos > abnormal
@@ -365,13 +399,13 @@ class TrainDS(Dataset):
         #    idx = NPRNG.integers(feat_len-self.seg_len)
             
         if self.in2mem:
-            feats, seqlen, label = self.data[int(idx)]  
+            feats, seqlen, pnt_lbl, idxs_seg, label = self.data[int(idx)]  
         else:
             label = self.get_label(idx)
-            feats, seqlen, pnt_lbl = self.get_feat(idx)
+            feats, seqlen, pnt_lbl, idxs_seg = self.get_feat(idx)
             
         #log.debug(f'f[{idx}]: {feats.shape}')    
-        return feats, seqlen, label, pnt_lbl 
+        return feats, seqlen, pnt_lbl, idxs_seg, label
 
     def __len__(self):
         return len(self.rgbflst)
@@ -400,7 +434,7 @@ class FeatSegm():
         #self.rng = NPRNGZ              
         #log.error(f" {np.random.default_rng.}")
     
-    def get_idxs(self, feat_len):
+    def get_idxs(self, feat_len, points=None):
         if self.sel == 'itp': ## special case for avg adjcent linspace
             idxs = np.linspace(0, feat_len, self.len+1, dtype=np.int32)
             idxs = self.rnd_jit(idxs, feat_len)
@@ -408,8 +442,8 @@ class FeatSegm():
             
         else:
             if feat_len <= self.len: ## latter pad
-                #idxs = []
-                idxs = None
+                #idxs = None
+                idxs = np.zeros(self.len, dtype=np.int32)
                 log.debug(f"grabbed None idxs")
                 
             elif self.sel == 'uni': ## differ from intplt seq
@@ -417,12 +451,28 @@ class FeatSegm():
                 idxs = self.rnd_jit(idxs, feat_len)
                 log.debug(f"FSeg: grabbed uni {len(idxs)} idxs")
                     
-            elif self.sel == 'seq': ## start point
+            elif self.sel == 'seq':
                 start = NPRNG.integers(0, feat_len-self.len)
-                idxs = list(range(start, start+self.len))
+                if points: ## pick a random start assuring a anom within
+                    # Convert frame points to feature indices
+                    point_indices = [p / self.fsfeat for p in points]
+                    # Find valid starting positions that would include at least one anomaly
+                    valid_starts = []
+                    for p_idx in point_indices:
+                        # Calculate range of starting positions that would include this point
+                        earliest_start = max(0, int(p_idx - self.len + 1))
+                        latest_start = min(int(p_idx), feat_len - self.len)
+                        
+                        if latest_start >= earliest_start:
+                            valid_starts.extend(range(earliest_start, latest_start + 1))
+                    
+                    if valid_starts:
+                        # Randomly select from valid starts
+                        start = NPRNG.choice(valid_starts)
+                
+                idxs = np.arange(start, start+self.len, dtype=np.int32)
                 log.debug(f"FSeg: grabbed seq {len(idxs)} idxs")
                 
-        #idxs_glob = []
         idxs_glob = None
         if self.rnd:
             ## aply glob rnd only after self.trnsfrm.fx is call
@@ -434,7 +484,7 @@ class FeatSegm():
         
         return {
             'idxs': idxs,
-            'rnd_glob': idxs_glob
+            'rnd_glob': idxs_glob,
         }
         
     def rnd_jit(self, idxx, feat_len):
@@ -474,7 +524,8 @@ class FeatSegm():
             else: return feat
         
         #if len(idxs) == 0:
-        if idxs is None:
+        #if idxs is None:
+        if len(idxs.nonzero()[0]) == 0:
             #log.debug(f"FSeg selorpad padding")
             return pad(feat)
         else:
@@ -510,13 +561,14 @@ class DataCollator:
     
     def __call__(self, tdata, trn_inf):  
         ldata={}
-        cfeat, seqlen, label, pnt_lbl = tdata
+        cfeat, seqlen, pnt_lbl, idxs_seg, label = tdata
         
-        #if self.seg_sel != 'itp': ## it may come w/ pad ## better always pass
+        #if self.seg_sel != 'itp':
         ldata["seqlen"] = seqlen.to(trn_inf['dvc'])
         ldata["label"] = label.to(trn_inf['dvc'])
-        ldata["point_label"] = pnt_lbl.to(trn_inf['dvc'])
-        ldata["step"] = trn_inf['step']
+        ldata["point_label"] = pnt_lbl.to(trn_inf['dvc']) #glance
+        ldata["step"] = trn_inf['step'] #glance
+        ldata["idxs_seg"] = idxs_seg #glance
         
         log.debug(f"E[{trn_inf['epo']}]B[{trn_inf['bat']}]S[{trn_inf['step']}][{self.seg_sel}] feat: {list(cfeat.shape)}, seqlen: {list(seqlen.shape)} {seqlen}, lbl: {label} {list(label.shape)} {label.device}")
         return self._rshp_in(cfeat).to(trn_inf['dvc']), ldata

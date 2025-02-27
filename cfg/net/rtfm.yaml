@@ -10,7 +10,7 @@ main:
 
 cls:
   hdim_ratio: 
-    - 4
+    - 2
     - 4
 
 fm:

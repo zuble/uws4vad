@@ -21,3 +21,6 @@ main:
 #cls:
 #  ks: 7
 #  dim_in: ${data.faud.dfeat}
+
+
+#python main.py net=tcacc model=clas xtra=dflt dataload.balance.bag=0.5 dataproc.seg.sel=itp dataproc.seg.len=32 dataload.bs=8

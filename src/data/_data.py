@@ -24,8 +24,8 @@ def run_dl(dl, iters=2, vis=False):
             epo_counts = []  # Store counts for each class across batches
             epo_class_counts = [] # Store all the counts in the epoch
 
-            for b_idx, (cfeat, seqlen, label, pnt_lbl) in enumerate(dl):  # Unpack seqlen here
-                log.debug(f'B[{b_idx}] (seq) {cfeat.shape=} {cfeat.dtype} | {label=} {label.shape=} {label.dtype} | {seqlen.shape=} {seqlen.dtype} | {pnt_lbl=} {pnt_lbl.shape=} {pnt_lbl.dtype}')
+            for b_idx, (cfeat, seqlen, pnt_lbl, idxs_seg, label) in enumerate(dl):  # Unpack seqlen here
+                log.debug(f'B[{b_idx}] (seq) {cfeat.shape=} {cfeat.dtype} | {seqlen.shape=} {seqlen.dtype} | {pnt_lbl=} {pnt_lbl.shape=} {pnt_lbl.dtype} | {label=} {label.shape=} {label.dtype} ')
                 
                 ################3
                 ## seqlen batch calculues

@@ -14,7 +14,8 @@ from functools import partial
 from src.utils.logger import get_log
 log = get_log(__name__)
     
-    
+
+## 4 bndfm
 class MPP(nn.Module):
     def __init__(self, _cfg, pfu: PstFwdUtils = None): 
         super().__init__()
@@ -92,14 +93,15 @@ class Rtfm(nn.Module):
         self.pfu = pfu
         assert self.pfu.bat_div == self.pfu.bs // 2
         
-        if _cfg.preproc == 'og': self.preproc = self._preproc
-        elif _cfg.preproc == 'sbs': self.preproc = self._preproc2
+        if _cfg.preproc.lower() == 'og': self.preproc = self._preproc
+        elif _cfg.preproc.lower() == 'sbs': self.preproc = self._preproc2
+        else: raise ValueError 
         
         self.alpha = _cfg.alpha
         self.margin = _cfg.margin
-        self.bce = nn.BCELoss()
-        self.sig = nn.Sigmoid()
-        #self.bce = nn.BCEWithLogitsLoss()
+        #self.bce = nn.BCELoss()
+        #self.sig = nn.Sigmoid()
+        self.bce = nn.BCEWithLogitsLoss()
         self.smooth = smooth
         self.sparse = sparsity
     
@@ -164,19 +166,18 @@ class Rtfm(nn.Module):
         
         
         ## SCORE
-        scores = self.sig(scores)
+        #scores = self.sig(scores)
         scores = self.pfu.uncrop( scores, 'mean') ## bs*nc,t -> bs, t
         abn_scors, nor_scors = self.pfu.unbag(scores, labels) ## bag, t
         vls_abn, vls_nor = self.pfu.sel_scors( abn_scors, nor_scors, idx_abn, idx_nor, avg=True) ## bag
-        log.debug(f"score: {vls_abn.mean()=}  {vls_nor.mean()=}")
         
+        #log.error(f"{vls_abn.mean()=}  {vls_nor.mean()=}")
         #vls_abn, vls_nor = self.sig(vls_abn), self.sig(vls_nor)
-        #log.debug(f"{vls_abn.mean()=}  {vls_nor.mean()=}")
+        #log.error(f"{vls_abn.mean()=}  {vls_nor.mean()=}")
         
         loss_scor = self.bce(torch.cat((vls_abn,vls_nor)), ldata['label']) ## vls
-        ## (bag*t)
-        loss_smooth = self.smooth(abn_scors.view(-1)) ## sls
-        loss_spars = self.sparse(abn_scors.view(-1), rtfm=True) ## sls
+        #loss_smooth = self.smooth(abn_scors.view(-1)) ## sls
+        #loss_spars = self.sparse(abn_scors.view(-1), rtfm=True) ## sls
         
         #return {
         #        'rtfm': self.alpha * loss_mgnt,
@@ -186,8 +187,8 @@ class Rtfm(nn.Module):
                 'rtfm': self.alpha * loss_mgnt,
                 'bce': loss_scor,
             }, 
-            loss_smooth,
-            loss_spars
+            #loss_smooth,
+            #loss_spars
             )
         
     

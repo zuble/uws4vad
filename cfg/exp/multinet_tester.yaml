@@ -21,8 +21,15 @@ test: 1
 ## since its saved into logs folder
 load:
   ckpt_path:
-    - 110370935--4_1144
+    - 1466237547--4_288 
+    - 912382493--3_144
 
+    #- 1169292772--3_333 #tcacc clas
+    #- 1191978455--5_475 #tcacc rank
+    #- 817389634--10_950 #tcacc clas glance culumB6 itp
+    #- 2422957955--10_950 #tcacc clas glance culumB6 itp 
+    #- 4033393754--17_1615 #tcacc clas glance culumB6 itp
+    
 dataload:
   test:
     in2mem: False
@@ -33,14 +40,15 @@ dataload:
 
 vldt:
   test:
-    savepkl: true #true
+    savepkl: false #true
     frompkl: true
     per_what: vid #lbl
     full_anom_lbls: true
 
     #watch:
     #  fns: 
-    #    - v=cEOM18n8fhU__#1_label_G-0-0 
+    #    - v=cEOM18n8fhU__#1_label_G-0-0
     #    - v=_BgJEXQkjNQ__#1_label_G-0-0
     #    - v=8oTjTufJnXI__#1_label_G-0-0
+    #    - v=H5W58Loofks__#00-05-50_00-06-20_label_B6-0-0
 

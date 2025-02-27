@@ -61,16 +61,13 @@ class Clas(nn.Module):
         self.crit = nn.BCEWithLogitsLoss()
     
     def get_k(self, x, label):
-        #if label == 0: 
-        #    return 1 ##pel4vad
-        if self.k == -1: 
-            return int(torch.div(x, 16, rounding_mode='trunc')+1)
-        else: 
-            return min(x, self.k)
+        if label == 0:  return 1 ##pel4vad
+        elif self.k == -1: return int(torch.div(x, 16, rounding_mode='trunc')+1)
+        else: return min(x, self.k)
                 
     def fwd_topk(self, scores, label, seqlen):
         #scores = scores.squeeze()
-        vl_scores = torch.zeros(0).to(scores.device)  # tensor([])
+        vl_scores = torch.zeros(0).to(scores.device)#self.pfu.dvc  # tensor([])
         for i in range(scores.shape[0]): ## bs,t  in original is cropasvideo ? 
             tmp, _ = torch.topk(scores[i][:seqlen[i]], k=self.get_k(seqlen[i],label[i]), largest=True)
             tmp = torch.mean(tmp).view(1)
@@ -96,18 +93,17 @@ class Clas(nn.Module):
         #log.warning(f"{seqlen.shape}  {label.shape} {scores.shape}")
         
         scores = self.pfu.uncrop(scores, 'mean')
-        if self.pfu.cropasvideo: 
-            assert scores.shape[0] == self.pfu.bs
+        if self.pfu.cropasvideo: assert scores.shape[0] == self.pfu.bs
         #log.error(scores.shape)
         
         vl_scores = self._fx(scores, label, seqlen)
-        #vl_scores2 = torch.sigmoid(vl_scores) # <- inside fwd
+        #vl_scores2 = torch.sigmoid(vl_scores)
         #log.warning(f"{vl_scores}  {vl_scores2}")
         L = self.crit(vl_scores, label)
         
         return {
             'clas': L
-            ## retrieve additional info with certain key
+            ## TODO: retrieve additional info with certain key
             ## and if in debug send to vis, eg:
             ## '_sel_scores': [vl_scores,label]
             }
@@ -927,97 +923,105 @@ class CIL(nn.Module):
 ###########
 
 
-
 class Glance(nn.Module):
     def __init__(self, _cfg, pfu: PstFwdUtils): 
         super().__init__()
         self.pfu = pfu
         assert self.pfu.bat_div == self.pfu.bs//2
-        assert self.pfu.seg_sel == 'itp'
         
         self.abn_ratio = _cfg.alpha
         #self.sigma = torch.nn.Parameter(torch.tensor(0.1))  
         self.sigma = torch.tensor(_cfg.sigma) #requires_grad=True, device=self.pfu.dvc
         self.min_mining_step = _cfg.min_mining_step
-        
-        ## gaussian_kernel_mining 
-        ## expects scores in probability space [0,1]
+
         self.sig = nn.Sigmoid()
-        self.crit = nn.BCELoss()
-        #self.crit = nn.BCEWithLogitsLoss()
+        self.bce = nn.BCELoss(reduction='none')  # Using reduction='none' for flexibility
         
-    def gaussian_kernel_mining(self, score, point_label):
+    def gaussian_kernel_mining(self, score, point_label, seqlen=None):
         abn_snippet = point_label.clone().detach()
-
-        for b in range(point_label.shape[0]):
+        bs, max_len = point_label.shape
+        
+        for b in range(bs):
+            valid_len = max_len
+            if seqlen is not None:
+                valid_len = min(seqlen[b].item(), max_len)
+                if valid_len != max_len: log.error(f"gkm {b} {valid_len=} != {max_len=}")
+                
+            #point_label = point_label[b, :valid_len]
             abn_idx = torch.nonzero(point_label[b]).squeeze(1)
-            if len(abn_idx) == 0: continue
-
-            # most left
+            if len(abn_idx.shape) == 0 and abn_idx.numel() > 0:  # Handle single index case
+                abn_idx = abn_idx.unsqueeze(0)
+            if abn_idx.numel() == 0: continue
+            #if len(abn_idx) == 0: continue   
+            log.debug(f"gkm {b} {abn_idx=}\n{score[b]=}")
+                
+            # Process most left boundary
             if abn_idx[0] > 0:
-                '''pseudo abnormal'''
                 for j in range(abn_idx[0]-1, -1, -1):
                     abn_thresh = self.abn_ratio * score[b, abn_idx[0]]
                     if score[b, j] >= abn_thresh:
                         abn_snippet[b, j] = 1
-                    else:
-                        break
-
-            # most right
-            if abn_idx[-1] < (point_label.shape[1]-1):
-                '''pseudo abnormal'''
-                for j in range(abn_idx[-1]+1, point_label.shape[1]-1):
+                    else: break
+            log.debug(f"gkm {b} {abn_snippet[b]=}")
+            
+            # Process most right boundary (respect sequence length)
+            if abn_idx[-1] < (valid_len-1):
+                for j in range(abn_idx[-1]+1, valid_len):
                     abn_thresh = self.abn_ratio * score[b, abn_idx[-1]]
                     if score[b, j] >= abn_thresh:
                         abn_snippet[b, j] = 1
-                    else:
-                        break
-                
-            # between
+                    else: break
+            log.debug(f"gkm {b} {abn_snippet[b]=}")    
+            
+            # Process between abnormal points
             for i in range(len(abn_idx)-1):
                 if abn_idx[i+1] - abn_idx[i] <= 1:
                     continue
-                '''pseudo abnormal'''
+                # Forward pass
                 for j in range(abn_idx[i]+1, abn_idx[i+1]):
                     abn_thresh = self.abn_ratio * score[b, abn_idx[i]]
                     if score[b, j] >= abn_thresh:
                         abn_snippet[b, j] = 1
-                    else:
-                        break
+                    else: break
+                # Backward pass
                 for j in range(abn_idx[i+1]-1, abn_idx[i], -1):
                     abn_thresh = self.abn_ratio * score[b, abn_idx[i+1]]
                     if score[b, j] >= abn_thresh:
                         abn_snippet[b, j] = 1
-                    else:
-                        break
+                    else: break
+            log.debug(f"gkm {b} {abn_snippet[b]=}")            
         return abn_snippet
 
-    def temporal_gaussian_splatting(self, point_label, distribution='normal', params=None):
-        """
-        Calculate weights splatted by different gaussian kernels.
-        Args:
-        - point_label: Input point labels
-        - distribution: Distribution type, options are 'normal', 'cauchy', 'laplace', 'exponential', 'lognormal'
-        - params: Distribution parameters, a dictionary
-        """
+    def temporal_gaussian_splatting(self, point_label, distribution='normal', params=None, seqlen=None):
         point_label = point_label.clone().detach().cpu()
-
+        bs, max_len = point_label.shape
         distribution_weight = torch.zeros_like(point_label)
-        #log.error(f"{distribution_weight.shape=}")
-        N = distribution_weight.shape[1]
-
-        for b in range(point_label.shape[0]):
+        
+        for b in range(bs):
+            N = max_len
+            if seqlen is not None:
+                N = min(seqlen[b].item(), max_len)
+                if N == 0: continue
+                if N != max_len: log.error(f"tgs {b} {N=} != {max_len=}")
+                
+            #point_label = point_label[b, :N]
             abn_idx = torch.nonzero(point_label[b]).squeeze(1)
-            #log.error(f"{b=} {abn_idx=} ")
-            if len(abn_idx) == 0: continue
-
+            if len(abn_idx.shape) == 0 and abn_idx.numel() > 0:  # Handle single index case
+                abn_idx = abn_idx.unsqueeze(0)
+            if abn_idx.numel() == 0: continue
+            log.debug(f"tgs {b} {abn_idx=} {N=}")
+            
             temp_weight = torch.zeros([len(abn_idx), N])
-
             for i, point in enumerate(abn_idx):
+                # Normalize to [-1, 1] range within valid sequence
                 i_arr = torch.arange(N, dtype=torch.float32)
-                h_i = 2 * (i_arr - 1) / (N - 1) - 1
-                h_p = 2 * (point - 1) / (N - 1) - 1
+                if N > 1:
+                    h_i = 2 * (i_arr - 1) / (N - 1) - 1
+                    h_p = 2 * (point - 1) / (N - 1) - 1
+                else:
+                    h_i = h_p = torch.zeros(1)
 
+                # Calculate weights based on distribution
                 if distribution == 'normal':
                     weight = torch.exp(-(h_i - h_p) ** 2 / (2 * params['sigma']**2)) / (params['sigma'] * (2 * torch.pi)**0.5)
                 elif distribution == 'cauchy':
@@ -1025,60 +1029,90 @@ class Glance(nn.Module):
                 elif distribution == 'laplace':
                     weight = 0.5 * torch.exp(-torch.abs(h_i - h_p) / params['b']) / params['b']
                 else:
-                    raise ValueError("Unsupported distribution type")
+                    raise ValueError(f"Unsupported distribution: {distribution}")
 
-                weight = (weight - torch.min(weight)) / (torch.max(weight) - torch.min(weight))
+                # Normalize weights to [0, 1]
+                if torch.min(weight) != torch.max(weight):
+                    weight = (weight - torch.min(weight)) / (torch.max(weight) - torch.min(weight))
+                else:
+                    weight = torch.ones_like(weight)
+                    
                 temp_weight[i, :] = weight
 
             temp_weight = torch.max(temp_weight, dim=0)[0]
-            temp_weight = (temp_weight - torch.min(temp_weight)) / (torch.max(temp_weight) - torch.min(temp_weight))
-            distribution_weight[b, :] = temp_weight
+            # Normalize 
+            if torch.min(temp_weight) != torch.max(temp_weight):
+                temp_weight = (temp_weight - torch.min(temp_weight)) / (torch.max(temp_weight) - torch.min(temp_weight))
+            # Assign weights to valid sequence positions only
+            distribution_weight[b, :N] = temp_weight
 
         return distribution_weight
 
     def forward(self, ndata, ldata):
-        labels = ldata['label'] ## bs
-        seqlen = ldata['seqlen'] ## bs
-        point_label = ldata['point_label'] ## bs, seqlen
+        """Unified forward method handling both interpolated and padded data"""
+        labels = ldata['label']
+        seqlen = ldata['seqlen']
+        point_label = ldata['point_label']
         step = ldata["step"]
-        #log.error(f"{seqlen.shape=} {point_label.shape=}")
+        idxs_seg = ldata["idxs_seg"]
+        #log.debug(f"\n{idxs_seg=}")
         
-        
-        scores = self.sig( ndata['scores'] ) 
-        #log.error(f"{scores.shape=} ")
-        
-        #loss = torch.tensor(0., requires_grad=True, device=self.pfu.dvc)
-        
+        scores = self.sig(ndata['scores'])
         scores = self.pfu.uncrop(scores, 'mean')
-        abn_scores, nor_scores = self.pfu.unbag(scores, labels)
-        #log.error(f"{abn_scores.shape=} ")
+
+        abn_scores, _ = self.pfu.unbag(scores, labels) ## bag,t
+        abn_pnt_lbl, _ = self.pfu.unbag(point_label, labels) ## bag,t
         
-        abn_pnt_lbl,_ = self.pfu.unbag(point_label, labels) ## bs, seqlen
-        #log.error(f"{abn_pnt_lbl.shape=} ")
+        abn_seqlen = None
+        if seqlen is not None:
+            abn_seqlen, _ = self.pfu.unbag(seqlen, labels) ## bag
         
+        needs_padding = False
+        if seqlen is not None and torch.min(seqlen) < scores.shape[-1]:
+            needs_padding = True
+            log.debug(f"{needs_padding=}")
         
-        ## Guassian Mining
-        abn_kernel = self.gaussian_kernel_mining(abn_scores.detach().cpu(), abn_pnt_lbl)
-        #log.error(f"{abn_kernel.shape=} ")
+        # Gaussian Mining
+        abn_kernel = self.gaussian_kernel_mining(
+            abn_scores.detach().cpu(), 
+            abn_pnt_lbl,
+            abn_seqlen if needs_padding else None
+        )
         
-        ## Temporal Gaussian Splatting
-        #log.error(step)
+        # Temporal Gaussian Splatting
         if step < self.min_mining_step:
-            rendered_score = self.temporal_gaussian_splatting(abn_pnt_lbl, 'normal', params={'sigma':self.sigma}) #.item()
+            rendered_score = self.temporal_gaussian_splatting(
+                abn_pnt_lbl, 
+                'normal', 
+                params={'sigma': self.sigma},
+                seqlen=abn_seqlen if needs_padding else None
+            )
         else:
-            rendered_score = self.temporal_gaussian_splatting(abn_kernel, 'normal', params={'sigma':self.sigma}) #.item()
+            rendered_score = self.temporal_gaussian_splatting(
+                abn_kernel, 
+                'normal', 
+                params={'sigma': self.sigma},
+                seqlen=abn_seqlen if needs_padding else None
+            )
         rendered_score = rendered_score.to(self.pfu.dvc)
-        #Log.error(f"{rendered_score.shape=} ")
+
+        per_element_loss = self.bce(abn_scores, rendered_score)
         
-        #log.error(abn_scores)
-        #log.error(rendered_score)
-        loss = self.crit(abn_scores, rendered_score)
-        #log.error(f"{loss} {loss.shape=}")
-        
-        loss = loss.mean()
-        #log.error(f"{loss} {loss.shape=}")
-        
+        if needs_padding:
+            mask = torch.zeros_like(abn_scores, dtype=torch.bool)
+            for i, length in enumerate(abn_seqlen):
+                mask[i, :length] = True
+            log.debug(f"{abn_seqlen=}  {mask=}")    
+            # Apply mask and calculate mean over valid elements only
+            masked_loss = per_element_loss * mask
+            log.debug(f"{per_element_loss=}  {masked_loss=}")
+            valid_count = torch.sum(mask, dim=1)
+            batch_loss = torch.sum(masked_loss, dim=1) / torch.clamp(valid_count, min=1.0)
+            loss = torch.mean(batch_loss)
+        else:
+            loss = torch.mean(per_element_loss)
         
         return {
             'glance': loss
         }
+        

@@ -4,6 +4,7 @@ log/*
 data/*
 !data/
 !data/gt
+!data/HIVAU-70k
 
 !.gitkeep
 

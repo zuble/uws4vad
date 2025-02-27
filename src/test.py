@@ -217,13 +217,13 @@ class Watcher:
         ## no overwrite when theres is a list of fns to iter
         ## otherwise its loops trough a label or user input
         ## anomaly score player
-        if 'asp' in cfg_wtc.frmt: self.player = ASPlayer(cfg_wtc, vis, len(cfg_wtc.fns) > 1).play
+        if 'asp' in cfg_wtc.frmt: self.player = ASPlayer(cfg_wtc, vis, len(cfg_wtc.fns) < 1).play
         else: self.player = lambda *args, **kwargs: None
         log.info(f"Watcher.asp {self.player}")
         
         ## gtfl(grount-truth frame-level) ( /attws) viewer
         if any(x in cfg_wtc.frmt for x in ['gtfl', 'attws']):
-            self.plot = ASPlotter(cfg_wtc.frtend, vis, len(cfg_wtc.fns) > 1 ).fx #'asp' in cfg_wtc.frmt
+            self.plot = ASPlotter(cfg_wtc.frtend, vis, len(cfg_wtc.fns) < 1 ).fx #'asp' in cfg_wtc.frmt
         else: self.plot = lambda *args, **kwargs: None
         log.info(f"Watcher.plot {self.plot}")
         
@@ -323,20 +323,24 @@ class ASPlotter:
         self.vis = vis
         self.overwrite = overwrite
         self.cmap = 'viridis'
-        # Updated color scheme for better visibility on white background
         self.colors = [
             '#1f77b4',  # blue
+            '#ff7f0e',  # orange  
             '#2ca02c',  # green
-            '#ff7f0e',  # orange
+            '#d62728',  # red
             '#9467bd',  # purple
+            '#8c564b',  # brown
+            '#e377c2',  # pink
+            '#7f7f7f',  # gray
+            '#bcbd22',  # olive
+            '#17becf',  # cyan
         ]
-        self.gt_color = 'rgba(200, 200, 200, 0.3)'  ## Light gray with transparency for GT area
-        self.gt_line_color = 'rgba(100, 100, 100, 0.8)'  ## Darker gray for GT border
+        self.gt_color = 'rgba(200, 200, 200, 0.3)'  # Light gray with transparency for GT area
+        self.gt_line_color = 'rgba(100, 100, 100, 0.8)'  # Darker gray for GT border
 
     def _short_name(self, path):
         """Extract meaningful short name from checkpoint path"""
         return path.split('/')[-1].split('.')[0]
-        #return int(osp.basename(path).split("--")[0])
 
     def plotly(self, fn, gt, data):
         """Plotly version supporting multiple FL curves"""
@@ -356,7 +360,9 @@ class ASPlotter:
                 zeroline=False,
                 showline=True,
                 linewidth=1,
-                linecolor='black'
+                linecolor='black',
+                # Add range slider for exploring long sequences
+                rangeslider=dict(visible=True, thickness=0.05),
             ),
             yaxis=dict(
                 showgrid=True,
@@ -380,21 +386,27 @@ class ASPlotter:
                 fillcolor=self.gt_color,
                 line=dict(color=self.gt_line_color, width=1),
                 name='GT',
-                showlegend=True
+                showlegend=True,
+                hoverinfo='x+y',
+                hovertemplate='Frame: %{x}<br>GT: %{y:.3f}<extra></extra>'
             )
         )
-        ## Add score curves with improved styling
+        
+        ## Add score curves
         for idx, d in enumerate(data):
+            model_name = self._short_name(d["ckpt"])
             fig.add_trace(
                 go.Scatter(
                     x=list(range(len(d['fl']))),
                     y=d['fl'],
                     mode='lines',
-                    name=f'Score {self._short_name(d["ckpt"])}',
+                    name=f'Score {model_name}',
                     line=dict(
                         color=self.colors[idx % len(self.colors)],
                         width=2
-                    )
+                    ),
+                    hoverinfo='x+y',
+                    hovertemplate=f'Frame: %{{x}}<br>{model_name}: %{{y:.3f}}<extra></extra>'
                 )
             )
 
@@ -403,7 +415,6 @@ class ASPlotter:
             self.vis.close(title)
         else: title = f"GT/FL {fn}"
 
-        # Enhanced layout
         fig.update_layout(
             height=600,
             #width=800,
@@ -418,29 +429,42 @@ class ASPlotter:
             yaxis_title="Anomaly Score",
             font=dict(size=14),
             legend=dict(
-                #anchor="top",
-                #=0.99,
-                #anchor="right",
-                #=0.99,
                 bgcolor='rgba(255,255,255,0.8)',
                 bordercolor='black',
                 borderwidth=1
             ),
-            margin=dict(l=80, r=50, t=100, b=80)
+            margin=dict(l=80, r=50, t=100, b=80),
+            # Add controls for the range slider
+            updatemenus=[
+                dict(
+                    type="buttons",
+                    direction="right",
+                    buttons=[
+                        dict(
+                            args=[{"xaxis.rangeslider.visible": False}],
+                            label="Hide Slider",
+                            method="relayout"
+                        ),
+                        dict(
+                            args=[{"xaxis.rangeslider.visible": True}],
+                            label="Show Slider",
+                            method="relayout"
+                        ),
+                    ],
+                    pad={"r": 10, "t": 10},
+                    showactive=True,
+                    x=0.11,
+                    xanchor="left",
+                    y=1.15,
+                    yanchor="top"
+                ),
+            ],
+            hoverlabel=dict(
+                bgcolor="white",
+                font_size=12
+            )
         )
 
-        # Optional: Add annotations/arrows for specific points
-        # Example of adding an annotation:
-        # fig.add_annotation(
-        #     x=100,  # frame number
-        #     y=0.8,  # score value
-        #     text="Peak detection",
-        #     showarrow=True,
-        #     arrowhead=2,
-        #     arrowcolor="black",
-        #     arrowwidth=2,
-        # )
-        #fig.show()
         self.vis.potly(fig)
         
         '''
