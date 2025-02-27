@@ -1,0 +1,23 @@
+defaults:
+  - _dflt
+  - cls: ~ #conv
+
+id: tcacc
+wght_init: xavier0 
+
+main:
+  hid_dim: 128
+  out_dim: 300
+  n_heads: 1
+  win_size: 9
+  dropout: 0.1
+  gamma: ${dyn_per_ds:${data.id}, 0.6, 0.06} # initialization for DPE^
+  bias: ${dyn_per_ds:${data.id}, 0.2, 0.02} # initialization for DPE^
+  norm: ${dyn_per_ds:${data.id}, true, false} # whether adaptive fusion uses normalization
+
+  # CC settings
+  t_step: ${dyn_per_ds:${data.id}, 9, 3}  # the kernel size of causal convolution
+
+#cls:
+#  ks: 7
+#  dim_in: ${data.faud.dfeat}
