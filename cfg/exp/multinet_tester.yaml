@@ -41,14 +41,24 @@ dataload:
 vldt:
   test:
     savepkl: false #true
-    frompkl: true
+    frompkl: true #false
     per_what: vid #lbl
     full_anom_lbls: true
 
-    #watch:
-    #  fns: 
-    #    - v=cEOM18n8fhU__#1_label_G-0-0
-    #    - v=_BgJEXQkjNQ__#1_label_G-0-0
-    #    - v=8oTjTufJnXI__#1_label_G-0-0
-    #    - v=H5W58Loofks__#00-05-50_00-06-20_label_B6-0-0
-
+    watch:
+      frmt: 
+        #- asp
+        - gtfl
+      frtend: visdom
+      guividsel: false
+      #label:
+      #  - B6
+      fns: 
+        - v=cEOM18n8fhU__#1_label_G-0-0
+      #  - v=_BgJEXQkjNQ__#1_label_G-0-0
+      #  - v=8oTjTufJnXI__#1_label_G-0-0
+      #  - v=H5W58Loofks__#00-05-50_00-06-20_label_B6-0-0
+      asp:
+        fs: 1
+        cvputfx: float # overlay
+        th: 0.5  

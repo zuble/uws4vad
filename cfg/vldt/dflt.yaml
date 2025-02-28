@@ -108,7 +108,7 @@ test:
     ## enables a terminal diving menu into vldt_info dict
     ## if false cycles trough videos based on below var
     guividsel: false
-    ## 1 or multiples numbers from data.lbls.info
+    ## 1 or multiples numbers from data.lbls.id
     ## eg: UCF abuse and vandalism ['1','13']
     ## if None selected, a prompt enabling to dynamic select videos to watch
     label: []

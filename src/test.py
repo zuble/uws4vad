@@ -21,8 +21,9 @@ import matplotlib
 #matplotlib.use('TkAgg') # Qt5Agg
 import matplotlib.pyplot as plt
 
+from src.data import FeaturePathListFinder
 from src.model import ModelHandler, build_net
-from src.vldt import Validate, Metrics, Plotter, Tabler
+from src.vldt import Validate, Metrics, Plotter, Tabler 
 from src.utils import hh_mm_ss, get_log, Visualizer, init_seed
 log = get_log(__name__)
 
@@ -214,16 +215,20 @@ class Watcher:
         
         if not cfg_wtc.frmt: cfg_wtc.frmt = input(f"asp,gtfl,attws ? and/or comma separated").split(",")
         
-        ## no overwrite when theres is a list of fns to iter
-        ## otherwise its loops trough a label or user input
+        ## if label or fns to ier, dont overwrite and output all together
+        ## else (user input) do overwrite
+        overwrite = True 
+        if len(cfg_wtc.label) or len(cfg_wtc.fns):
+            overwrite = False 
+
         ## anomaly score player
-        if 'asp' in cfg_wtc.frmt: self.player = ASPlayer(cfg_wtc, vis, len(cfg_wtc.fns) < 1).play
+        if 'asp' in cfg_wtc.frmt: self.player = ASPlayer(cfg_wtc, vis, overwrite).play
         else: self.player = lambda *args, **kwargs: None
         log.info(f"Watcher.asp {self.player}")
         
         ## gtfl(grount-truth frame-level) ( /attws) viewer
         if any(x in cfg_wtc.frmt for x in ['gtfl', 'attws']):
-            self.plot = ASPlotter(cfg_wtc.frtend, vis, len(cfg_wtc.fns) < 1 ).fx #'asp' in cfg_wtc.frmt
+            self.plot = ASPlotter(cfg_wtc.frtend, vis, overwrite).fx #'asp' in cfg_wtc.frmt
         else: self.plot = lambda *args, **kwargs: None
         log.info(f"Watcher.plot {self.plot}")
         
@@ -264,17 +269,15 @@ class Watcher:
     
     def init_lst(self):
         if len(self.cfg_wtc.label):
-            
-            self.cfg_wtc.label = input(f"1 or + labels from: {self.cfg_dsinf.lbls} 'label1,labeln' ").split(",")
-            
-            fnlist = FeaturePathListFinder(self.cfg, 'test', 'rgb').get('watch', self.cfg_wtc.label)
-            log.info(f'Watching lst init in {self.cfg_wtc.frmt} formats for {self.cfg_wtc.label} w/ {len(fnlist)} vids')
-            for fn in fnlist: 
-                stop = self.process(fn.replace(" ",""))
-                if stop: log.warning(f"watch.init_lst just broke"); return
+            #self.cfg_wtc.label = input(f"1 or + labels from: {self.cfg_dsinf.lbls} 'label1,labeln' ").split(",")
+            for label in self.cfg_wtc.label:
+                fnlist = FeaturePathListFinder(self.cfg, 'test', 'rgb').get('watch', watch_list=[label])
+                log.info(f'Watching lst init in {self.cfg_wtc.frmt} formats for {label} w/ {len(fnlist)} vids')
+                for fn in fnlist: 
+                    stop = self.process(fn.replace(" ",""))
+                    if stop: log.warning(f"watch.init_lst just broke"); break
         
         elif len(self.cfg_wtc.fns):
-            
             for fn in self.cfg_wtc.fns:
                 stop = self.process(fn)
                 if stop: log.warning(f"watch.init_lst just broke"); return
@@ -324,14 +327,12 @@ class ASPlotter:
         self.overwrite = overwrite
         self.cmap = 'viridis'
         self.colors = [
-            '#1f77b4',  # blue
+            #'#1f77b4',  # blue
             '#ff7f0e',  # orange  
-            '#2ca02c',  # green
-            '#d62728',  # red
+            #'#2ca02c',  # green
+            #'#d62728',  # red
             '#9467bd',  # purple
             '#8c564b',  # brown
-            '#e377c2',  # pink
-            '#7f7f7f',  # gray
             '#bcbd22',  # olive
             '#17becf',  # cyan
         ]
@@ -361,8 +362,19 @@ class ASPlotter:
                 showline=True,
                 linewidth=1,
                 linecolor='black',
-                # Add range slider for exploring long sequences
-                rangeslider=dict(visible=True, thickness=0.05),
+                title=dict(
+                    text=fn,
+                    #font=dict(size=14),
+                    standoff=15  # Increase standoff to push rangeslider down
+                ),
+                rangeslider=dict(
+                    visible=True,
+                    thickness=0.03,  # Thin slider
+                    bgcolor='rgba(211, 211, 211, 0.5)',  # Light gray with transparency
+                    bordercolor='rgba(211, 211, 211, 0.8)',
+                    borderwidth=1,
+                    yaxis=dict(rangemode='fixed')
+                ),
             ),
             yaxis=dict(
                 showgrid=True,
@@ -416,7 +428,7 @@ class ASPlotter:
         else: title = f"GT/FL {fn}"
 
         fig.update_layout(
-            height=600,
+            height=700,
             #width=800,
             showlegend=True,
             title=dict(
@@ -425,7 +437,6 @@ class ASPlotter:
                 xanchor='center',
                 font=dict(size=20)
             ),
-            xaxis_title=f"{fn}",
             yaxis_title="Anomaly Score",
             font=dict(size=14),
             legend=dict(
@@ -433,8 +444,7 @@ class ASPlotter:
                 bordercolor='black',
                 borderwidth=1
             ),
-            margin=dict(l=80, r=50, t=100, b=80),
-            # Add controls for the range slider
+            margin=dict(l=80, r=50, t=100, b=120),
             updatemenus=[
                 dict(
                     type="buttons",
@@ -451,20 +461,23 @@ class ASPlotter:
                             method="relayout"
                         ),
                     ],
-                    pad={"r": 10, "t": 10},
+                    pad={"r": 10, "b": 10},
                     showactive=True,
                     x=0.11,
                     xanchor="left",
-                    y=1.15,
-                    yanchor="top"
+                    y=-0.17, # Position below the rangeslider
+                    yanchor="top"  # Anchor from top of button to y position
                 ),
             ],
             hoverlabel=dict(
                 bgcolor="white",
                 font_size=12
-            )
+            ),
         )
-
+        fig.update_xaxes(
+            automargin=True,  # Give more breathing room
+            ticklabeloverflow="hide past domain"  # Clean layout by hiding overflowing labels
+        )
         self.vis.potly(fig)
         
         '''
