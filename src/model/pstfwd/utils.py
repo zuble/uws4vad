@@ -409,6 +409,40 @@ class PstFwdUtils:
     
     ###########
     ## specific for Infer class in each net file
+    ## TODO: 
+    def fixed_smooth(self, logits, t_size):
+        ins_preds = torch.zeros(0).cuda()
+        assert t_size > 1
+        if len(logits) % t_size != 0:
+            delta = t_size - len(logits) % t_size
+            logits = F.pad(logits, (0,  delta), 'constant', 0)
+
+        seq_len = len(logits) // t_size
+        for i in range(seq_len):
+            seq = logits[i * t_size: (i + 1) * t_size]
+            avg = torch.mean(seq, dim=0)
+            avg = avg.repeat(t_size)
+            ins_preds = torch.cat((ins_preds, avg))
+
+        return ins_preds
+
+    def slide_smooth(self, logits, t_size, mode='zero'):
+        assert t_size > 1
+        ins_preds = torch.zeros(0).cuda()
+        padding = t_size - 1
+        if mode == 'zero':
+            logits = F.pad(logits, (0, padding), 'constant', 0)
+        elif mode == 'constant':
+            logits = F.pad(logits, (0, padding), 'constant', logits[-1])
+
+        seq_len = int(len(logits) - t_size) + 1
+        for i in range(seq_len):
+            seq = logits[i: i + t_size]
+            avg = torch.mean(seq, dim=0).unsqueeze(dim=0)
+            ins_preds = torch.cat((ins_preds, avg))
+
+        return ins_preds
+
     def out(self, scors):
         ## dev
         if scors.shape == (1, 1): return scors.reshape(1)

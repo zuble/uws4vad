@@ -394,77 +394,99 @@ class FeaturePathListFinder: ## dirt as it can gets ffff
 ##############
 ## XDV/UCF DS
 def get_testxdv_info(cfg):
-
-    with open(cfg.data.gt, 'r') as txt: data = txt.read()
-    gtlines = [line.split() for line in data.split('\n') if line]
-    with open(cfg.data.tframes, 'r') as txt: data = txt.read()
-    tflines = [line.split('@') for line in data.split('\n') if line]
+    with open(cfg.data.gt, 'r') as txt:
+        gtlines = [line.split() for line in txt.read().split('\n') if line.strip()]
+    
+    with open(cfg.data.tframes, 'r') as txt:
+        tflines = [line.split('@') for line in txt.read().split('\n') if line.strip()]
     
     total_anom_frame_count = 0
-    total_anom = 0
+    total_anom_instances = 0 
     
     ratios = {}
     for lbl in cfg.data.lbls.info[1:-2]:
         ratios[lbl]=[]
-    print(ratios)
+    log.error(ratios)
     
     lbl_mng = LBL(ds=cfg.data.id, cfg_lbls=cfg.data.lbls)
     
     for vidx in range(len(gtlines)):
-        #log.info(f"{gtlines[vidx]}")
-        
         vn = gtlines[vidx][0]
         
         label = lbl_mng.encod(vn)[0]
-        tframes = next(( int(item[1]) for item in tflines if str(item[0]) == vn), None)
+        log.error(label)
+        
+        tframes = next((int(item[1]) for item in tflines if item[0] == vn), 0)
+        
+        if tframes <= 0:
+            log.warning(f"Video {vn} has invalid tframes ({tframes}), skipping")
+            continue
+        
         pairs = list(zip(gtlines[vidx][1::2], gtlines[vidx][2::2]))
-        log.info(f"{vn}  {label}  {tframes}  {pairs}")
+        log.info(f"{vn} | Label: {label} | Frames: {tframes} | Anomaly segments: {pairs}")
         
         video_anom_frame_count = 0
-        total_anom += 1
-        for anomi,(start, end) in enumerate(pairs):
-            start_anom, end_anom = int(start), int(end)
-            wind_anom = end_anom - start_anom
-            total_anom_frame_count += wind_anom
-            video_anom_frame_count += wind_anom
-        log.info(f"{video_anom_frame_count} anom frames | {video_anom_frame_count / 24:.2f} secs \n") # | {int(gtlines[vidx][-1])} max anom frame
-
-        ratio_anom = video_anom_frame_count/tframes
-        log.info(f"{ratio_anom}")
+        for start, end in pairs:
+            start_anom = int(start)
+            end_anom = int(end)
+            anomaly_duration = end_anom - start_anom
+            total_anom_frame_count += anomaly_duration
+            video_anom_frame_count += anomaly_duration
         
-        ratios[label].append(ratio_anom)
+        # Count number of anomaly instances (pairs)
+        total_anom_instances += len(pairs)
         
-    #print(ratios)
-    # Prepare data for the box plot
-    labels = list(ratios.keys())
-    data = [ratios[lbl] for lbl in labels]
+        if video_anom_frame_count > 0:
+            ratio_anom = video_anom_frame_count / tframes
+            ratios[label].append(ratio_anom)
+            log.info(f"Anomaly ratio: {ratio_anom:.4f}")
+        else:
+            log.info(f"No anomalies detected in video {vn}")
+        
+        log.info(f"{video_anom_frame_count} anomaly frames | "
+                f"{video_anom_frame_count / 24:.2f} seconds\n")
     
-    # Plotting the box plot using matplotlib
+    # Filter out empty classes before plotting
+    plot_labels = ['Fight', 'Shoot', 'Riot', 'Abuse', 'Car Accident', 'Explosion'] #
+    tmp = [lbl for lbl in ratios if ratios[lbl]]
+    plot_data = [ratios[lbl] for lbl in tmp]
+    
+    if not plot_data:
+        log.error("No anomaly data available for plotting")
+        return
+    
     plt.figure(figsize=(10, 6))
-    plt.boxplot(data, labels=labels, patch_artist=True, boxprops=dict(facecolor="lightblue"))
-    plt.xticks(rotation=45)  # Rotate x-axis labels for better readability
+    plt.boxplot(plot_data, labels=plot_labels, patch_artist=True,
+                boxprops=dict(facecolor="lightblue"))
+    plt.xticks(rotation=45)
     plt.xlabel("Class")
     plt.ylabel("Abnormality Ratio")
     plt.title("Abnormality Ratio Distribution per Class")
+    plt.tight_layout()  # Improve layout spacing
     plt.grid(True)
     plt.show()
     
-    # Calculate mean and standard deviation for each class
+    # Calculate statistics with empty list check
     for lbl in ratios:
-        mean_ratio = np.mean(ratios[lbl])
-        std_ratio = np.std(ratios[lbl])
-        print(f"Class {lbl}: Mean = {mean_ratio:.4f}, Std = {std_ratio:.4f}")
-        
-    total_secs = total_anom_frame_count / 24
-    ## per video
-    #mean_secs = total_secs / len(gtlines)
-    #mean_frames = total_anom_frame_count / len(gtlines)
-    ## per anom
-    mean_secs = total_secs / total_anom
-    mean_frames = total_anom_frame_count / total_anom
+        if ratios[lbl]:
+            mean_ratio = np.mean(ratios[lbl])
+            std_ratio = np.std(ratios[lbl])
+            print(f"Class {lbl}: Mean = {mean_ratio:.4f}, Std = {std_ratio:.4f}")
+        else:
+            print(f"Class {lbl}: No data available")
     
-    log.info(f"TOTAL OF {total_anom_frame_count:.2f} frames  {total_secs:.2f} secs\n"
-            f"ANOM MEAN WINDOW: {mean_frames:.2f} frames  {mean_secs:.2f} secs per video\n")
+    if total_anom_instances > 0:
+        mean_frames = total_anom_frame_count / total_anom_instances
+        mean_secs = mean_frames / 24
+    else:
+        mean_frames = mean_secs = 0
+    
+    total_secs = total_anom_frame_count / 24
+    log.info(
+        f"TOTAL: {total_anom_frame_count} frames ({total_secs:.2f} secs)\n"
+        f"MEAN PER ANOMALY: {mean_frames:.2f} frames ({mean_secs:.2f} secs)\n"
+        f"PROCESSED {len(gtlines)} VIDEOS WITH {total_anom_instances} ANOMALY INSTANCES"
+    )
 
 def get_xdv_stats():
     folders = {"train":"/raid/DATASETS/anomaly/XD_Violence/training_copy", "test":"/raid/DATASETS/anomaly/XD_Violence/testing_copy"}

@@ -11,8 +11,8 @@ from hydra.utils import instantiate as instantiate
 from src.utils.logger import get_log
 log = get_log(__name__)
 
+## https://github.com/yujiangpu20/PEL4VAD
 
-## from pel4vad
 class DistanceAdj2(nn.Module):
     def __init__(self, sigma, bias):
         super().__init__()
