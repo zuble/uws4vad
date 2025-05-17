@@ -17,7 +17,7 @@ Results refer to the test subset which methods were evaluated, *o(verall)/a(noma
   <tr>
     <td>2018</td>
     <td>MIR <a href=""><img src="https://img.shields.io/badge/-rgba(0,0,0,0)?logo=pytorch" height="20"></a> <a href="#"> <img src="https://img.shields.io/badge/-rgba(0,0,0,0)?logo=arxiv&logoColor=red" height="20"></a> <img src="https://img.shields.io/badge/uws4vad--green?labelColor=purple" height="20"></td>
-    <td></td>
+    <td> <details> <summary></summary> <img src="./img/meth/0-2018-MIR.png"/> </details>  </td>
     <td><img src="https://img.shields.io/badge/Weak-FFA500" height="20"></td>
     <td>C3D<br>I3D</td>
     <td>0.7541,-,-<br>0.7792,-,-</td>
@@ -505,7 +505,7 @@ Results refer to the test subset which methods were evaluated, *o(verall)/a(noma
     <td>LAVAD <a href="https://github.com/lucazanella/lavad"><img src="https://img.shields.io/badge/-rgba(0,0,0,0)?logo=pytorch" height="20"></a> <a href="https://arxiv.org/abs/2404.01014"><img src="https://img.shields.io/badge/-rgba(0,0,0,0)?logo=arxiv&logoColor=red" height="20"></a></td>
     <td><img src="https://img.shields.io/badge/Explainable-green" height="20"></td>
     <td><img src="https://img.shields.io/badge/Train_Free-808080" height="20"></td>
-    <td> BLIP-2 ensemble + Llama-2-13b-chat + ImageBind multimodal encoders </td>
+    <td> BLIP-2 ensemble <br> Llama-2-13b-chat <br> ImageBind multimodal encoders </td>
     <td></td>
     <td></td>
   </tr>
