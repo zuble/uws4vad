@@ -6,6 +6,10 @@ data/*
 !data/gt
 !data/HIVAU-70k
 
+docs/img/meth/.a.bib
+docs/img/meth/.sort.py
+
+
 !.gitkeep
 
 # visdom output file 
