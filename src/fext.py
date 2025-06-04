@@ -28,7 +28,7 @@ class VisFeatExtract():
         
     def start(self):
         """
-        Extracts audio features and saves them to .npy files.
+        Extracts visual features and saves them to .npy files.
 
         This function handles different scenarios for specifying input paths:
         1. If cfg.ext_dir is a string (single path), it extracts features from all .mp4 files in that path.

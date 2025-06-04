@@ -6,7 +6,7 @@ from timm.data import resolve_data_config, create_transform
 from torchvision.transforms import Compose, Resize, TenCrop, FiveCrop, CenterCrop, ToTensor, Normalize, ToPILImage, Lambda
 from PIL import Image
 
-import os, os.path as osp, glob, time, random, hydra
+import os, os.path as osp, glob, time, random, hydra, tabulate
 from hydra.utils import instantiate as instantiate
 
 from src.fe.dlvid import get_vidloader
@@ -17,19 +17,40 @@ log = get_log(__name__)
 def get_vid_model(cfg):
     model_dir = cfg.path.fext.models_dir
     cfg_model = cfg.data.frgb
+
+    def print_timm(model_names):
+        n_cols=4
+        chunked = [model_names[i:i + n_cols] for i in range(0, len(model_names), n_cols)]
+        log.info(f"\n {tabulate(chunked, tablefmt='fancy_grid')}")
     
     if cfg_model.id == "timm":
         # https://github.com/huggingface/pytorch-image-models/discussions/2069
-        
         log.info("timm model")
-        model_names = timm.list_models(filter='*clip*', pretrained=True)
-        if cfg_model.vrs is None or cfg_model.vrs not in model_names: 
-            for m in model_names: log.info(f"{m}")
-            log.error(f"{cfg_model.vrs} not in the list")
-            new_vrs = input(f"pick another")
-            if new_vrs not in model_names: raise Exception
-        else: log.info(f"going with {cfg_model.vrs}")
-        
+
+        if cfg_model.vrs:
+            all_models = timm.list_models(pretrained=True)
+            if cfg_model.vrs in all_models:
+                model = timm.create_model(cfg_model.vrs, pretrained=True, num_classes=0) 
+            else:
+                filtered = timm.list_models(cfg_model.vrs, pretrained=True)
+                log.error(f"'{cfg_model.vrs}' invalid. Options:")
+                print_timm(filtered)
+                raise ValueError(f"Set cfg_model.vrs to valid model")
+        else:
+            print_timm(timm.list_models(pretrained=True))
+            raise ValueError("cfg_model.vrs required")
+
+        # if cfg_model.vrs: 
+        #     model_names = timm.list_models(filter=cfg_model.vrs, pretrained=True)
+        #     if len (model_names) == 1: pass
+        #     elif not model_names: error=f"Model '{cfg_model.vrs}' not found"; print_timm(timm.list_models(pretrained=True))
+        #     else: error=f"Fill '{cfg_model.vrs=}'"; print_timm(model_names)
+        #     raise ValueError(error)
+        # else: print_timm(timm.list_models(pretrained=True));raise ValueError(f"Fill '{cfg_model.vrs=}'")
+
+        ## TODO add cfg parameter to model & direct load from saved weights
+        # model = timm.create_model(f"{cfg_model.id}/{cfg_model.vrs}", checkpoint_path=)
+        torch.hub.set_dir(osp.join(cfg.path.data_dir,"fe/rgb_timm"))        
         model = timm.create_model(f"{cfg_model.id}/{cfg_model.vrs}", pretrained=True, num_classes=0)
         #print(dir(model))
         model.to(cfg.dvc)
@@ -89,6 +110,7 @@ def get_vid_model(cfg):
     
     ############
     ## PROFILING
+    # TODO: the same is done in the end of network creation (model/net/_builder.py)
     if cfg.dryfwd:
         out = model(frame)       
         log.warning(f"DRY RUN: {frame.shape} -> {out.shape} {out.dtype}")

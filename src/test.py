@@ -166,6 +166,7 @@ def tester(cfg, vis):
 
     del VLDT ## free DL
 
+    ############
     ## Reporting
     if cfg_vldt.per_what == 'lbl' and pckg.rslts:
         pltr = Plotter(vis)

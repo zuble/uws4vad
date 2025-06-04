@@ -30,7 +30,7 @@ profile: false
 ## iter: feed (1,3,_,_)
 fwd_feed: full #iter
 ## folder path with .mp4's
-## if ~ , all folders in data.vroot are extracted
+## if ~ , all folders in data.vroot are extracted (more info @ fext.py/VisFeatExtract)
 ext_dir: ~ 
 
 

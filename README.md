@@ -38,9 +38,11 @@ Refer to [wiki/config](https://github.com/zuble/uws4vad/wiki/Config) for a broad
 - core
     - [ ] add mean Average Precision (mAP) @ Intersection over Union (IoU) from VAD-CLIP
     - [ ] add HIVAU-70K raw_annotations (supervised FL)
+    - [ ] add ECVA/AnomEval
     - [ ] add Language to the pipeline
         - [ ] PEL4VAD
         - [ ] Holmes-VAU
+        - [ ] txt enc @ timm
 
 - docs
     -  [ ] methods/ds tables
@@ -62,7 +64,7 @@ Refer to [wiki/methods](https://github.com/zuble/uws4vad/wiki/Meth) for a comple
 --- 
 ### Citation
 
-Give a shout if used:
+Give a shout if used <3 
 
 ```bibtex
 @misc{uws4vad,
