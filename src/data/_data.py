@@ -235,7 +235,7 @@ class FeaturePathListFinder: ## dirt as it can gets ffff
         
         cfg_lbls = cfg.data.lbls
         crops2use = cfg.dataproc.crops2use.get(mode)
-        cropasvideo = cfg.dataproc.cropasvideo.get(mode)
+        #cropasvideo = cfg.dataproc.cropasvideo.get(mode)
         cfg_feat = cfg.data.get(f"f{modality}")
         
         mode = mode.upper()
@@ -263,15 +263,16 @@ class FeaturePathListFinder: ## dirt as it can gets ffff
 
         if modality == 'RGB' and mode == 'TRAIN':
 
-            if cropasvideo: #cfg.dataproc.cropasvideo.train:
-                
-                if crops2use == cfg_feat.ncrops: ## get full list w/o ".npy"
-                    flist = [f[:-4] for f in flist] 
-                else: ## get only rigth crop idx
-                    flist = list(OrderedDict.fromkeys([osp.splitext(f)[0][:-3] for f in flist]))
-                    flist = [f"{f}__{i}" for f in flist for i in range(cfg.dataproc.crops2use.train)]
+            ## REMOVED
+            #if cropasvideo: #cfg.dataproc.cropasvideo.train:
+            #    
+            #    if crops2use == cfg_feat.ncrops: ## get full list w/o ".npy"
+            #        flist = [f[:-4] for f in flist] 
+            #    else: ## get only rigth crop idx
+            #        flist = list(OrderedDict.fromkeys([osp.splitext(f)[0][:-3] for f in flist]))
+            #        flist = [f"{f}__{i}" for f in flist for i in range(cfg.dataproc.crops2use.train)]
             
-            elif crops2use: ## >= 1
+            if crops2use: ## >= 1
                 ##feature fn from features crop folder without duplicates (__0, __1...) 
                 flist = list(OrderedDict.fromkeys([osp.splitext(f)[0][:-3] for f in flist]))
             else: ## goes without .npy
@@ -293,10 +294,11 @@ class FeaturePathListFinder: ## dirt as it can gets ffff
             log.debug(f"AUD FLIST {len(flist)}  {flist[0]}")
             ## /mnt/t77/FEAT/XDV/AUD/VGGISH/TRAIN/A.Beautiful.Mind.2001__#00-01-45_00-02-50_label_A
             
-            if cropasvideo:#cfg.dataproc.get("cropasvideo"):
-                log.warning("not implemented")
-                pass
-            elif len(flist) != len(auxrgbflist) :
+            ## REMOVED
+            #if cropasvideo:#cfg.dataproc.get("cropasvideo"):
+            #    log.warning("not implemented")
+            #    pass
+            if len(flist) != len(auxrgbflist) :
                 if not auxrgbflist: raise Exception
                 log.debug(f" auxerrgbflist {len(auxrgbflist)}")
                 ## /mnt/t77/FEAT/XDV/RGB/CLIPTSA/TRAIN/Bad.Boys.1995__#00-26-51_00-27-53_label_B2-0-0

@@ -33,6 +33,9 @@ def get_trainloader(cfg, vis=None):
     
     get_rng(cfg.seed)
     
+    ## THIS CAN BE SIMPLYFIED
+    ## rather than find on the fly, use list files ? 
+    ## we can still have some check logic (number of files match, resolve in edge cases, etc)
     rgbfplf = FeaturePathListFinder(cfg, 'train', 'rgb')
     argbfl, nrgbfl = rgbfplf.get('ANOM', cfg.dataproc.culum), rgbfplf.get('NORM')
     len_abn = len(argbfl); len_nor = len(nrgbfl)
@@ -150,7 +153,6 @@ class TrainDS(Dataset):
         self.trnsfrm = FeatSegm(cfg_dproc.seg)
         log.debug(f'TRAIN TRNSFRM: {self.trnsfrm=}')
         
-        self.cropasvideo = cfg_dproc.cropasvideo.train
         self.frgb_ncrops = cfg_dproc.crops2use.train
         self.seg_len = cfg_dproc.seg.len
         self.seg_sel = cfg_dproc.seg.sel
@@ -163,15 +165,14 @@ class TrainDS(Dataset):
         if audflst: self.peakboo_aud(cfg_ds.faud.dfeat)
         
         log.info(f'TRAIN ({self.frgb_ncrops} ncrops, {self.seg_len} maxseqlen/nsegments, {self.dfeat} feats')    
-        log.info(f'TRAIN cropasvideo is {self.cropasvideo}')
-
+        
         self.get_feat = {
             True: self.get_feat_wcrop,
             False: self.get_feat_wocrop
-        }.get(self.frgb_ncrops and not self.cropasvideo)
+        }.get(self.frgb_ncrops)
         log.info(f'TRAIN get_feat {self.get_feat}')
         
-        
+        ## here glance can be seen as metric to pick anomaly-present segments furhter down 
         self.glance = pd.read_csv(cfg_ds.glance)
         
         if cfg_dload.in2mem: 
@@ -182,8 +183,7 @@ class TrainDS(Dataset):
             
     def peakboo_aud(self, dfeat):
         ## pekaboo AUD features
-        if not self.cropasvideo:
-            assert len(self.rgbflst) == len(self.audflst)
+        assert len(self.rgbflst) == len(self.audflst)
         peakboo2 = f"{self.audflst[-1]}.npy"
         tojo2 = np.load(peakboo2)    
         assert dfeat == tojo2.shape[-1]
@@ -351,8 +351,10 @@ class TrainDS(Dataset):
         log.debug(f'vid[{idx}][RGB] PST-SEG {frgb_seg.shape}')
         
         if self.audflst:
-            if self.cropasvideo: aud_idx = int(idx)//self.frgb_ncrops
-            else: aud_idx = int(idx)
+            ## REMOVED
+            #if self.cropasvideo: aud_idx = int(idx)//self.frgb_ncrops
+            #else: 
+            aud_idx = int(idx)
             
             aud_fp = f"{self.audflst[aud_idx]}.npy"
             faud = np.load( aud_fp ).astype(np.float32)
