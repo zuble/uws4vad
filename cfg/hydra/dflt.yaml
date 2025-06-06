@@ -30,6 +30,17 @@ job_logging:
 #    root:
 #    handlers: [console]
 
+  # TODO: refactor loggers:
+  # - remove the util/loggers.py logic 
+  # - rewrite the debug/...yml to incorporate similiar logic as below
+  loggers:
+    #__main__:
+    #  level: INFO
+    visdom:
+      level: WARN
+    websocket:
+      level: WARN
+
 ## https://github.com/facebookresearch/hydra/issues/1903
 ## https://github.com/facebookresearch/hydra/discussions/2804
 ## https://github.com/facebookresearch/hydra/issues/2735

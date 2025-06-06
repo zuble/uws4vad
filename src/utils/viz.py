@@ -36,7 +36,7 @@ class Visualizer:
         self.index = {}
         self.mtrc_win = {}
         
-        log.info(f"vis envs: \n\n{self.vis.get_env_list()}\n")
+        log.debug(f"vis envs: \n\n{self.vis.get_env_list()}\n")
         log.info(f"vis created for {self.env_name = }")
         log.debug(f'vis connection check {self.vis.check_connection()}')
         

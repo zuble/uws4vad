@@ -123,9 +123,9 @@ def debug_cfg_data(cfg):
             dbg_train_unqs = list(OrderedDict.fromkeys([f[:-3] for f in dbg_train_fns]))
             
             ## check miss file
-            notin = [ f for f in train_fns if f not in dbg_train_unqs]
-            if len(notin):
-                log.error(f"[{ID_DL}] {len(notin)} .npy files not in {ID_RGB} train")
+            not_in = [ f for f in train_fns if f not in dbg_train_unqs]
+            if len(not_in):
+                log.error(f"[{ID_DL}] {len(not_in)} .npy files not in {ID_RGB} train")
             
             ## check miss crop
             for idx, train_fn in enumerate(train_fns):
@@ -153,10 +153,10 @@ def debug_cfg_data(cfg):
         #assert len(dbg_train_fns) == (cfg.data.train.normal + cfg.data.train.abnormal)
         if len(dbg_train_fns) != len(train_fns):
             
-            notin = [ f for f in train_fns if f not in dbg_train_fns]
-            if len(notin): 
-                log.warning(f"[{ID_DL}] {len(notin)} missing file in {ID_RGB}train")
-                log.warning(notin)
+            not_in = [ f for f in train_fns if f not in dbg_train_fns]
+            if len(not_in): 
+                log.warning(f"[{ID_DL}] {len(not_in)} missing file in {ID_RGB}train")
+                log.warning(not_in)
         else: 
             log.debug(f"[{ID_DL}] {ID_RGB} match number of files in {cfg.data.froot}/RGB/{MODE}/{ID_RGB}")
         
@@ -249,14 +249,7 @@ class FeaturePathListFinder: ## dirt as it can gets ffff
         log.debug(f" {mode} {modality} feat flist pre-filt {len(flist)}")
         
         #################        
-        ## if cropasvideo
-        ##      if train, 
-        ##          if cfg_data.ds.frgb.ncrops == to the amount of crops in the flist 
-        ##              all features will treatead as a video so leave all fn in list
-        ##          if != load only correspondant crop based cfg_data.trnsfrm.train.crops2use , 
-        ##              eg if cfg_data.ds.frgb.ncrops == 1 and the flist contains 5 crops for each vid, form flist with flist excluding the __1.npy __2.npy __3.npy __4.npy crops for each video 
-        ##      if test, take unique basename from crop fns -> it'll use only center crop __0.npy
-        ## elif cfg_data,DATA.ncrops is set means that features files have crops even if only 1 is used
+        ## if cfg_data.DATA.ncrops is set means that features files have crops even if only 1 is used
         ##      if train, take unique basename from crop fns -> feed each crop feat -> mean scores over crop dimension
         ##      if test, take unique basename from crop fns -> it'll use only center crop __0.npy
         ## else means that all files are a feature of video full view

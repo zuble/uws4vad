@@ -22,19 +22,7 @@ seg:
 crops2use: 
   train: ${dyn_crops2use:${data.frgb.ncrops}, -1}
   test: ${dyn_crops2use:${data.frgb.ncrops}, -1}
-  
-## REMOVED
-## refer to model/pstfwd/PstFwdUtils
-#cropasvideo: ## each crop with be treated as a video it self
-  ## true -> each crop is assigned its VL label, input as bs,t,f
-  ## false -> all video's crops form the input (if any) as bs*nc,t,f
-  #train: False
-  ## false -> Network's Infer is responsible for dealing with it
-  ## true -> Validate/fwd avg output of Infer
-  #test: True 
-#rgbl2n: 0 ## if 1 l2norm apllied right after load
-#audl2n: 0
-#l2n: 0
+
 
 ## TODO: can be made open-world (ow) and we can further standard some dflts following OVVAD, etc
 ## Curriculum-ish Learning for XDV

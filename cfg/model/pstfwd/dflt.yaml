@@ -10,9 +10,6 @@ _cfg:
   ncrops: 
     - ${dataproc.crops2use.train}
     - ${dataproc.crops2use.test}
-  cropasvideo: 
-    - ${dataproc.cropasvideo.train}
-    - ${dataproc.cropasvideo.test}
   seg_sel: ${dataproc.seg.sel}
   seg_len: ${dataproc.seg.len}
 
