@@ -33,29 +33,16 @@ Refer to [wiki/config](https://github.com/zuble/uws4vad/wiki/Config) for a broad
 
 
 ---
-### ToDo
+### Development/Contributions
 
-- core
-    - [ ] add mean Average Precision (mAP) @ Intersection over Union (IoU) from VAD-CLIP
-    - [ ] add HIVAU-70K raw_annotations (supervised FL)
-    - [ ] add ECVA/AnomEval
-    - [ ] add Language to the pipeline
-        - [ ] PEL4VAD
-        - [ ] Holmes-VAU
-        - [ ] txt enc @ timm
+Refer to [wiki/Dev](https://github.com/zuble/uws4vad/wiki/Dev) for instructions on how to contribute or help with development, as well as an updated to-do list.
 
-- docs
-    -  [ ] methods/ds tables
-
-- misc
-    - [ ] [run GH actiions locally w/ act](https://github.com/nektos/act)
-    - [ ] support UV package manager (take refer from [nanoVLM](https://github.com/huggingface/nanoVLM))
 
 
 ---
 ### Acknowledgments
 
-Gratzie to author's works that are either part of this project, served as inspiration or contributed to VAD. 
+Gratzie to author's works that are either part of this project, served as inspiration or contributed to VAD/VAU. 
 
 Refer to [wiki/methods](https://github.com/zuble/uws4vad/wiki/Meth) for a complete and updated list. 
 
