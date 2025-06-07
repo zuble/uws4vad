@@ -155,8 +155,8 @@ def debug_cfg_data(cfg):
             
             not_in = [ f for f in train_fns if f not in dbg_train_fns]
             if len(not_in): 
-                log.warning(f"[{ID_DL}] {len(not_in)} missing file in {ID_RGB}train")
-                log.warning(not_in)
+                log.warning(f"[{ID_DL}] {len(not_in)} missing file in {ID_RGB} train : {not_in}")
+            
         else: 
             log.debug(f"[{ID_DL}] {ID_RGB} match number of files in {cfg.data.froot}/RGB/{MODE}/{ID_RGB}")
         

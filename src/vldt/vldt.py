@@ -1,13 +1,12 @@
 import torch
-import os, os.path as osp, numpy as np, time, cv2, gc, copy
+import os, os.path as osp, numpy as np, time, cv2, gc, copy, logging
 from sklearn.metrics import average_precision_score
 
 from src.vldt.metric import Metrics, Plotter
 from src.data import get_testloader, run_dltest
-from src.utils import get_log, hh_mm_ss
+from src.utils import hh_mm_ss
 
-log = get_log(__name__)
-
+log = logging.getLogger(__name__)
 
 ################
 ## dict handlers
@@ -67,6 +66,7 @@ class VldtInfo:
                             self.anom: {'GT': [], 'FL': []}, ## auc / ap
                             self.all: {'GT': [], 'FL': []} }  ## auc / ap on fstep16, after upgrade 2330384
             self.updt = self._updt_glob
+            
         elif per_what == 'lbl':
             ## store previous plus specific labels of ds
             ## B1.FIGHT | B2.SHOOT | B4.RIOT | B5.ABUSE | B6.CARACC | G.EXPLOS | 111.ANOM | ALL
@@ -74,6 +74,7 @@ class VldtInfo:
             ## 000.NORM | B1.FIGHT | B2.SHOOT | B4.RIOT | B5.ABUSE | B6.CARACC | G.EXPLOS | 111.ANOM | ALL
             self.DATA = {lbl: {'GT': [], 'FL': []} for lbl in cfg_ds.lbls.info}
             self.updt = self._updt_lbl
+        
         elif per_what == 'vid':
             ## store previous but keep a record for each video
             ## 000.NORM | B1.FIGHT | B2.SHOOT | B4.RIOT | B5.ABUSE | B6.CARACC | G.EXPLOS | 111.ANOM
@@ -157,8 +158,7 @@ class Validate:
         self.DL = get_testloader(cfg) 
         #log.info(f'Validate w/ DL{self.DL}\n')
         
-        self.cropasvideo = cfg.dataproc.cropasvideo.test
-        self.ncrops = cfg.dataproc.crops2use.test
+        self.ncrops = cfg.dataproc.crops2use.test ## not used since testdl use only center crop
         
         ## selects the net forward, as attnomil needs splitting to get SegmLev scores
         ## exprmnt impact of such in different archs
@@ -245,15 +245,9 @@ class Validate:
     def _fwd_glob(self, net, inferator, feat):
         ndata = net(feat)
         sls = inferator(ndata)
-        if self.cropasvideo: ## nc, t  (og)
-            assert sls.ndim == 2
-            if self.ncrops:
-                assert sls.shape[0] == self.ncrops
-            sls = sls.mean(0)
-        else: ## 1, t
-            sls = sls.view(-1)
+        sls = sls.view(-1) ## (1,t) assure that sls.shape is (t)
         return sls
-            
+    
     @torch.no_grad()    
     def start(self, net, inferator):
         net.eval()
@@ -311,7 +305,7 @@ class Validate:
                 else:
                     tmp_fl = tmp_fl[:len(tmp_gt)]
                     log.debug(f'[{i}]   new_fl: {len(tmp_gt)}')
-
+                    
             assert len(tmp_fl) == len(tmp_gt), f'{self.cfg_frgb.fstep} cfg_frgb.fstep * {sls.shape[0]} len  != {len(tmp_gt)} orign video frames'
             
             ## dirt but dont have time 

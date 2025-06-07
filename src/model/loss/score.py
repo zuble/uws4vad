@@ -927,7 +927,7 @@ class Glance(nn.Module):
     def __init__(self, _cfg, pfu: PstFwdUtils): 
         super().__init__()
         self.pfu = pfu
-        assert self.pfu.bat_div == self.pfu.bs//2
+        assert self.pfu.bat_div == self.pfu.bs//2 , f"dataload.balance.bag != 0.5"
         
         self.abn_ratio = _cfg.alpha
         #self.sigma = torch.nn.Parameter(torch.tensor(0.1))  

@@ -69,7 +69,6 @@ class Infer():
         scores = self.pfu.uncrop(ndata['scores'], 'mean')
         #log.info(f"{scores=}")
         scores = self.sig(scores)
-        #log.info(f"{_scores=}")
         return scores
     
         ## magnitudes

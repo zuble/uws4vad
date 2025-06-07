@@ -25,8 +25,6 @@ def get_trainloader(cfg, vis=None):
     from ._data import FeaturePathListFinder, debug_cfg_data
     if cfg.get("debug"): debug_cfg_data(cfg)
     
-    log.info(f'TRAIN: getting trainloader')
-
     cfg_ds = cfg.data
     cfg_dload = cfg.dataload
     cfg_dproc = cfg.dataproc
@@ -101,8 +99,8 @@ def get_trainloader(cfg, vis=None):
                     )
 
     bsampler = BatchSampler(sampler, cfg_dload.bs, True) #cfg_dload.droplast
-    log.info(f"TRAIN: {sampler=} w/ {len(sampler)} -> [{bal_abn_bag=} {bal_abn_set=}]")
-    log.info(f"TRAIN: {bsampler=} w/ {len(bsampler)} ")
+    log.debug(f"TRAIN: {sampler=} w/ {len(sampler)} -> [{bal_abn_bag=} {bal_abn_set=}]")
+    log.debug(f"TRAIN: {bsampler=} w/ {len(bsampler)} ")
     
     #sampler_debug(bal_abn_bag, bsampler, ds, )
     if cfg.get("debug"):
@@ -164,13 +162,13 @@ class TrainDS(Dataset):
         self.dfeat = cfg_ds.frgb.dfeat
         if audflst: self.peakboo_aud(cfg_ds.faud.dfeat)
         
-        log.info(f'TRAIN ({self.frgb_ncrops} ncrops, {self.seg_len} maxseqlen/nsegments, {self.dfeat} feats')    
+        log.info(f'TrainDS ({self.frgb_ncrops} ncrops, {self.seg_len} maxseqlen/nsegments, {self.dfeat} feats)')    
         
         self.get_feat = {
             True: self.get_feat_wcrop,
             False: self.get_feat_wocrop
         }.get(self.frgb_ncrops)
-        log.info(f'TRAIN get_feat {self.get_feat}')
+        log.debug(f'TRAIN get_feat {self.get_feat}')
         
         ## here glance can be seen as metric to pick anomaly-present segments furhter down 
         self.glance = pd.read_csv(cfg_ds.glance)
@@ -351,9 +349,6 @@ class TrainDS(Dataset):
         log.debug(f'vid[{idx}][RGB] PST-SEG {frgb_seg.shape}')
         
         if self.audflst:
-            ## REMOVED
-            #if self.cropasvideo: aud_idx = int(idx)//self.frgb_ncrops
-            #else: 
             aud_idx = int(idx)
             
             aud_fp = f"{self.audflst[aud_idx]}.npy"

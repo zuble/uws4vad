@@ -13,33 +13,12 @@ class PstFwdUtils:
         
         if not tst:
             self.bs = _cfg.bs
-            self.cropasvideo = _cfg.cropasvideo[0]
-            if self.cropasvideo: 
-                ## net input is bs, t, f 
-                ## uncrop will have no effect
-                ## and each crop has assigned its vid lbl
-                self.ncrops = 1
-            else: 
-                ## net input is bs*nc, t, f
-                ## uncrop will avg tensors during loss preproc 
-                ## keeping each vid info not disperse
-                self.ncrops = _cfg.ncrops[0]
-            log.info(f"PFU TRAIN{self.ncrops=} {self.cropasvideo=}")
+            self.ncrops = _cfg.ncrops[0]
+            log.debug(f"PFU TRAIN{self.ncrops=}")
         else: 
             self.bs = 1
-            self.cropasvideo = _cfg.cropasvideo[1]
-            ## input is controlled by vldt/Validate/start
-            ## meaning that can either be nc,t,f or 1,t,f
-            if self.cropasvideo: 
-                ## Infer class calls to uncrop have no effect
-                ## therefore Infer outputs nc,t
-                ## in vldt/Validate/fwd crop dim is avg
-                self.ncrops = 1
-            else: 
-                ## uncrop @ Infer will avg
-                ## therefore Infer outputs t
-                self.ncrops = _cfg.ncrops[1]
-            log.info(f"PFU TEST {self.ncrops=} {self.cropasvideo=}")
+            self.ncrops = _cfg.ncrops[1]
+            log.debug(f"PFU TEST {self.ncrops=}")
         
         ## 4train
         ## batch sampler
@@ -408,8 +387,7 @@ class PstFwdUtils:
     
     
     ###########
-    ## specific for Infer class in each net file
-    ## TODO: 
+    ## TODO: pel4vad infer modules
     def fixed_smooth(self, logits, t_size):
         ins_preds = torch.zeros(0).cuda()
         assert t_size > 1

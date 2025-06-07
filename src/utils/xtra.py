@@ -30,14 +30,12 @@ def xtra(cfg):
         warnings.filterwarnings("ignore")
 
     # prompt user to input tags from command line if none are provided in the config
-    if cfg.xtra.get("enforce_tags"):
-        log.info("Enforcing tags! <cfg.xtra.enforce_tags=True>")
-        enforce_tags(cfg, save_to_file=True)
+    #if cfg.xtra.get("enforce_tags"):
+    #    log.info("Enforcing tags! <cfg.xtra.enforce_tags=True>")
+    #    enforce_tags(cfg, save_to_file=True)
 
     # pretty print config tree using Rich library
-    log.info(
-        "Printing config tree with Rich! <cfg.xtra.log_cfg=True>"
-    )
+    log.info( "Printing config tree with Rich! <cfg.xtra.log_cfg=True>")
     print_config_tree(cfg, resolve=True, save_to_file=True)
 
 
@@ -86,13 +84,13 @@ def print_config_tree(
     # generate config tree from queue
     for field in queue:
         branch = tree.add(field, style=style, guide_style=style)
-
+        
         config_group = cfg[field]
         if isinstance(config_group, DictConfig):
             branch_content = OmegaConf.to_yaml(config_group, resolve=resolve)
         else:
             branch_content = str(config_group)
-
+            
         branch.add(rich.syntax.Syntax(branch_content, "yaml"))
 
     # print config tree

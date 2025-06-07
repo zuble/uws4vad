@@ -4,24 +4,18 @@
 task_name: "debug"
 
 
-# sets level of all command line loggers to 'DEBUG'
-# https://hydra.cc/docs/tutorials/basic/running_your_app/logging/
+# hydra.verbose=true : Sets the log level of all loggers to DEBUG
+# hydra.verbose=NAME : Sets the log level of the logger NAME to DEBUG. Equivalent to import logging; logging.getLogger(NAME).setLevel(logging.DEBUG).
+# hydra.verbose=[NAME1,NAME2]: Sets the log level of the loggers NAME1 and NAME2 to DEBUG
 hydra:
-  job_logging:
-    root:
-      level: DEBUG
-  ## find  out now that i can set directly the leve lt debug for each module here
-  ## verbose: "src.model.net" 
   ## https://hydra.cc/docs/tutorials/basic/running_your_app/logging/
   verbose: True  ## sets hydra loggers to debug
-  
 
 ## sets log lvl 2 dbg when each entrie in module __name__
-debug:
-  id: debug
-  path: 
-    - src
-
+# debug:
+#   id: debug
+#   path: 
+#     - src
 
 dataload:
   in2mem: False
