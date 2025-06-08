@@ -3,8 +3,9 @@
 defaults:
   - dflt.yaml
 
-debug:
-  id: vis
-  path: 
-    - "src.utils.vis"
+hydra:
+  job_logging:
+    loggers:
+      src.utils.vis:
+        level: DEBUG
 

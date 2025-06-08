@@ -3,12 +3,11 @@
 defaults:
   - dflt.yaml
 
-debug:
-  id: loss
-  path: 
-    - "src.model.loss"
-    #- "src.model.pstfwd" 
+hydra:
+  job_logging:
+    loggers:
+      src.model.loss:
+        level: DEBUG
 
-
-#model:
-#  dryfwd: True
+net:
+  dryfwd: True

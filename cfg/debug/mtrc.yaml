@@ -3,8 +3,8 @@
 defaults:
   - dflt.yaml
 
-debug:
-  id: metric
-  path: 
-    - "src.vldt.metric"
-
+hydra:
+  job_logging:
+    loggers:
+      src.vldt.metric:
+        level: DEBUG

@@ -27,7 +27,8 @@ _HYDRA_PARAMS = {
 @utils.reg_custom_resolvers(**_HYDRA_PARAMS)  ## @src/utils/cfgres.py
 @hydra.main(**_HYDRA_PARAMS)
 def main(cfg: DictConfig) -> None:
-    log = utils.get_log(__name__, cfg) ## -> runs once 2 set right lvl's per module
+    #log = utils.get_log(__name__, cfg) ## -> runs once 2 set right lvl's per module
+    log = utils.get_log(__name__)
     
     #cleaner = utils.cleanup_on_exit.get_cleaner()
     #if not cleaner: raise RuntimeError("Cleanup manager not initialized!")

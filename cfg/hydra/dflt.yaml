@@ -33,11 +33,6 @@ job_logging:
   #   level: INFO
   #   handlers: [console, file]
 
-  # TODO: refactor loggers
-  # - remove the util/loggers.py logic 
-  # - rewrite the debug/...yml to incorporate same logic as debug/vldt
-  # - change all headers: 
-  #     from src.utils import get_log // log.get_log(__name__) -> import logging // log = logging.getLogger(__name__)
   loggers:
     __main__:
       level: INFO

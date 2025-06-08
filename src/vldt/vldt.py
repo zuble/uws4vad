@@ -4,9 +4,8 @@ from sklearn.metrics import average_precision_score
 
 from src.vldt.metric import Metrics, Plotter
 from src.data import get_testloader, run_dltest
-from src.utils import hh_mm_ss
-
-log = logging.getLogger(__name__)
+from src.utils import logger, hh_mm_ss
+log = logger.get_log(__name__)
 
 ################
 ## dict handlers
@@ -318,12 +317,12 @@ class Validate:
             self.vldt_info.updt(label, fn, tmp_gt, tmp_fl)
             self.watch_info.updt(fn, tmp_gt, tmp_fl, ) #self.attws
             
-            _gt.append(tmp_gt); _fl.append(tmp_fl)
+            #_gt.append(tmp_gt); _fl.append(tmp_fl)
         
-        _fl = np.concatenate(_fl, axis=0)
-        _gt = np.concatenate(_gt, axis=0)
-        app = average_precision_score(_gt, _fl)
-        log.error(app)
+        #_fl = np.concatenate(_fl, axis=0)
+        #_gt = np.concatenate(_gt, axis=0)
+        #app = average_precision_score(_gt, _fl)
+        #log.error(app)
         
         self.vldt_info.log()        
         self.vldt_info.upgrade()

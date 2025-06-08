@@ -156,7 +156,7 @@ def debug_cfg_data(cfg):
             not_in = [ f for f in train_fns if f not in dbg_train_fns]
             if len(not_in): 
                 log.warning(f"[{ID_DL}] {len(not_in)} missing file in {ID_RGB} train : {not_in}")
-            
+
         else: 
             log.debug(f"[{ID_DL}] {ID_RGB} match number of files in {cfg.data.froot}/RGB/{MODE}/{ID_RGB}")
         
@@ -223,7 +223,7 @@ def debug_cfg_data(cfg):
 
 ####################
 ## PATHS AND SUCH
-class FeaturePathListFinder: ## dirt as it can gets ffff
+class FeaturePathListFinder:
     """
         From cfg_data.ds.info.froot/cfg_feat.id/ finds a folder with mode in it (train / test)
         then based on cfg_data procedes to filter the features paths
@@ -256,15 +256,6 @@ class FeaturePathListFinder: ## dirt as it can gets ffff
 
         if modality == 'RGB' and mode == 'TRAIN':
 
-            ## REMOVED
-            #if cropasvideo: #cfg.dataproc.cropasvideo.train:
-            #    
-            #    if crops2use == cfg_feat.ncrops: ## get full list w/o ".npy"
-            #        flist = [f[:-4] for f in flist] 
-            #    else: ## get only rigth crop idx
-            #        flist = list(OrderedDict.fromkeys([osp.splitext(f)[0][:-3] for f in flist]))
-            #        flist = [f"{f}__{i}" for f in flist for i in range(cfg.dataproc.crops2use.train)]
-            
             if crops2use: ## >= 1
                 ##feature fn from features crop folder without duplicates (__0, __1...) 
                 flist = list(OrderedDict.fromkeys([osp.splitext(f)[0][:-3] for f in flist]))
@@ -286,11 +277,7 @@ class FeaturePathListFinder: ## dirt as it can gets ffff
             flist = [f[:-4] for f in flist] ## wo .npy
             log.debug(f"AUD FLIST {len(flist)}  {flist[0]}")
             ## /mnt/t77/FEAT/XDV/AUD/VGGISH/TRAIN/A.Beautiful.Mind.2001__#00-01-45_00-02-50_label_A
-            
-            ## REMOVED
-            #if cropasvideo:#cfg.dataproc.get("cropasvideo"):
-            #    log.warning("not implemented")
-            #    pass
+
             if len(flist) != len(auxrgbflist) :
                 if not auxrgbflist: raise Exception
                 log.debug(f" auxerrgbflist {len(auxrgbflist)}")
@@ -357,11 +344,11 @@ class FeaturePathListFinder: ## dirt as it can gets ffff
                         
         #for label, lst in self.fn_label_dict.items(): 
         #    log.info(f'[{label}]: {len(self.fn_label_dict[label])}  ') ##{self.fn_label_dict[label]}
-                
-                
+    
+    
     def get(self, mode, culum_lbls=[], watch_list=[]):
         if mode == 'ANOM': 
-            if not culum_lbls: l = self.listANOM
+            if not culum_lbls: l = self.listANOM ## no open-world
             else: 
                 log.warning(f"\tCULUM is ON ")
                 if isinstance(culum_lbls, str): culum_lbls = [culum_lbls]
@@ -372,16 +359,22 @@ class FeaturePathListFinder: ## dirt as it can gets ffff
                                 if key not in exclude_labels]
                 log.info(f"{exclude_labels=}  {included_keys=}")
                 l = []
-                for key in included_keys: l.extend(self.fp_label_dict[key])
-        elif mode == 'NORM': l = self.listNORM
+                for key in included_keys: 
+                    l.extend(self.fp_label_dict[key]) 
+                
+        elif mode == 'NORM': 
+            l = self.listNORM
+            
         elif mode == 'watch': 
             l = []
             for lbl2wtch in watch_list:
-                ## find the labels that match the ones provided which need to be the nummberss prior to dot/.
+                ## find the labels that match the ones provided which need to be the numbers prior to dot/.
                 lbl2wtch = [lbl for lbl in list(self.fn_label_dict.keys()) if lbl.split('.')[0] == lbl2wtch][0]
                 log.debug(f'{lbl2wtch} {len(self.fn_label_dict[lbl2wtch])}')
                 l.extend(self.fn_label_dict[lbl2wtch])
-        else: log.error(f'{mode} not found')
+        else: 
+            log.error(f'{mode} not found')
+            
         return l
     
 

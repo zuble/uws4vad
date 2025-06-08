@@ -3,12 +3,8 @@
 defaults:
   - dflt.yaml
 
-debug:
-  id: fe
-  path: 
-    - "src.fe"
-    #- "src.model.pstfwd" 
-
-
-#model:
-#  dryfwd: True
+hydra:
+  job_logging:
+    loggers:
+      src.fe:
+        level: DEBUG

@@ -3,12 +3,11 @@
 defaults:
   - dflt.yaml
 
-debug:
-  id: model
-  path: 
-    - "src.model"
-    #- "src.model.metric.Metrics"
-
-
-model:
+hydra:
+  job_logging:
+    loggers:
+      src.model:
+        level: DEBUG
+        
+net:
   dryfwd: True

@@ -1,7 +1,7 @@
 import logging, os
 from rich.logging import RichHandler
-import hydra
 
+"""
 def get_log(module_name, cfg=None):
 
     log = logging.getLogger(module_name)
@@ -34,6 +34,21 @@ def get_log(module_name, cfg=None):
                 lvl = logging.DEBUG
                 log.warning(f"dbg[{dbgp}] set {module_name}")
                 break
-                
+
     log.setLevel( lvl )
     return log
+"""
+
+def get_log(name: str, log_level: str = None):
+    # https://github.com/huggingface/accelerate/blob/main/src/accelerate/logging.py
+    
+    logger = logging.getLogger(name)
+    
+    logger.debug(f"{name} - {logging.getLevelName(logger.getEffectiveLevel())}")
+    
+    if log_level is not None:
+        logger.setLevel(log_level.upper())
+        logger.root.setLevel(log_level.upper())
+    
+    return logger #MultiProcessAdapter(logger, {})
+    

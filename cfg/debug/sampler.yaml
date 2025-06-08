@@ -3,9 +3,8 @@
 defaults:
   - dflt.yaml
 
-debug:
-  id: smplr
-  path: 
-    - "src.data.samplers"
-
-
+hydra:
+  job_logging:
+    loggers:
+      src.data.samplers:
+        level: DEBUG

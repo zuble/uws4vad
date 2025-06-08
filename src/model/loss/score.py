@@ -924,6 +924,9 @@ class CIL(nn.Module):
 
 
 class Glance(nn.Module):
+    # https://github.com/pipixin321/GlanceVAD/blob/master/engine.py#L20
+    # https://github.com/pipixin321/GlanceVAD/pull/5
+    
     def __init__(self, _cfg, pfu: PstFwdUtils): 
         super().__init__()
         self.pfu = pfu
@@ -953,7 +956,7 @@ class Glance(nn.Module):
                 abn_idx = abn_idx.unsqueeze(0)
             if abn_idx.numel() == 0: continue
             #if len(abn_idx) == 0: continue   
-            log.debug(f"gkm {b} {abn_idx=}\n{score[b]=}")
+            #log.debug(f"gkm {b} {abn_idx=}\n{score[b]=}")
                 
             # Process most left boundary
             if abn_idx[0] > 0:
@@ -962,7 +965,7 @@ class Glance(nn.Module):
                     if score[b, j] >= abn_thresh:
                         abn_snippet[b, j] = 1
                     else: break
-            log.debug(f"gkm {b} {abn_snippet[b]=}")
+            #log.debug(f"gkm {b} {abn_snippet[b]=}")
             
             # Process most right boundary (respect sequence length)
             if abn_idx[-1] < (valid_len-1):
@@ -971,7 +974,7 @@ class Glance(nn.Module):
                     if score[b, j] >= abn_thresh:
                         abn_snippet[b, j] = 1
                     else: break
-            log.debug(f"gkm {b} {abn_snippet[b]=}")    
+            #log.debug(f"gkm {b} {abn_snippet[b]=}")    
             
             # Process between abnormal points
             for i in range(len(abn_idx)-1):
@@ -989,7 +992,7 @@ class Glance(nn.Module):
                     if score[b, j] >= abn_thresh:
                         abn_snippet[b, j] = 1
                     else: break
-            log.debug(f"gkm {b} {abn_snippet[b]=}")            
+            #log.debug(f"gkm {b} {abn_snippet[b]=}")            
         return abn_snippet
 
     def temporal_gaussian_splatting(self, point_label, distribution='normal', params=None, seqlen=None):
@@ -1009,7 +1012,7 @@ class Glance(nn.Module):
             if len(abn_idx.shape) == 0 and abn_idx.numel() > 0:  # Handle single index case
                 abn_idx = abn_idx.unsqueeze(0)
             if abn_idx.numel() == 0: continue
-            log.debug(f"tgs {b} {abn_idx=} {N=}")
+            #log.debug(f"tgs {b} {abn_idx=} {N=}")
             
             temp_weight = torch.zeros([len(abn_idx), N])
             for i, point in enumerate(abn_idx):
@@ -1103,6 +1106,7 @@ class Glance(nn.Module):
             for i, length in enumerate(abn_seqlen):
                 mask[i, :length] = True
             log.debug(f"{abn_seqlen=}  {mask=}")    
+            
             # Apply mask and calculate mean over valid elements only
             masked_loss = per_element_loss * mask
             log.debug(f"{per_element_loss=}  {masked_loss=}")
