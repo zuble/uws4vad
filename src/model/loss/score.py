@@ -67,8 +67,8 @@ class Clas(nn.Module):
                 
     def fwd_topk(self, scores, label, seqlen):
         #scores = scores.squeeze()
-        vl_scores = torch.zeros(0).to(scores.device)#self.pfu.dvc  # tensor([])
-        for i in range(scores.shape[0]): ## bs,t  in original is cropasvideo ? 
+        vl_scores = torch.zeros(0).to(scores.device)#self.pfu.dvc 
+        for i in range(scores.shape[0]): ## bs,t 
             tmp, _ = torch.topk(scores[i][:seqlen[i]], k=self.get_k(seqlen[i],label[i]), largest=True)
             tmp = torch.mean(tmp).view(1)
             vl_scores = torch.cat((vl_scores, tmp))
@@ -93,20 +93,16 @@ class Clas(nn.Module):
         #log.warning(f"{seqlen.shape}  {label.shape} {scores.shape}")
         
         scores = self.pfu.uncrop(scores, 'mean')
-        if self.pfu.cropasvideo: assert scores.shape[0] == self.pfu.bs
-        #log.error(scores.shape)
-        
         vl_scores = self._fx(scores, label, seqlen)
         #vl_scores2 = torch.sigmoid(vl_scores)
         #log.warning(f"{vl_scores}  {vl_scores2}")
+        
         L = self.crit(vl_scores, label)
         
         return {
             'clas': L
-            ## TODO: retrieve additional info with certain key
-            ## and if in debug send to vis, eg:
-            ## '_sel_scores': [vl_scores,label]
-            }
+            # TODO: define standard keys for normal and debug
+        }
         
         
 class Ranking(nn.Module): 

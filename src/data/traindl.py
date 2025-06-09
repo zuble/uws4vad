@@ -170,7 +170,7 @@ class TrainDS(Dataset):
         }.get(self.frgb_ncrops)
         log.debug(f'TRAIN get_feat {self.get_feat}')
         
-        ## here glance can be seen as metric to pick anomaly-present segments furhter down 
+        ## glance can be further used as a segment picker 
         self.glance = pd.read_csv(cfg_ds.glance)
         
         if cfg_dload.in2mem: 
@@ -229,7 +229,7 @@ class TrainDS(Dataset):
             end_idx = idxs_seg[-1]
             assert len(idxs_seg) == self.seg_len 
             
-            segment_start_frame = start_idx * self.fsfeat  # Convert feature idx to frame idx
+            segment_start_frame = start_idx * self.fsfeat  # feature idx to frame idx
             segment_end_frame = end_idx * self.fsfeat
             
             for p in points: # check if it falls in our segment
@@ -247,7 +247,7 @@ class TrainDS(Dataset):
                 # Find closest sampled index
                 closest_idx = np.argmin(np.abs(idxs_seg - feat_idx))
                 #if 0 <= closest_idx < self.seg_len:  # Safety check
-                pnt_lbl[closest_idx] = 1
+                pnt_lbl[closest_idx] = np.float32(1.0)
                     
         elif self.seg_sel == 'itp':
             #feat_len = feat.shape[-2]            
@@ -268,7 +268,6 @@ class TrainDS(Dataset):
 
         crop_lens, crop_data = [], []
         for crop_i in range(self.frgb_ncrops): ## !!
-            # RGB
             rgb_fp_crop = f"{self.rgbflst[int(idx)]}__{crop_i}.npy"
             frgb_crop = np.load(rgb_fp_crop).astype(np.float32) 
             crop_lens.append(frgb_crop.shape[0])
@@ -328,7 +327,7 @@ class TrainDS(Dataset):
         else: ## interpolate 
             seqlen = self.seg_len
         
-        ## TODO dev for seg.sel:
+        # TODO: dev for seg.sel:
         pnt_lbl = self.get_pnt_lbl(idx, unified_len, idxs_trnsf['idxs'])
         
         log.debug(f'vid[{idx}] {feats.shape=} {feats.dtype} {seqlen=} {pnt_lbl.shape=}')
@@ -343,7 +342,7 @@ class TrainDS(Dataset):
         log.debug(f"vid[{idx}][RGB] {frgb.shape} {frgb.dtype}  {osp.basename(rgb_fp)}")
         
         #if self.rgbl2n: frgb = self.l2normfx(frgb)
-        ## TODO: pass points here, if seq/uni return idxs rndm w/ anom within
+        # TODO: pass points here, if seq/uni return idxs rndm w/ anom within
         idxs_trnsf = self.trnsfrm.get_idxs(frgb.shape[0])
         frgb_seg = self.trnsfrm.fx(frgb, idxs_trnsf['idxs'])
         log.debug(f'vid[{idx}][RGB] PST-SEG {frgb_seg.shape}')
@@ -389,11 +388,7 @@ class TrainDS(Dataset):
     
     
     def __getitem__(self, idx):
-        ## as n normal videos > abnormal
-        ## if idx out of range, pick a random idx
-        #if idx >= len(self.rgbflst):
-        #    idx = np.random.randint(0,len(self.rgbflst))
-        #    idx = NPRNG.integers(feat_len-self.seg_len)
+        #if idx >= len(self.rgbflst): idx = NPRNG.integers(0,len(self.rgbflst))
             
         if self.in2mem:
             feats, seqlen, pnt_lbl, idxs_seg, label = self.data[int(idx)]  
@@ -422,14 +417,6 @@ class FeatSegm():
         self.fx = self.interpolate if cfg.sel == 'itp' else self.sel_or_pad 
         log.info(f"FeatSegm w {self.fx=}")
         
-        #self.intplt = cfg.intplt
-        #self.fx = {
-        #    1: self.interpolate,
-        #    0: self.sel_or_pad
-        #}.get(cfg.intplt)
-        #self.RNG = np.random.default_rng(seed)
-        #self.rng = NPRNGZ              
-        #log.error(f" {np.random.default_rng.}")
     
     def get_idxs(self, feat_len, points=None):
         if self.sel == 'itp': ## special case for avg adjcent linspace
@@ -527,12 +514,6 @@ class FeatSegm():
             return pad(feat)
         else:
             #log.debug(f"FSeg selorpad indexing")
-            ## make use of idxs already pre seleted at crop0
-            ## find a way to modulate each crop differently
-            ## ovverride given idxs
-            #if cfg.RNDCROP:
-            #    log.error(f"{cfg.RNDCROP} in dev")
-            #    #idxs = self.get_idxs(len(feat))['idxs']
 
             #assert len(feat) == len(idxs)
             #log.error(f"{feat.shape} {len(idxs)} {idxs}")    
