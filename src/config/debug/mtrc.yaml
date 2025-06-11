@@ -1,0 +1,10 @@
+# @package _global_
+
+defaults:
+  - dflt.yaml
+
+hydra:
+  job_logging:
+    loggers:
+      uws4vad.vldt.metric:
+        level: DEBUG

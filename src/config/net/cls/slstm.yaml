@@ -1,0 +1,3 @@
+_target_: uws4vad.model.net.layers.scorhead.SLstm
+lstm_dim: 256
+lstm_bd: True

@@ -1,0 +1,4 @@
+_target_: uws4vad.model.loss.score.Glance
+min_mining_step: ${dyn_per_ds:${data.id},50,100}
+sigma: 0.1          
+alpha: 0.9  

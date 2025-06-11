@@ -1,0 +1,3 @@
+_target_: uws4vad.model.net.layers.scorhead.SConv
+ks: 7
+dim_in: null

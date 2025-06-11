@@ -1,0 +1,35 @@
+defaults:
+  - _self_
+
+id: ??? ## must be specified as the main._target_ depends on
+vrs: ""
+wght_init: xavier0 
+
+dryfwd: true
+summary: true ## params/flops/actvs
+profile: false
+
+main:
+  _target_: "uws4vad.model.net.${net.id}.Network${net.vrs}" 
+  ## defaults this even if network dont have this option
+  ## serves as a indicator in Validate.fwd to either save the attws or not
+  ## then on each network with such, use dyn res (example in attnmil)
+  #ret_att: False
+
+## feature modulator
+##     _target_: path_2_object (hydra-based)
+##        or 
+##     name: name given in register decorator
+##        +
+##     params:
+##       key: value
+fm: ~
+
+## classifier
+##  .... same as above
+cls: ~
+
+## every network has its one Inference class
+infer:
+  _target_: "uws4vad.model.net.${net.id}.Infer"
+  _cfg: ~

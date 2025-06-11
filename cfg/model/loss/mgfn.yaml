@@ -1,4 +1,0 @@
-## MGFN
-_target_: src.model.loss.feat.MagnCont
-alpha: 0.001
-margin: 200.0

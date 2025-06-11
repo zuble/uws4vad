@@ -1,3 +1,0 @@
-_target_: src.model.net.layers.scorhead.SConv
-ks: 7
-dim_in: null

@@ -1,0 +1,19 @@
+# @package _global_
+
+defaults:
+  - dflt.yaml
+
+
+hydra:
+  job_logging:
+    loggers:
+      uws4vad.train:
+        level: DEBUG
+      uws4vad.model.pstfwd:
+        level: DEBUG
+      uws4vad.model.loss:
+        level: DEBUG
+
+model:
+  epoch: 1
+
