@@ -1,0 +1,13 @@
+# @package _global_
+
+defaults:
+  - dflt.yaml
+
+hydra:
+  job_logging:
+    loggers:
+      src.model.pstfwd:
+        level: DEBUG
+        
+net:
+  dryfwd: True

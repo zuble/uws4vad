@@ -1,5 +1,0 @@
-_target_: src.model.loss.score.Salient
-trip_margin: 1
-per_crop: False
-
-## excpets entrie 'vls' (video-level score)

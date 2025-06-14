@@ -1,0 +1,15 @@
+# @package _global_
+
+defaults:
+  - dflt.yaml
+
+hydra:
+  job_logging:
+    loggers:
+      uws4vad.vldt:
+        level: DEBUG
+      uws4vad.metric:
+        level: DEBUG
+
+vldt:
+  dryrun: True

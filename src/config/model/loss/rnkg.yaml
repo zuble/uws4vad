@@ -1,0 +1,2 @@
+_target_: uws4vad.model.loss.score.Ranking
+lambda12: [8e-5,8e-5]

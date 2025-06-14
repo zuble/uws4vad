@@ -1,0 +1,11 @@
+# @package _global_
+
+defaults:
+  - dflt.yaml
+
+hydra:
+  job_logging:
+    loggers:
+      uws4vad.utils.vis:
+        level: DEBUG
+

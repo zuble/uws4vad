@@ -1,0 +1,33 @@
+# @package _global_
+
+# overwrite task name so debugging logs are stored in separate folder
+task_name: "debug"
+
+
+# hydra.verbose=true : Sets the log level of all loggers to DEBUG
+# hydra.verbose=NAME : Sets the log level of the logger NAME to DEBUG. Equivalent to import logging; logging.getLogger(NAME).setLevel(logging.DEBUG).
+# hydra.verbose=[NAME1,NAME2]: Sets the log level of the loggers NAME1 and NAME2 to DEBUG
+#hydra:
+#  ## https://hydra.cc/docs/tutorials/basic/running_your_app/logging/
+#  verbose: True  ## sets hydra loggers to debug
+
+dataload:
+  bs: 4
+  in2mem: False
+  nworkers: 0
+  pinmem: False
+  prstwrk: false
+
+  test:
+    in2mem: False
+    nworkers: 0
+    pinmem: False
+    prstwrk: false
+
+dataproc:
+  seg:
+    len: 32
+
+#model:
+#  epochs: 1
+

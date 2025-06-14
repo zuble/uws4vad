@@ -1,0 +1,19 @@
+defaults:
+  - _dflt
+  - cls: mlp
+  
+id: rtfm
+wght_init: xavier0 
+
+main:
+  do: 0.7
+
+cls:
+  hdim_ratio: 
+    - 2
+    - 4
+
+fm: 
+  name: aggregate
+  rate: 4
+  do: 0.0

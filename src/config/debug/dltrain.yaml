@@ -1,0 +1,17 @@
+# @package _global_
+
+
+defaults:
+  - dflt.yaml
+
+
+hydra:
+  job_logging:
+    loggers:
+      uws4vad.data._data:
+        level: DEBUG
+      uws4vad.data.traindl:
+        level: DEBUG
+
+dataload:
+  dryrun: True
