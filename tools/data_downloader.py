@@ -87,8 +87,13 @@ class BaseDatasetBuilder:
                 return False
         else:
             from DriveDownloader.downloader import download_single_file
-            download_single_file(url, filename=output_path, thread_number=1,
-                                 force_back_google=False, list_suffix=suffix)
+            download_single_file(
+                url, 
+                filename=output_path, 
+                thread_number=1,
+                force_back_google=False, 
+                list_suffix=suffix
+            )
             return True
 
     def _format(self, relocate_option):
@@ -114,24 +119,32 @@ class BaseDatasetBuilder:
 
 class UCFCrimeBuilder(BaseDatasetBuilder):
     def __init__(self, urls):
-        super().__init__(name='UCF-Crime',
-                         urls=urls)
+        super().__init__(
+            name = 'UCF-Crime',
+            urls = urls
+        )
 
     def _format(self, relocate_option):
         print('Start decompressing.')
-        extract_zip_with_progress(list(self.urls.keys())[
-                                  0], 'data/raw/UCF-Crime')
+        extract_zip_with_progress(
+            zip_path = list(self.urls.keys())[0], 
+            extract_to = 'data/raw/UCF-Crime'
+        )
         print('Decompressing finished.')
         os.makedirs('data/UCF-Crime/Videos/Train', exist_ok=True)
         os.makedirs('data/UCF-Crime/Videos/Test', exist_ok=True)
-        relocate_files_by_list('data/raw/UCF-Crime/UCF_Crimes/Videos',
-                               'data/UCF-Crime/Videos/Test',
-                               list_file='data/raw/UCF-Crime/UCF_Crimes/Anomaly_Detection_splits/Anomaly_Test.txt',
-                               relocate_option=relocate_option)
-        relocate_files_by_list('data/raw/UCF-Crime/UCF_Crimes/Videos',
-                               'data/UCF-Crime/Videos/Train',
-                               list_file='data/raw/UCF-Crime/UCF_Crimes/Anomaly_Detection_splits/Anomaly_Train.txt',
-                               relocate_option=relocate_option)
+        relocate_files_by_list(
+            src_dir = 'data/raw/UCF-Crime/UCF_Crimes/Videos',
+            dst_dir = 'data/UCF-Crime/Videos/Test',
+            list_file='data/raw/UCF-Crime/UCF_Crimes/Anomaly_Detection_splits/Anomaly_Test.txt',
+            relocate_option=relocate_option
+        )
+        relocate_files_by_list(
+            src_dir = 'data/raw/UCF-Crime/UCF_Crimes/Videos',
+            dst_dir = 'data/UCF-Crime/Videos/Train',
+            list_file = 'data/raw/UCF-Crime/UCF_Crimes/Anomaly_Detection_splits/Anomaly_Train.txt',
+            relocate_option = relocate_option
+        )
 
     def _clean_unzip_files(self):
         shutil.rmtree('data/raw/UCF-Crime/UCF_Crimes')
@@ -149,7 +162,10 @@ class XDViolenceBuilder(BaseDatasetBuilder):
                 video_path_with_split = os.path.join(
                     video_path, 'Train') if 'Train' in key else os.path.join(video_path, 'Test')
                 print('Start decompressing.')
-                extract_zip_with_progress(key, video_path_with_split)
+                extract_zip_with_progress(
+                    zip_path = key, 
+                    extract_to = video_path_with_split
+                )
                 print('Decompressing finished.')
 
     def _clean_unzip_files(self):
@@ -204,12 +220,12 @@ def relocate(src, dst, option):
         raise ValueError(f'Relocate option {option} is invalid.')
 
 
-@hydra.main(version_base=None, config_path="../src/config/dataset_build", config_name="cfg")
+@hydra.main(version_base=None, config_path="../src/config/tools", config_name="dataset_build")
 def main(cfg):
     builder_dict = {'ucf': 'UCFCrimeBuilder', 'xd': 'XDViolenceBuilder'}
     for dataset in cfg.datasets:
         builder = eval(
-            f'{builder_dict[dataset]}({getattr(cfg, f'{dataset}_urls')})')
+            f'{builder_dict[dataset]}({getattr(cfg, f"{dataset}_urls")})')
         builder.build(cfg.relocate_option, cfg.clean_option)
 
 
