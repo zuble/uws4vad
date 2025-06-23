@@ -1,0 +1,70 @@
+[project]
+authors = [{name = "zuble", email = "67658465+zuble@users.noreply.github.com"}]
+description = "Unified WorkStation 4 Video Anomaly Detection"
+name = "uws4vad"
+requires-python = ">= 3.7"
+version = "0.1.0"
+readme = "README.md"
+#documentation = ""
+dependencies = [
+    "decord", 
+    "pyrootutils", 
+    "av", 
+    "visdom",
+    "matplotlib",
+    "hydra_core",
+    "hydra_colorlog",
+    "opencv-python",
+    "plotly==5.22.0", 
+    "pandas", 
+    "tabulate",
+    "rich", 
+    "tqdm", 
+    "pytorch-metric-learning", 
+    "timm", 
+    "transformers", 
+    "einops",
+    "torchinfo",
+    "fvcore"
+]
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+## ------------------------
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.tasks]
+start = 'python src/main.py'
+
+[tool.pixi.pypi-dependencies]
+uws4vad = { path = ".", editable = true }
+
+# https://github.com/pytorch/pytorch/blob/main/RELEASE.md#release-compatibility-matrix
+[tool.pixi.feature.cpu]
+dependencies = { python = ">=3.9" }
+pypi-dependencies = { torch = { version = ">=2.5.0", index = "https://download.pytorch.org/whl/cpu" } }
+
+#[tool.pixi.feature.gpu]
+#system-requirements = { cuda = "11.3" }
+#[tool.pixi.feature.gpu.dependencies]
+#python = ">=3.7, <=3.10"
+#[tool.pixi.feature.gpu.pypi-dependencies]
+#torch = { version = "=1.12.1", index = "https://download.pytorch.org/whl/cu113" }
+
+[tool.pixi.feature.fextaud.pypi-dependencies]
+essentia = "==2.1b6.dev1110"
+
+# [tool.pixi.feature.test.dependencies]
+# pytest = "*"
+# pytest-md = "*"
+# pytest-asyncio = "*"
+# [tool.pixi.feature.test.tasks]
+# test = "pytest --md=report.md"
+
+[tool.pixi.environments]
+# gpu = { features = ["gpu"] }
+default = { features = ["cpu"] }
